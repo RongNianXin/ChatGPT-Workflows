@@ -102,6 +102,16 @@ const remoteRequests = [];
     await page.getByRole('heading', { name: '第二代工作流操作者操作手册', exact: true }).waitFor();
     const tokens = parser.parse(manual, {});
     assert.equal(await page.locator('#toc a').count(), tokens.filter(t => t.type === 'heading_open').length);
+    const outlineStyles = await page.evaluate(() => {
+      const level2 = document.querySelector('#toc a[data-level="2"]');
+      const level3 = document.querySelector('#toc a[data-level="3"]');
+      const style2 = getComputedStyle(level2);
+      const style3 = getComputedStyle(level3);
+      return { weight2: Number(style2.fontWeight), background2: style2.backgroundColor, padding2: parseFloat(style2.paddingLeft), padding3: parseFloat(style3.paddingLeft) };
+    });
+    assert(outlineStyles.weight2 >= 600, 'content level-one headings are emphasized');
+    assert.notEqual(outlineStyles.background2, 'rgba(0, 0, 0, 0)', 'content level-one headings have a subtle background');
+    assert(outlineStyles.padding3 > outlineStyles.padding2, 'content level-two headings are indented');
     const expected = tokens.filter(t => t.type === 'fence').map(t => t.content);
     assert.deepEqual(await page.locator('pre code').allTextContents(), expected);
     await page.getByRole('link', { name: '场景 5A：建立“执行 AI＋独立检查 AI”配对｜发给当前负责安排的 AI', exact: true }).click();

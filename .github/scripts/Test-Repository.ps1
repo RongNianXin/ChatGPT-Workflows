@@ -342,16 +342,16 @@ function Test-CommanderDurableWorkflowContract {
     # Reporting rules apply to ordinary tasks too; task-card gating must not hide them.
     $ruleRoot = '总指挥工作流/第二代总指挥的工作模式/'
     $contracts += @(
-        @{ Path = ($ruleRoot + '02-总指挥核心规则.md'); Required = @('通用汇报读取 `03`', '正式履职后的首次实质汇报前') },
-        @{ Path = ($ruleRoot + '03-专项任务卡模板.md'); Required = @('父子关系和编号沿用原记录', '子项实现或取消不自动算父项验收通过', '任务1暂停且剩1.3') },
+        @{ Path = ($ruleRoot + '02-总指挥核心规则.md'); Required = @('通用汇报读取 `03`', '正式履职后的首次实质汇报前', '专项任务的工作区状态交接', 'PR 合并、远端分支更新或准备切换本地 `main` 后') },
+        @{ Path = ($ruleRoot + '03-专项任务卡模板.md'); Required = @('父子关系和编号沿用原记录', '子项实现或取消不自动算父项验收通过', '任务1暂停且剩1.3', '工作区状态交接（必填）', '结束/暂停回报') },
         @{ Path = ($ruleRoot + '06-复盘与优化规则.md'); Required = @('隐藏内部编号、代码名和日志链接后', '不要求操作者复述考试') },
         @{ Path = ($ruleRoot + '总指挥轻量交接启动配置.md'); Required = @('区分完整读取、标题级定点读取和仅比对指纹', '输出截断须补读缺失部分') }
     )
     $coreRules = Get-Content -LiteralPath (Join-Path $repoRoot ($ruleRoot + '02-总指挥核心规则.md')) -Raw
     # Documentary routing and legacy entry checks; no live model or Git synchronization is exercised.
     $contracts += @(
-        @{ Path = ($ruleRoot + '01-操作者操作手册.md'); Required = @('4H 和 4I 的区别', '场景 4I：按需安全汇合双方成果', '<a id="场景-2d本地与远端长期分叉后的安全同步"></a>', '不因本提示词自动 Fetch') },
-        @{ Path = ($ruleRoot + '02-总指挥核心规则.md'); Required = @('发布与同步的共用只读路由', '同 HEAD 不代表工作区相同', '不按文件时间裁定', '远端新提交已包含于本地', '队友未推送成果不可见时标未知', '只有远端有效增量，本地无待汇合增量', '双方有变化但当前暂不汇合', '不预选Merge', '不因通用路由自动Fetch', '<a id="场景-2d长期双边分叉的安全汇合"></a>', '不另建第二套发布卡', '原目标仅同步本地时按该目标收口') }
+        @{ Path = ($ruleRoot + '01-操作者操作手册.md'); Required = @('4H 和 4I 的区别', '场景 4I：按需安全汇合双方成果', '场景 1I：交接失败时如何处理', '发送给移交方 AI', '当前恢复置信度为【中/低】', '依据来源为【复制对话窗口原文 / 口述总结 / 其他】', '<a id="场景-2d本地与远端长期分叉后的安全同步"></a>', '不因本提示词自动 Fetch') },
+        @{ Path = ($ruleRoot + '02-总指挥核心规则.md'); Required = @('发布与同步的共用只读路由', '同 HEAD 不代表工作区相同', '不按文件时间裁定', '远端新提交已包含于本地', '队友未推送成果不可见时标未知', '只有远端有效增量，本地无待汇合增量', '双方有变化但当前暂不汇合', '不预选Merge', '不因通用路由自动Fetch', '回退到操作手册场景 1I', '<a id="场景-2d长期双边分叉的安全汇合"></a>', '不另建第二套发布卡', '原目标仅同步本地时按该目标收口') }
     )
     if ($coreRules.Contains('`03` 只有专项任务净收益门禁通过后才读取')) {
         throw '通用汇报入口被专项任务创建门禁遮蔽'

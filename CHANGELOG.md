@@ -2,8 +2,23 @@
 
 本文件记录 ChatGPT Workflows 的重要变更。
 
+## 未发布：交接失败回退场景与证据修复
+
+- 新增场景 1I“交接失败时如何处理”，明确提示词发送给移交方 AI，并要求填写当前恢复置信度（中/低）及依据来源（复制对话窗口原文、口述总结或其他）。
+- 固化交接失败的回退链：候选正文不可读、断点缺失、事实冲突或完成声明无法回溯时，先由移交方修订证据和快照，再由候选重新执行场景 1D 的独立只读核验；不以新建空白对话、重复发送或平台“已完成”标记替代核验。
+- 交接快照继续区分已提交树、当前工作树、中央状态和逐对象证据；场景 1I 不授予中央调度权、远端写入权，也不覆盖未提交成果。
+
+### English summary
+
+- Add Scene 1I, “What to do when handoff fails,” with a prompt addressed to the transferring AI. It requires the current recovery confidence (medium/low) and evidence source (copied conversation text, verbal summary, or other).
+- Fix the fallback chain: when the candidate cannot read the response, the checkpoint is missing, facts conflict, or completion claims cannot be traced, the transferring AI must repair the evidence and snapshot before the candidate repeats Scene 1D read-only verification. A blank chat, repeated submission, or a platform “completed” flag is not a substitute for verification.
+- Handoff snapshots continue to separate the committed tree, working tree, central state, and per-object evidence. Scene 1I grants neither central dispatch authority nor remote-write permission and never overwrites uncommitted work.
+
 ## 未发布：跨任务经验吸收与交接回执边界强化
 
+- 修正交接快照的基线表述：明确区分“已提交树与远端目标一致”和“当前工作树含未提交差异”，并把中央状态冲突列为交接阻断；补充快照生成后的失效复核要求。
+- 为专项任务增加开始/结束 `git status` 回报和默认不自行 Commit/Push/合并的边界；为 PR 合并、远端更新和本地 `main` 切换增加按需只读 Fetch 与差异核对前置。
+- 统一 Markdown 阅读器 README 哈希校验的换行规范，并增加目录层级的浏览器断言。
 - 将跨任务交流中可复用的经验纳入研发侧工作流：回执先区分可复用规则、项目特定约定和未证实建议，只有完成适用性、冲突和隐私核验后，才能写入规范源或质量契约。
 - 强化自动化交接快照：存在已登记、待恢复、暂停或替代中的自动化时，逐项记录用途、逻辑任务、世代、频率/时区、配置或提示词指纹、通知设置、授权范围、最后可靠成功截点、平台核验、来源、核验时间和失效条件；不复制完整提示词、凭据或私有目标。
 - 明确平台任务 ID 只是运行时定位线索；回执、成果、授权和平台完成标记分开登记，“已发送”不等于“已确认”，接口不可见不等于目标未收到。
@@ -14,7 +29,7 @@
 - Incorporate reusable cross-task experience into the development workflow: classify incoming findings as reusable rules, project-specific conventions, or unverified suggestions, and update canonical rules or quality contracts only after applicability, conflict, and privacy checks.
 - Strengthen automation handoff snapshots. When an automation is registered, pending recovery, paused, or replaced, record its purpose, logical task, generation, cadence/time zone, configuration or prompt fingerprint, notification settings, authorization scope, last reliable success checkpoint, platform verification, source, verification time, and invalidation conditions—without copying full prompts, credentials, or private targets.
 - Treat platform task IDs as runtime locators only. Track acknowledgements, artifacts, authorization, and platform completion separately: “sent” is not “confirmed,” and an invisible read result is not proof of non-delivery.
-- This batch also records the maintenance context of the broader operator-manual reorganization, scene migration, and prompt-format normalization. The manual and linked rules remain authoritative only after the actual repository changes are committed; this entry currently records local changes and has not been published remotely.
+- This batch also records the maintenance context of the broader operator-manual reorganization, scene migration, and prompt-format normalization. It also corrects handoff snapshot baseline wording, adds central-state conflict blockers and post-snapshot invalidation checks, adds scoped-task `git status` reporting and Fetch prerequisites, and aligns Markdown Reader README hash verification on normalized line endings.
 
 ## 未发布：重排操作者手册场景编号与入口
 
@@ -28,7 +43,7 @@
 - Rebuilt the operator-manual registry for Scenes 1–6 and optional scenes, adding initial prompts for ordinary task handoff, context-free recovery, project analysis, teammate takeover, independent module planning, PR/Issue work, and reference research.
 - Removed the standalone local-development number: local development, acceptance, and delivery preparation now belong to Scene 2; the former 2D safe-convergence flow is Scene 4I and does not imply development, human acceptance, or GitHub Merge.
 - Simplified execution plus independent review from legacy 2F into four sub-scenes under Scene 5; moved the profile feature under optional “Personalization.”
-- Legacy numbers remain compatibility aliases and grant no authorization; this entry records local documentation changes only and has not been committed or published remotely.
+- Legacy numbers remain compatibility aliases and grant no authorization; this entry records the local documentation changes and is included in the current local follow-up commit.
 
 ## 未发布：移除任务卡片上的单轮上下文交接提示
 
