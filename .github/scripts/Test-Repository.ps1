@@ -350,7 +350,7 @@ function Test-CommanderDurableWorkflowContract {
     $coreRules = Get-Content -LiteralPath (Join-Path $repoRoot ($ruleRoot + '02-总指挥核心规则.md')) -Raw
     # Documentary routing and legacy entry checks; no live model or Git synchronization is exercised.
     $contracts += @(
-        @{ Path = ($ruleRoot + '01-操作者操作手册.md'); Required = @('4H 和 4I 的区别', '场景 4I：按需安全汇合双方成果', '场景 1I：交接失败时如何处理', '发送给移交方 AI', '当前恢复置信度为【中/低】', '依据来源为【复制对话窗口原文 / 口述总结 / 其他】', '<a id="场景-2d本地与远端长期分叉后的安全同步"></a>', '不因本提示词自动 Fetch') },
+        @{ Path = ($ruleRoot + '01-操作者操作手册.md'); Required = @('4H 和 4I 的区别', '场景 4I：按需安全汇合双方成果', '场景 1I：交接失败时如何处理', '发送给移交方 AI', '当前恢复置信度为【中/低】', '原因/依据来源为【复制对话窗口原文 / 口述总结 / 其他】', '<a id="场景-2d本地与远端长期分叉后的安全同步"></a>', '不因本提示词自动 Fetch') },
         @{ Path = ($ruleRoot + '02-总指挥核心规则.md'); Required = @('发布与同步的共用只读路由', '同 HEAD 不代表工作区相同', '不按文件时间裁定', '远端新提交已包含于本地', '队友未推送成果不可见时标未知', '只有远端有效增量，本地无待汇合增量', '双方有变化但当前暂不汇合', '不预选Merge', '不因通用路由自动Fetch', '回退到操作手册场景 1I', '<a id="场景-2d长期双边分叉的安全汇合"></a>', '不另建第二套发布卡', '原目标仅同步本地时按该目标收口') }
     )
     if ($coreRules.Contains('`03` 只有专项任务净收益门禁通过后才读取')) {
