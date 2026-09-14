@@ -2,6 +2,12 @@
 
 本文件记录 ChatGPT Workflows 的重要变更。
 
+## 未发布：历史分支审计与安全清理
+
+- 已执行：场景 4E 扩展为 Issue、PR 与历史分支的统一只读收口入口。分支审计必须区分祖先关系、补丁/树等价、PR 最终 Head、PR 后追加提交、未结责任和恢复用途，并单独盘点 stash；本地分支、远端分支、stash、worktree 分别制卡和授权。
+- 已验证：仓库质量脚本覆盖上述耐久契约。该规则不预设单人或团队协作方式，也不把“已合并 PR”直接等同于“当前分支可删除”。真实分支删除效果未在本批验证；删除仍需针对精确对象另行确认。
+- English: Scene 4E now audits stale issues, pull requests, and branches through one read-only convergence entry. Branch cleanup distinguishes ancestry, patch/tree equivalence, the PR's final head, later commits, unresolved responsibilities, and recovery use. Local branches, remote branches, and worktrees require separate action cards and authorization; no branch deletion was performed in this batch.
+
 ## 未发布：唯一日常主工作区与隔离载体可见性
 
 - 已执行：为单人维护项目增加唯一日常主工作区规则；自然语言“修改本地项目/工作流”默认指已登记入口的当前权威默认分支，不能静默创建、切换或把后续工作转移到其他分支/worktree。
