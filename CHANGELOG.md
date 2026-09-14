@@ -2,6 +2,52 @@
 
 本文件记录 ChatGPT Workflows 的重要变更。
 
+## 未发布：发布前本地资源与推送引用核验
+
+- 已执行：4A 和 PR 标准补充沿运行/验收依赖定点发现相关忽略或受限资源、原位保留、实际待上传历史核账和接收方复现限制；09 明确单分支授权不包含附带标签或其他引用。
+- 不新增按文件类型划分的子场景；沿用其他发布入口对 PR 标准的引用。未验证：真实外部项目的资源状态和远端推送效果。本批仅本地文档维护。
+- 已验证：`git diff --check` 和 `.github/scripts/Test-Repository.ps1` 通过；检查对象为当前混合工作区，不代表其他未提交任务已完成审阅。补充区分 LFS、推送钩子、Release 附件和制品上传的载荷与授权。
+- Verification: Diff whitespace and repository quality checks passed against the mixed working tree, not a review of unrelated pending work. LFS, push hooks, release attachments and artifact uploads require separate payload and authorization checks.
+- English: Publishing guidance now checks relevant ignored or restricted resources through runtime and acceptance dependencies, preserves local resources, audits the actual push history and references, and records recipient reproducibility limits. Branch authorization does not include extra tags or refs. No file-type-specific scenarios were added; external project state and live push behavior remain unverified. This is a local documentation update.
+
+## 未发布：按风险分层的对抗式审查
+
+- 所有指令执行前均做一次相称检查：简单任务静默快速检查，复杂或高影响任务才展开结构化对抗式审查；审查问题必须有事实或明确推理依据。
+- 第二次对抗式复审改为条件触发，只针对实际产物、新证据、范围变化和受影响回归，不机械重复第一次审查。验证和汇报前事实核对继续保留，但不各自计为审查轮次。
+- 操作者主动要求审查时，与当前阶段原定审查合并，不额外叠加；只有新证据、范围变化或产物形成后的独立风险才触发定向复审。本批只更新本地文档，尚未 Commit 或发布。
+
+### English summary
+
+- Require one risk-proportionate preflight check for every instruction: simple work gets a silent quick check, while complex or high-impact work receives structured adversarial review supported by evidence or explicit reasoning.
+- Make a second adversarial review conditional and targeted to actual artifacts, new evidence, scope changes, and affected regressions. Verification and pre-report fact checks remain mandatory but do not each count as review rounds.
+- An operator-requested review is merged with the review already required for that stage rather than added mechanically. A targeted follow-up occurs only for new evidence, scope changes, or artifact-specific risk. This batch updates local documentation only and has not been committed or published.
+
+## 未发布：Worktree 人话别名与可追溯登记
+
+- 新增项目内唯一且不复用的 worktree 稳定别名；别名用于交流定位，规范路径、分支和 HEAD 仍作为 Git 事实回读，不能把别名误当 Git tag。
+- `WORKTREE` 记录补充用途、特色、禁止及受限操作、责任方、状态、替代映射和清理/保留条件；限制必须独立登记，不能只写在名称里。
+- 登记缺失、别名重复或映射冲突时，只允许必要的只读归属核验；修复前不得自动开发、汇合、迁移、发布或清理该 worktree。本批只更新本地文档，尚未 Commit 或发布。
+
+### English summary
+
+- Add a project-unique, non-reusable human-readable alias for each worktree. The alias is a conversational locator, while canonical path, branch, and HEAD remain the Git facts; it is not a Git tag.
+- Extend `WORKTREE` records with purpose, distinguishing traits, prohibited or restricted actions, ownership, lifecycle state, alias replacement mapping, and retention/removal conditions. Restrictions must be stored separately rather than only encoded in a name.
+- Missing, duplicate, or conflicting mappings permit only the minimum read-only attribution checks until repaired. This batch changes local documentation only and has not been committed or published.
+
+## 未发布：更新 Markdown 阅读器真实运行截图
+
+- 已执行：用操作者提供的最新 1920×919 PNG 运行截图替换 `实用小工具/Markdown阅读器/assets/workflow-reader-preview.png`；已回读目标文件并确认与附件 SHA-256 一致。该截图仅作可选展示材料，不作为运行依赖。
+
+### English summary
+
+- Executed: replaced `实用小工具/Markdown阅读器/assets/workflow-reader-preview.png` with the operator-provided latest 1920×919 PNG runtime screenshot and verified the target SHA-256 matches the attachment. The screenshot remains optional showcase material, not a runtime dependency.
+
+## 未发布：交接失败的分层诊断与一致性交付
+
+- 已执行：补充 04 的通信、材料与身份分层核验；要求先验证候选收到的附件版本，再判断旧副本、漏更新或后续漂移；交付前逐字段回读 current 与实际成果。
+- 已执行：区分更早前任与当前移交方，明确草稿身份冲突和认证切换仅作待核验线索；这些文档约定不是宿主自动拦截。未验证：第三方认证切换故障根因与正式接管。本批尚未提交或发布。
+- English: Added layered handoff diagnosis, received-attachment version checks, field-by-field current-state verification, and distinct predecessor/transferor roles. Provider-switch causality and formal takeover remain unverified; these are workflow rules, not host-enforced controls. Not committed or published.
+
 ## 未发布：交接失败回退场景与证据修复
 
 - 新增场景 1I“交接失败时如何处理”，明确提示词发送给移交方 AI，并要求填写当前恢复置信度（中/低）及依据来源（复制对话窗口原文、口述总结或其他）。
@@ -379,6 +425,8 @@ The roadmap items above are candidates only. Before every commit, update this ch
 - 新增 Codex `thread not found` 的低风险恢复案例与操作顺序。
 
 ### Changed
+
+- 固化 worktree 生命周期记录：新建 worktree 必须登记任务、时间、目的、基线、变更摘要、责任方和清理条件；来源不明时暂停自动合并、迁移和清理。第二 worktree 的可复用规则已抽取，未提交草稿不整批迁移。
 
 - 第二代总指挥入口升版为 `2026-09-05.5`：需要操作者另发指令时按需附上可直接发送的下一步提示词，复用已确认事实并保留选择权；不机械附加、不推迟已授权工作，也不预置新的权限。
 
