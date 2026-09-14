@@ -2,6 +2,30 @@
 
 本文件记录 ChatGPT Workflows 的重要变更。
 
+## 未发布：按风险分层的对抗式审查
+
+- 所有指令执行前均做一次相称检查：简单任务静默快速检查，复杂或高影响任务才展开结构化对抗式审查；审查问题必须有事实或明确推理依据。
+- 第二次对抗式复审改为条件触发，只针对实际产物、新证据、范围变化和受影响回归，不机械重复第一次审查。验证和汇报前事实核对继续保留，但不各自计为审查轮次。
+- 操作者主动要求审查时，与当前阶段原定审查合并，不额外叠加；只有新证据、范围变化或产物形成后的独立风险才触发定向复审。本批不包含远端发布。
+
+### English summary
+
+- Require one risk-proportionate preflight check for every instruction: simple work gets a silent quick check, while complex or high-impact work receives structured adversarial review supported by evidence or explicit reasoning.
+- Make a second adversarial review conditional and targeted to actual artifacts, new evidence, scope changes, and affected regressions. Verification and pre-report fact checks remain mandatory but do not each count as review rounds.
+- Merge an operator-requested review with the review already required for that stage instead of adding rounds mechanically. Run a targeted follow-up only for new evidence, scope changes, or artifact-specific risk. This batch does not include remote publication.
+
+## 未发布：Worktree 人话别名与可追溯登记
+
+- 新增项目内唯一且不复用的 worktree 稳定别名；别名用于交流定位，规范路径、分支和 HEAD 仍作为 Git 事实回读，不能把别名误当 Git tag。
+- `WORKTREE` 记录补充用途、特色、禁止及受限操作、责任方、状态、替代映射和清理/保留条件；限制必须独立登记，不能只写在名称里。
+- 登记缺失、别名重复或映射冲突时，只允许必要的只读归属核验；修复前不得自动开发、汇合、迁移、发布或清理该 worktree。本批不包含远端发布。
+
+### English summary
+
+- Add a project-unique, non-reusable human-readable alias for each worktree. The alias is a conversational locator, while canonical path, branch, and HEAD remain the Git facts; it is not a Git tag.
+- Extend `WORKTREE` records with purpose, distinguishing traits, prohibited or restricted actions, ownership, lifecycle state, alias replacement mapping, and retention/removal conditions. Restrictions must be stored separately rather than only encoded in a name.
+- Permit only minimum read-only attribution checks while a mapping is missing, duplicated, or conflicting. Do not develop, integrate, migrate, publish, or remove that worktree automatically until the mapping is repaired. This batch does not include remote publication.
+
 ## 未发布：跨任务经验吸收与交接回执边界强化
 
 - 将跨任务交流中可复用的经验纳入研发侧工作流：回执先区分可复用规则、项目特定约定和未证实建议，只有完成适用性、冲突和隐私核验后，才能写入规范源或质量契约。
