@@ -22,7 +22,6 @@ Only explicitly selected files are accessed; the reader does not scan the comput
 ## Reading, Navigation, and Copying
 
 - The outline supports heading search, navigation, and current-section highlighting. Long outlines scroll to keep the active heading visible. Switching documents restores each document's reading position. Scroll positions for remembered original files are also saved; large document edits may require locating the section again.
-- The outline follows Markdown heading levels: the document `#` remains its title, `##` is emphasized as the first content level with bold text and a subtle background, and `###` plus deeper levels are separated by increasing indentation.
 - The toolbar magnifier opens a search field for the current document, including code, with controls for the previous and next results. Search highlights up to 1000 matches, does not match across separate text nodes created by formatting, and does not save queries. Closing search clears the highlights.
 - The copy icon copies only the original fenced text, preserving indentation and line breaks with CRLF normalized to LF. Explanatory text outside the block is excluded. If clipboard access fails, a read-only text area opens with all text selected for the system copy command.
 - The theme control switches light/dark mode and remembers the preference when browser storage permits. Browser printing omits toolbars and sidebars.
