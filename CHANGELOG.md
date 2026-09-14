@@ -2,32 +2,69 @@
 
 本文件记录 ChatGPT Workflows 的重要变更。
 
+## 未发布：发布前本地资源与推送引用核验
+
+- 已执行：4A 和 PR 标准补充沿运行/验收依赖定点发现相关忽略或受限资源、原位保留、实际待上传历史核账和接收方复现限制；09 明确单分支授权不包含附带标签或其他引用。
+- 不新增按文件类型划分的子场景；沿用其他发布入口对 PR 标准的引用。未验证：真实外部项目的资源状态和远端推送效果。本批仅本地文档维护。
+- 已验证：`git diff --check` 和 `.github/scripts/Test-Repository.ps1` 通过；检查对象为当前混合工作区，不代表其他未提交任务已完成审阅。补充区分 LFS、推送钩子、Release 附件和制品上传的载荷与授权。
+- Verification: Diff whitespace and repository quality checks passed against the mixed working tree, not a review of unrelated pending work. LFS, push hooks, release attachments and artifact uploads require separate payload and authorization checks.
+- English: Publishing guidance now checks relevant ignored or restricted resources through runtime and acceptance dependencies, preserves local resources, audits the actual push history and references, and records recipient reproducibility limits. Branch authorization does not include extra tags or refs. No file-type-specific scenarios were added; external project state and live push behavior remain unverified. This is a local documentation update.
+
 ## 未发布：按风险分层的对抗式审查
 
 - 所有指令执行前均做一次相称检查：简单任务静默快速检查，复杂或高影响任务才展开结构化对抗式审查；审查问题必须有事实或明确推理依据。
 - 第二次对抗式复审改为条件触发，只针对实际产物、新证据、范围变化和受影响回归，不机械重复第一次审查。验证和汇报前事实核对继续保留，但不各自计为审查轮次。
-- 操作者主动要求审查时，与当前阶段原定审查合并，不额外叠加；只有新证据、范围变化或产物形成后的独立风险才触发定向复审。本批不包含远端发布。
+- 操作者主动要求审查时，与当前阶段原定审查合并，不额外叠加；只有新证据、范围变化或产物形成后的独立风险才触发定向复审。本批只更新本地文档，尚未 Commit 或发布。
 
 ### English summary
 
 - Require one risk-proportionate preflight check for every instruction: simple work gets a silent quick check, while complex or high-impact work receives structured adversarial review supported by evidence or explicit reasoning.
 - Make a second adversarial review conditional and targeted to actual artifacts, new evidence, scope changes, and affected regressions. Verification and pre-report fact checks remain mandatory but do not each count as review rounds.
-- Merge an operator-requested review with the review already required for that stage instead of adding rounds mechanically. Run a targeted follow-up only for new evidence, scope changes, or artifact-specific risk. This batch does not include remote publication.
+- An operator-requested review is merged with the review already required for that stage rather than added mechanically. A targeted follow-up occurs only for new evidence, scope changes, or artifact-specific risk. This batch updates local documentation only and has not been committed or published.
 
 ## 未发布：Worktree 人话别名与可追溯登记
 
 - 新增项目内唯一且不复用的 worktree 稳定别名；别名用于交流定位，规范路径、分支和 HEAD 仍作为 Git 事实回读，不能把别名误当 Git tag。
 - `WORKTREE` 记录补充用途、特色、禁止及受限操作、责任方、状态、替代映射和清理/保留条件；限制必须独立登记，不能只写在名称里。
-- 登记缺失、别名重复或映射冲突时，只允许必要的只读归属核验；修复前不得自动开发、汇合、迁移、发布或清理该 worktree。本批不包含远端发布。
+- 登记缺失、别名重复或映射冲突时，只允许必要的只读归属核验；修复前不得自动开发、汇合、迁移、发布或清理该 worktree。本批只更新本地文档，尚未 Commit 或发布。
 
 ### English summary
 
 - Add a project-unique, non-reusable human-readable alias for each worktree. The alias is a conversational locator, while canonical path, branch, and HEAD remain the Git facts; it is not a Git tag.
 - Extend `WORKTREE` records with purpose, distinguishing traits, prohibited or restricted actions, ownership, lifecycle state, alias replacement mapping, and retention/removal conditions. Restrictions must be stored separately rather than only encoded in a name.
-- Permit only minimum read-only attribution checks while a mapping is missing, duplicated, or conflicting. Do not develop, integrate, migrate, publish, or remove that worktree automatically until the mapping is repaired. This batch does not include remote publication.
+- Missing, duplicate, or conflicting mappings permit only the minimum read-only attribution checks until repaired. This batch changes local documentation only and has not been committed or published.
+
+## 未发布：更新 Markdown 阅读器真实运行截图
+
+- 已执行：用操作者提供的最新 1920×919 PNG 运行截图替换 `实用小工具/Markdown阅读器/assets/workflow-reader-preview.png`；已回读目标文件并确认与附件 SHA-256 一致。该截图仅作可选展示材料，不作为运行依赖。
+
+### English summary
+
+- Executed: replaced `实用小工具/Markdown阅读器/assets/workflow-reader-preview.png` with the operator-provided latest 1920×919 PNG runtime screenshot and verified the target SHA-256 matches the attachment. The screenshot remains optional showcase material, not a runtime dependency.
+
+## 未发布：交接失败的分层诊断与一致性交付
+
+- 已执行：补充 04 的通信、材料与身份分层核验；要求先验证候选收到的附件版本，再判断旧副本、漏更新或后续漂移；交付前逐字段回读 current 与实际成果。
+- 已执行：区分更早前任与当前移交方，明确草稿身份冲突和认证切换仅作待核验线索；这些文档约定不是宿主自动拦截。未验证：第三方认证切换故障根因与正式接管。本批尚未提交或发布。
+- English: Added layered handoff diagnosis, received-attachment version checks, field-by-field current-state verification, and distinct predecessor/transferor roles. Provider-switch causality and formal takeover remain unverified; these are workflow rules, not host-enforced controls. Not committed or published.
+
+## 未发布：交接失败回退场景与证据修复
+
+- 新增场景 1I“交接失败时如何处理”，明确提示词发送给移交方 AI，并要求填写当前恢复置信度（中/低）及依据来源（复制对话窗口原文、口述总结或其他）。
+- 固化交接失败的回退链：候选正文不可读、断点缺失、事实冲突或完成声明无法回溯时，先由移交方修订证据和快照，再由候选重新执行场景 1D 的独立只读核验；不以新建空白对话、重复发送或平台“已完成”标记替代核验。
+- 交接快照继续区分已提交树、当前工作树、中央状态和逐对象证据；场景 1I 不授予中央调度权、远端写入权，也不覆盖未提交成果。
+
+### English summary
+
+- Add Scene 1I, “What to do when handoff fails,” with a prompt addressed to the transferring AI. It requires the current recovery confidence (medium/low) and evidence source (copied conversation text, verbal summary, or other).
+- Fix the fallback chain: when the candidate cannot read the response, the checkpoint is missing, facts conflict, or completion claims cannot be traced, the transferring AI must repair the evidence and snapshot before the candidate repeats Scene 1D read-only verification. A blank chat, repeated submission, or a platform “completed” flag is not a substitute for verification.
+- Handoff snapshots continue to separate the committed tree, working tree, central state, and per-object evidence. Scene 1I grants neither central dispatch authority nor remote-write permission and never overwrites uncommitted work.
 
 ## 未发布：跨任务经验吸收与交接回执边界强化
 
+- 修正交接快照的基线表述：明确区分“已提交树与远端目标一致”和“当前工作树含未提交差异”，并把中央状态冲突列为交接阻断；补充快照生成后的失效复核要求。
+- 为专项任务增加开始/结束 `git status` 回报和默认不自行 Commit/Push/合并的边界；为 PR 合并、远端更新和本地 `main` 切换增加按需只读 Fetch 与差异核对前置。
+- 统一 Markdown 阅读器 README 哈希校验的换行规范，并增加目录层级的浏览器断言。
 - 将跨任务交流中可复用的经验纳入研发侧工作流：回执先区分可复用规则、项目特定约定和未证实建议，只有完成适用性、冲突和隐私核验后，才能写入规范源或质量契约。
 - 强化自动化交接快照：存在已登记、待恢复、暂停或替代中的自动化时，逐项记录用途、逻辑任务、世代、频率/时区、配置或提示词指纹、通知设置、授权范围、最后可靠成功截点、平台核验、来源、核验时间和失效条件；不复制完整提示词、凭据或私有目标。
 - 明确平台任务 ID 只是运行时定位线索；回执、成果、授权和平台完成标记分开登记，“已发送”不等于“已确认”，接口不可见不等于目标未收到。
@@ -38,7 +75,7 @@
 - Incorporate reusable cross-task experience into the development workflow: classify incoming findings as reusable rules, project-specific conventions, or unverified suggestions, and update canonical rules or quality contracts only after applicability, conflict, and privacy checks.
 - Strengthen automation handoff snapshots. When an automation is registered, pending recovery, paused, or replaced, record its purpose, logical task, generation, cadence/time zone, configuration or prompt fingerprint, notification settings, authorization scope, last reliable success checkpoint, platform verification, source, verification time, and invalidation conditions—without copying full prompts, credentials, or private targets.
 - Treat platform task IDs as runtime locators only. Track acknowledgements, artifacts, authorization, and platform completion separately: “sent” is not “confirmed,” and an invisible read result is not proof of non-delivery.
-- This batch also records the maintenance context of the broader operator-manual reorganization, scene migration, and prompt-format normalization. The manual and linked rules remain authoritative only after the actual repository changes are committed; this entry currently records local changes and has not been published remotely.
+- This batch also records the maintenance context of the broader operator-manual reorganization, scene migration, and prompt-format normalization. It also corrects handoff snapshot baseline wording, adds central-state conflict blockers and post-snapshot invalidation checks, adds scoped-task `git status` reporting and Fetch prerequisites, and aligns Markdown Reader README hash verification on normalized line endings.
 
 ## 未发布：重排操作者手册场景编号与入口
 
@@ -52,7 +89,7 @@
 - Rebuilt the operator-manual registry for Scenes 1–6 and optional scenes, adding initial prompts for ordinary task handoff, context-free recovery, project analysis, teammate takeover, independent module planning, PR/Issue work, and reference research.
 - Removed the standalone local-development number: local development, acceptance, and delivery preparation now belong to Scene 2; the former 2D safe-convergence flow is Scene 4I and does not imply development, human acceptance, or GitHub Merge.
 - Simplified execution plus independent review from legacy 2F into four sub-scenes under Scene 5; moved the profile feature under optional “Personalization.”
-- Legacy numbers remain compatibility aliases and grant no authorization; this entry records local documentation changes only and has not been committed or published remotely.
+- Legacy numbers remain compatibility aliases and grant no authorization; this entry records the local documentation changes and is included in the current local follow-up commit.
 
 ## 未发布：移除任务卡片上的单轮上下文交接提示
 
@@ -388,6 +425,8 @@ The roadmap items above are candidates only. Before every commit, update this ch
 - 新增 Codex `thread not found` 的低风险恢复案例与操作顺序。
 
 ### Changed
+
+- 固化 worktree 生命周期记录：新建 worktree 必须登记任务、时间、目的、基线、变更摘要、责任方和清理条件；来源不明时暂停自动合并、迁移和清理。第二 worktree 的可复用规则已抽取，未提交草稿不整批迁移。
 
 - 第二代总指挥入口升版为 `2026-09-05.5`：需要操作者另发指令时按需附上可直接发送的下一步提示词，复用已确认事实并保留选择权；不机械附加、不推迟已授权工作，也不预置新的权限。
 

@@ -4,7 +4,7 @@ const crypto = require('node:crypto');
 const assert = require('node:assert/strict');
 const dir = __dirname;
 assert(!fs.existsSync(path.join(dir, 'demo.js')), 'No bundled document snapshot');
-const cn = fs.readFileSync(path.join(dir, 'README.md'));
+const cn = fs.readFileSync(path.join(dir, 'README.md'), 'utf8').replace(/\r\n/g, '\n');
 const en = fs.readFileSync(path.join(dir, 'README.en.md'), 'utf8');
 assert(en.includes('README-SOURCE-SHA256: ' + crypto.createHash('sha256').update(cn).digest('hex')));
 assert(cn.toString().startsWith('[English](README.en.md)'));
