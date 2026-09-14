@@ -2,6 +2,12 @@
 
 本文件记录 ChatGPT Workflows 的重要变更。
 
+## 未发布：唯一日常主工作区与隔离载体可见性
+
+- 已执行：为单人维护项目增加唯一日常主工作区规则；自然语言“修改本地项目/工作流”默认指已登记入口的当前权威默认分支，不能静默创建、切换或把后续工作转移到其他分支/worktree。
+- 创建或切换隔离载体前须说明路径、起点、必要性、用途、禁止项、回归主线方式和保留条件，并取得本次明确确认；任务结束须报告实际修改位置、成果层级、遗留载体和日常入口对齐状态。该默认不外推到其他项目或多人团队。
+- English: Added a single daily workspace policy for explicitly registered solo-maintained projects. Natural-language requests to modify the local project target that workspace's authoritative default branch. Moving work to another branch or worktree requires an explicit, informed confirmation and an end-of-task location and convergence report; this policy does not apply automatically to other repositories or team workflows.
+
 ## 未发布：发布前本地资源与推送引用核验
 
 - 已执行：4A 和 PR 标准补充沿运行/验收依赖定点发现相关忽略或受限资源、原位保留、实际待上传历史核账和接收方复现限制；09 明确单分支授权不包含附带标签或其他引用。
