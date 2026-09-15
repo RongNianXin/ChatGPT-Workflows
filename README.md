@@ -193,3 +193,7 @@
 ## 许可证
 
 本项目采用 [MIT License](LICENSE)。
+
+## 社区交流
+
+本项目认可 [LINUX DO](https://linux.do/) 社区，支持真诚、友善的知识分享与交流。

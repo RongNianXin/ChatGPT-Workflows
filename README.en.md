@@ -158,4 +158,8 @@ The privacy claims are auditable: the real profile stays in an exact `.gitignore
 
 Released under the [MIT License](LICENSE).
 
-<!-- README-SOURCE-SHA256: b3c5fbefa711980625a85a24aead94415800dec386ce9114af857c891ae18ee1 -->
+## Community
+
+This project acknowledges the [LINUX DO](https://linux.do/) community and supports sincere, friendly knowledge sharing and exchange.
+
+<!-- README-SOURCE-SHA256: 7c4186b4a0f5064e9d260abc2734eaed431e052b3c707ae705b2013614ad02a1 -->
