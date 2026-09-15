@@ -5,8 +5,8 @@
 ## 未发布：补充社区交流说明
 
 - 已执行：在中英文 README 的许可证章节前补充 LINUX DO 社区链接和交流说明；英文采用中性表述，避免暗示官方背书、合作关系或发布资格。
-- 已验证：同步刷新英文 README 的中文源 SHA-256 标记，并完成仓库质量检查与差异检查。本次仅修改本地文档，未 Commit 或发布。
-- English: Added a LINUX DO community link and a neutral community statement before the license sections in both README files. Refreshed the English page's Chinese-source SHA-256 marker. This is a local documentation update and has not been committed or published.
+- 已验证：同步刷新英文 README 的中文源 SHA-256 标记，并完成仓库质量检查与差异检查。本次文档修改已提交并推送到远端默认分支。
+- English: Added a LINUX DO community link and a neutral community statement before the license sections in both README files. Refreshed the English page's Chinese-source SHA-256 marker. The documentation update has been committed and pushed to the remote default branch.
 
 ## 未发布：历史分支审计与安全清理
 
