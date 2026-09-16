@@ -2,6 +2,27 @@
 
 本文件记录 ChatGPT Workflows 的重要变更。
 
+## 未发布：跨任务回执按回合排队并隔离契约
+
+- 已执行：把不可抢占边界从整个长期任务缩小到正在运行的当前回合。回合执行中收到的跨任务消息进入 FIFO 队列；本回合完整输出后优先处理队列，再恢复原任务断点。窗口已处于回合间空闲点时，即使原任务仍有后续步骤，也不能阻塞回执。
+- 已执行：每条跨任务消息使用独立事件契约，不得与接收窗口原任务合并目标、范围、授权、事实或验证结论。规则与故障记录已补充截图所示的“长期任务阻塞回执”和“外部审查混入本地画像任务”两类现场现象。
+- 待验证：本批只修正文档行为契约与静态质量检查，未修改 Codex 宿主调度器，也未进行真实跨窗口消息试验；空回合等底层故障仍保持未解决。
+- English: Cross-task messages now queue only behind the currently running turn, not behind an unfinished multi-turn task. Each message uses an isolated event contract, is handled before the previous long-running task resumes, and cannot inherit or merge that task's scope, authorization, facts, or conclusions. Runtime behavior remains unverified because this change does not modify the Codex host scheduler.
+
+## 未发布：操作者画像跨项目接管与三个场景入口
+
+- 已执行：将原 Pe1 拆分为 Pe1-(a) 开启或接管、Pe1-(b) 持久关闭、Pe1-(c) 从粘贴文本/精确路径/直接链接生成候选；新项目定位同一规则根后继承已核验的画像选择和修订号。场景 1A 现支持无文件、Git 或远端的本地空白项目，不会为启动总指挥擅自初始化 Git 或创建远端。
+- 已执行：所有已启用窗口在指定断点检查新证据，由当前总指挥默认统一写入；姓名、年龄、职业等身份资料经逐字段确认后只能进入独立本地档案，不进入跨项目画像、索引、交接或自动接管。硬禁止载荷继续拒绝写入。
+- 已验证：仓库质量脚本、Markdown 差异检查和本地画像 Git 隐私边界通过。本批只本地维护，未 Commit 或发布；未在另一个真实空白项目中启动新总指挥做跨窗口现场演练。
+- English: Split operator profiles into enable/takeover, disable, and external-source entry points. A new project can inherit a verified rule-root-level choice, while one profile writer merges checkpoint candidates. Identity details such as name, age, and occupation require field-level confirmation and remain in a separate local-only record; they do not enter the cross-project profile, index, handoff, or automatic takeover flow.
+
+## 未发布：统一计划、进度与存档入口
+
+- 已执行：把“写进计划、记录成果、保存进度、存档、留档”等自然语言纳入通用语义路由；详细材料按用途保存，同时把仍影响执行、验收、阻断、暂缓或恢复的事项同步到项目中央工作项清单。
+- 已执行：明确中央清单、当前进度视图、会议/专项证据、CHANGELOG 与工程 TODO/Issue 的职责，并要求交接快照投影全部非终态事项、优先级、断点、恢复/失效条件和证据指针。
+- 已验证：规则入口版本统一为 `2026-09-16.1`；规则契约、Markdown 链接、双语 README、PowerShell 语法、差异检查和仓库质量检查通过。本批仅本地维护，未 Commit 或发布。
+- English: Added a shared semantic route for plan, progress, result, and archive requests. Projects keep one central work-item register for resumable state, a concise current-progress view, detailed evidence in its original records, and portable handoff snapshots that remain projections rather than new sources of truth.
+
 ## 未发布：补充社区交流说明
 
 - 已执行：在中英文 README 的许可证章节前补充 LINUX DO 社区链接和交流说明；英文采用中性表述，避免暗示官方背书、合作关系或发布资格。
