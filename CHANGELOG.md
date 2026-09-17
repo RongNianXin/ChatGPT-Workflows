@@ -2,6 +2,14 @@
 
 本文件记录 ChatGPT Workflows 的重要变更。
 
+## 未发布：压缩恢复后的重复创建防护
+
+- 已执行：登记一次总指挥在上下文压缩后恢复已完成教学目标、再次调用 `create_thread` 并生成第二个独立任务的现场；两个任务各执行一次，不是原教学窗口自行重跑。
+- 已执行：每次创建前按来源请求、规范化目标和交付类型核对近期相关任务；复用初始化中/进行中任务，回读未交付的既有结果，已交付任务只有在操作者本轮明确要求重跑时才能重建。
+- 已执行：发生上下文压缩或恢复后，旧创建计划失效；必须重新核对最新有效请求、完成回执和任务映射。第二次实际运行使用 Sol，现有证据不支持把 Terra 作为根因。
+- 已验证：`git diff --check` 与仓库质量脚本通过；本批没有重放真实创建流程，也没有修改 Codex 宿主调度器，行为级防护的真实运行效果仍待验证。
+- English: After context compaction, the coordinator restored a completed teaching request and called `create_thread` again, producing a second independent task. Task creation now checks the source request, normalized objective, delivery type, existing task state, and completion receipt; any pre-compaction creation plan must be revalidated before execution.
+
 ## 未发布：场景 2C 的可选诊断证据
 
 - 已执行：场景 2C 增加可选诊断证据字段和“行车记录仪”说明，明确日志、trace、请求标识、阶段产物或后台观测不是入场券；AI 能自行取得时不要求操作者重复提供。
