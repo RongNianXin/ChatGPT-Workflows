@@ -302,6 +302,11 @@ function Test-CommanderDurableWorkflowContract {
             Required = @('并存实现决议与实际运行身份', '规范启动命令及自检输出', '代码已包含', '干净环境可复现', '发布内容筛选：用途、规则与精确载荷', '没有分支保护不等于没有项目规则', '被明确排除的内容仍不纳入', '测试依赖不等于产品运行依赖', '源码也可能内嵌像素', '默认只读分析', '最新 worktree 不等于新目录架构获准', '不得静默删测试、削断言或隐藏失败', '最终树与本次将上传的全部提交历史', '最终确认绑定目标、精确文件和历史范围', '不能借公开 Draft 上传')
         },
         @{
+            Path = '总指挥工作流/第二代总指挥的工作模式/docs/AUTOMATED_TESTING_LESSONS.md'
+            # Documentary presence checks only; these do not prove a project's impact analysis or tests are complete.
+            Required = @('共享组件、公共接口、运行时选择器', '真实产品回归', '过期的测试契约', '测试装置/环境错误', '受影响测试文件或项目定义的等价测试单元', '不能把测试弱化为只断言不存在')
+        },
+        @{
             Path = '总指挥工作流/第二代总指挥的工作模式/06-复盘与优化规则.md'
             Required = @('公开可复制提示词', '私聊中的临时示例', '专业表达与低操作负担', '不依赖未分发的私有指令', '减少人工步骤不减少安全、权限、测试或领域专业验收')
         },
@@ -382,7 +387,7 @@ function Test-CommanderBoundedExecutionCases {
         @{ File='03-专项任务卡模板.md'; Required=@('核心字段和实际触发的条件段', '没有 GitHub 对象', '默认沿用当前配置', '操作目的：', '异常反馈：'); Forbidden=@('中断恢复身份：保持本专项任务身份', '场景 2B 必须在通用任务卡基础上增加') },
         @{ File='10-自动状态索引规范.md'; Required=@('下一项实质动作前回读', '指纹证明内容身份', '完整读取受影响标题', '当前授权明确覆盖全量范围'); Forbidden=@('无法唯一恢复时自动切换全量推进') },
         @{ File='总指挥轻量交接启动配置.md'; Required=@('可可靠定位时完整读取受影响标题', '候选阶段只读', '旧远端授权'); Forbidden=@('只完整读取受影响文件并记录差异') },
-        @{ File='docs/PIPELINE_DIAGNOSIS_AND_ALGORITHM_TUNING_STANDARD.md'; Required=@('不每阶段重复询问', '已有有效授权内的后续动作'); Forbidden=@('只有操作者重新发送建议文本后', 'AI 还必须询问') },
+        @{ File='docs/PIPELINE_DIAGNOSIS_AND_ALGORITHM_TUNING_STANDARD.md'; Required=@('不每阶段重复询问', '已有有效授权内的后续动作', '都是可选证据，不是进入本流程的前提', '缺少该证据只暂停依赖它的归因', '不能凭相关性直接升级为根因'); Forbidden=@('只有操作者重新发送建议文本后', 'AI 还必须询问') },
         @{ File='docs/PR_SUBMISSION_AND_REVIEW_STANDARD.md'; Required=@('尚未通读时只允许本地草稿', '没有代码变化无需制造新 Commit'); Forbidden=@('给出新的精确 Head') },
         @{ File='docs/EXECUTION_AND_INDEPENDENT_REVIEW.md'; Required=@('不等于一条命令', '实质失效', '正常修订和新增验证', '绝对上限三轮'); Forbidden=@('证据、权限、范围、中央暂停/停止、收口状态或互斥资源发生变化时') },
         @{ File='docs/AUTOMATED_TESTING_LESSONS.md'; Required=@('正式运行所用解析路径', '人工认可绑定具体阶段', '枚举测试、配置检查及 AI 汇总另用输出位置', '先核对实际 schema', '可选工具失败只限制该工具'); Forbidden=@() },

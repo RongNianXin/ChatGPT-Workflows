@@ -2,6 +2,29 @@
 
 本文件记录 ChatGPT Workflows 的重要变更。
 
+## 未发布：场景 2C 的可选诊断证据
+
+- 已执行：场景 2C 增加可选诊断证据字段和“行车记录仪”说明，明确日志、trace、请求标识、阶段产物或后台观测不是入场券；AI 能自行取得时不要求操作者重复提供。
+- 已执行：有限记录先冻结版本、输入和现象，再做少量受控尝试；刷新、换输入、改参数或切模式前按覆盖边界及时导出。日志缺失只暂停依赖它的归因，日志存在也不能代替原始输入、运行身份、人工观察、可信真值或可证伪根因验证。
+- 已执行：补充页面内存记录的刷新提示：普通刷新、关闭或离开页面前先保存；硬刷新只用于怀疑前端资源缓存或 AI 明确要求取新资源，不作为日常复现或日志保存步骤。
+- 已验证：规则只补充 2C 操作者入口与既有链路诊断手册，没有复制 09 连续执行或 10 规则复用；差异检查与仓库质量检查通过。来源项目的端口、路径、容量和产品字段未进入通用规则。
+- English: Scene 2C now treats logs, traces, request identifiers, stage artifacts, and backend observations as optional evidence rather than an entry requirement. The AI acquires accessible evidence first, requests minimal operator steps only when necessary, preserves bounded records before state changes, and never treats a log as ground truth or causal proof.
+
+## 未发布：功能删减的影响面与测试契约门禁
+
+- 已执行：自动化测试手册要求在删除、隐藏、改名或迁移功能前，沿实际引用核对共享组件、公共接口、运行时契约和测试消费者，不把单一页面通过当作影响面完整。
+- 已执行：CI 失败区分真实产品回归、合法需求变化后的过期测试契约、测试装置或环境错误及有证据的时序波动；修正测试不得只为变绿削弱断言。受影响测试文件或等价测试单元须完整运行，但不机械扩大为整库或高资源测试。
+- 已执行：删除类需求使用“目标不存在或不可达 + 保留的关键业务行为仍正确”的组合证据；项目组件名、DOM 和具体测试写法不进入通用规则。
+- 已验证：差异检查与仓库质量检查通过；本次只更新工作流文档和静态耐久契约，未在来源项目重跑产品测试。
+- English: The testing guide now requires dependency-aware impact checks before removing or hiding behavior, classifies CI failures before changing assertions, runs the affected test file or equivalent unit without forcing a full-suite run, and pairs absence checks with evidence that retained behavior still works.
+
+## 未发布：PR 最终事实与本地 amend 的披露边界
+
+- 已执行：PR 标准明确区分从未对外可见的本地 amend、已 Push/进入 PR、CI、审阅、其他远端引用或被协作者取得的旧 Head，以及未外发但涉及安全、隐私、数据处置的旧 Head。前者的 PR 正文只描述最终 Head；已对外可见者必须如实说明相对上次可见 Head 的实质增量并重新核验；未外发的敏感处置事实保留在本地受控审计记录，PR 只写最终 Head 必需的脱敏影响、修复和剩余风险。
+- 已执行：不要求逐次记录纯本地排版或措辞试错；既有本地任务状态或受控审计记录保留最终 Head、验证证据，以及会影响安全、隐私、数据、范围或验证有效性的事实，避免把本地日志当作远端协作记录的替代品。
+- 已验证：本次仅合并进现有“精确 Head”条款，没有新增平行流程或规则文件；仓库质量检查与差异检查通过。
+- English: The PR standard now distinguishes a purely local, never-visible amend; a prior head that was pushed, entered PR/CI/review or another remote reference, or reached collaborators; and a never-visible head involving security, privacy, or data handling. Only the final head belongs in the first PR narrative. A previously visible head requires a truthful incremental update and renewed checks; a never-visible sensitive case stays in controlled local audit records, while the PR contains only the necessary redacted impact, fix, and residual risk.
+
 ## 未发布：跨任务回执按回合排队并隔离契约
 
 - 已执行：把不可抢占边界从整个长期任务缩小到正在运行的当前回合。回合执行中收到的跨任务消息进入 FIFO 队列；本回合完整输出后优先处理队列，再恢复原任务断点。窗口已处于回合间空闲点时，即使原任务仍有后续步骤，也不能阻塞回执。
