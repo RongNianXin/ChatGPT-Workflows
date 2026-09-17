@@ -2,6 +2,14 @@
 
 本文件记录 ChatGPT Workflows 的重要变更。
 
+## 未发布：Windows SessionDesk dev.10 本地发布候选
+
+- 已执行：将工具中英文 README 的测试数量从 45 项改为实际记录的 47 项自动化模拟测试，并明确这些测试不代表覆盖所有电脑、系统环境或真实会话。
+- 已执行：旧 dev.10 ZIP 以原 SHA-256 保留为历史测试产物；从当前源码重新生成 10 文件候选包。新包 SHA-256 为 `D3F8C0A3B82EB8E13902FA08A2A336059A1C91D0ABFDCE678CD24042E2357B55`，不含 `.local`、任务清单、连接文件或已检出的机器专属路径。
+- 已验证：新 ZIP 在短路径解压后通过服务启动、版本显示、任务保存、虚构查询、详细报告、零页面错误/外部请求和界面退出等 8 项冒烟检查。现有公开截图与当前 dev.10 的版本、控件和布局一致，但截图不含构建哈希，不能证明来自这个精确 ZIP。
+- 未验证：本轮完整 47 项重跑在“旧版任务迁移后等待页面”处发生不稳定超时，没有形成新的全通过凭证；此前的 47 项通过记录继续作为历史证据，不能替代本轮结果。过深解压路径还会触发 Windows PowerShell 5.1 路径长度限制，继续要求解压到较短路径。
+- English: Updated both tool READMEs from 45 to 47 automated simulation checks and stated their coverage limits. Rebuilt the ten-file dev.10 ZIP from current source, preserved the old candidate by its original hash, and passed an eight-step smoke test after extracting to a short path. A fresh full 47-check run remains unverified because the harness timed out after legacy-task migration; the screenshot matches the current dev.10 interface but cannot prove exact ZIP provenance.
+
 ## 未发布：压缩恢复后的重复创建防护
 
 - 已执行：登记一次总指挥在上下文压缩后恢复已完成教学目标、再次调用 `create_thread` 并生成第二个独立任务的现场；两个任务各执行一次，不是原教学窗口自行重跑。

@@ -40,7 +40,7 @@ Old HTML prototypes and synthetic demos are retired from the current distributio
 
 - The [command-line quick guide](查看当前任务本地对话文件大小.md) (Chinese) uses the same `check-codex-session.ps1`. Chinese is the default; add `-Language en-US` for English.
 - `compatibility-fixtures.json` contains synthetic regression cases for the repository’s JSON field-order checks, not user data.
-- Release preparation includes 45 isolated synthetic interaction checks, repository quality checks and ZIP verification. The operator reported successful dev.9 manual use. Automated regression does not prove exhaustive real-session, macOS or all-device support.
+- Release preparation includes 47 automated simulation checks with isolated synthetic data, repository quality checks and ZIP verification. The operator reported successful dev.9 manual use. These 47 checks cover defined behavior and boundaries; they do not mean that every computer, system environment or real session has been tested, and they do not establish macOS or all-Windows-device support.
 
 ## Statistics and privacy
 
@@ -48,4 +48,4 @@ Results are engineering guidance, not official thresholds or live status. Segmen
 
 Detailed reports and history can contain complete user input and local paths. They remain in `.local` and must not be published without review. ZIP files exclude private state. The service listens only on loopback and validates a random connection token. Exit does not stop other programs or Codex tasks. Preserve the analyzer’s integrity warnings; missing Token counts must not be treated as zero.
 
-<!-- README-SOURCE-SHA256: caa362ffeb54953e5ed42e3d6301745382288fe584420d247cef7fc4f428c897 -->
+<!-- README-SOURCE-SHA256: a4caa8c6315cc467e21a96fe33d7eaa58589dcb1c1795ea0006bc4287b0aaf24 -->
