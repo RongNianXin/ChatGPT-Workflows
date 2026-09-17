@@ -2,6 +2,13 @@
 
 本文件记录 ChatGPT Workflows 的重要变更。
 
+## 未发布：发布候选的存储环境基线
+
+- 已执行：自动化测试最小契约新增操作系统、运行时或 shell、普通本地/同步/网络文件系统、实际路径长度和已知平台限制；未知环境只限制依赖它的结论，不自动判定产品失败。
+- 已执行：发布候选验证绑定精确包 SHA-256 与文件清单，先从全新短路径非同步目录建立基准；源码目录、旧解压副本和同名旧包不能代签。声明支持同步目录或网络文件系统时，再用同一候选做单变量兼容性对照。
+- 已执行：同一测试装置错误连续两次后转既有链路诊断标准，区分路径限制、文件系统竞争、测试装置和产品行为，找到第一处可靠偏差后再修；不得把未经同包、同输入对照的换目录后通过、延长超时或重复全量测试当作故障已解决。
+- English: The testing contract now records the operating system, runtime or shell, storage type and effective path length. Release validation binds the exact package hash and manifest, establishes a baseline from a fresh short non-synced extraction, and uses the same package for any claimed sync or network-storage compatibility check. Two repeated harness failures must enter the existing causal diagnosis flow before further fixes.
+
 ## 未发布：Windows SessionDesk dev.10 同步盘兼容修复
 
 - 已确认：旧清单迁移后的页面超时来自同步盘短暂占用 `tasks.json`，接口返回共享冲突并留下 `tasks.json.pending`；服务快速重启时，`server.lock` 也可能被同步程序短暂占用。过深解压路径触发的 Windows PowerShell 5.1 路径限制是另一项独立环境问题。
