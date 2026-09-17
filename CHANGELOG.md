@@ -17,6 +17,20 @@
 - 边界：完整回归仍是合成数据，不能代表所有电脑、同步软件和真实会话。同步盘内的完整测试还可能因测试脚本直接写入夹具时被占用而失败，因此发布验收使用从精确 ZIP 解压出的非同步短路径副本。
 - English: Added bounded retries for transient sync-folder sharing violations during atomic state writes and single-writer lock acquisition. Persistent failures remain visible. The exact ten-file clean ZIP passed all 47 synthetic checks from a non-synced short path with no page errors or external requests; its SHA-256 is `8C4D2E1C68A68C7B37A0F3977431704D99BA86A7A65AF5A018117D8EFC8BE0CC`. Coverage does not extend to every machine, sync client, or real session.
 
+## 未发布：工作流规则统一写入门禁
+
+- 已执行：规则、模板、检查脚本和根 `AGENTS.md` 的写入、暂存与 Commit 收归当前唯一总指挥；其他任务窗口只能回传带问题、事实、精确建议位置、影响、验证、风险和证据指针的建议包。
+- 已执行：只有操作者完成正式总指挥换任，新的登记总指挥才能取得该写入权；同账号、专项委派、独立审查、通信回执和一般维护授权均不能例外。
+- 已验证：仓库质量检查将核对这条职责边界的关键文字。该检查证明规则未被删改，不保证宿主平台强制阻止其他窗口写文件。
+- English: Centralized writes, staging, and commits for workflow rules, templates, checks, and the root `AGENTS.md` under the currently registered sole commander. Other task windows may only return an evidence-backed proposal. The authority transfers only through a formal commander handoff; the repository check detects missing contract text but cannot enforce host-level file permissions.
+
+## 未发布：事件触发的规则刷新回执
+
+- 已执行：把“重新温习规则”实现为事件触发的 `RULE-REFRESH` 短回执。新任务/角色、上下文压缩或恢复、契约/场景/范围/风险/授权变化、长任务批次切换、高影响动作和最终汇报前，重新核对短状态、规则路径、指纹及当前动作的关键标题。
+- 已执行：刷新结果记录触发原因、实际回读范围、`PASS / WARN / FAIL`、冲突缺口、受影响动作和下一失效条件。未实际回读、输出截断、路径不可访问或写入失败不能登记通过。
+- 边界：采用稳定事件节点，不按固定分钟、消息数或工具调用后台轮询。该机制能留下重新加载证据并发现旧规则，不能直接控制模型注意力，也不能证明后续动作必然遵从。
+- English: Added an event-triggered `RULE-REFRESH` receipt for task/role start, context recovery, scope or authorization changes, long-task batch transitions, high-impact actions, and final reporting. It records fingerprints, actual reread scope, outcome, gaps and expiry conditions; it is auditable evidence of reloading, not a guarantee of model attention or compliance.
+
 ## 未发布：Windows SessionDesk dev.10 本地发布候选
 
 - 已执行：将工具中英文 README 的测试数量从 45 项改为实际记录的 47 项自动化模拟测试，并明确这些测试不代表覆盖所有电脑、系统环境或真实会话。
@@ -24,6 +38,13 @@
 - 已验证：新 ZIP 在短路径解压后通过服务启动、版本显示、任务保存、虚构查询、详细报告、零页面错误/外部请求和界面退出等 8 项冒烟检查。现有公开截图与当前 dev.10 的版本、控件和布局一致，但截图不含构建哈希，不能证明来自这个精确 ZIP。
 - 未验证：本轮完整 47 项重跑在“旧版任务迁移后等待页面”处发生不稳定超时，没有形成新的全通过凭证；此前的 47 项通过记录继续作为历史证据，不能替代本轮结果。过深解压路径还会触发 Windows PowerShell 5.1 路径长度限制，继续要求解压到较短路径。
 - English: Updated both tool READMEs from 45 to 47 automated simulation checks and stated their coverage limits. Rebuilt the ten-file dev.10 ZIP from current source, preserved the old candidate by its original hash, and passed an eight-step smoke test after extracting to a short path. A fresh full 47-check run remains unverified because the harness timed out after legacy-task migration; the screenshot matches the current dev.10 interface but cannot prove exact ZIP provenance.
+
+## 未发布：下一步建议改为可直接执行的交棒
+
+- 已执行：日常汇报出口现在必须区分三种情况：AI 在授权内直接继续、操作者按明确步骤手动操作、操作者复制完整提示词发给 AI。只列项目待办不再算合格的下一步建议。
+- 已执行：手动操作必须说明位置、步骤或命令、目的、成功表现和异常反馈；需要另发消息时，必须提供标题为“可直接发送”的独立文本块，并预填对象、范围、禁止项和验收标准。
+- 已验证：`git diff --check` 与仓库质量脚本通过。本批只修改本地工作流规则、耐久检查和履历，不涉及远端写入。
+- English: The daily reporting exit must now distinguish work the AI should continue within existing authorization, explicit manual steps for the operator, and a complete prompt the operator can send to an AI. A bare project to-do list is no longer an acceptable next action.
 
 ## 未发布：压缩恢复后的重复创建防护
 
@@ -33,6 +54,13 @@
 - 已验证：`git diff --check` 与仓库质量脚本通过；本批没有重放真实创建流程，也没有修改 Codex 宿主调度器，行为级防护的真实运行效果仍待验证。
 - English: After context compaction, the coordinator restored a completed teaching request and called `create_thread` again, producing a second independent task. Task creation now checks the source request, normalized objective, delivery type, existing task state, and completion receipt; any pre-compaction creation plan must be revalidated before execution.
 
+## 未发布：授权说明、连续执行与本地等价 CI 验证
+
+- 已执行：授权确认在精确字段前先用人话说明拟做动作、原因、预期改变、风险/资源/耗时、成功结果与异常停止或所需反馈；该概览不替代精确授权卡，也不把进度更新伪装成授权请求。
+- 已执行：明确普通进度告知不要求操作者逐阶段回复或暂停。只有新授权、人工决策、明确停止条件或无法限定影响的异常才等待反馈。
+- 已执行：项目提供可本地复现的受影响 CI Job 时，优先执行等价 Job；无法等价时，说明浏览器、服务、权限或环境差异的限制。规则不要求全量 CI 或特定项目参数。
+- 已验证：同步更新模板、授权规则、测试手册和静态耐久契约；来源项目的 PR、提交、浏览器、DOM、测试文件与 CI 结论均未写入本仓库。
+- English: Authorization requests now start with a plain-language summary of the action, rationale, expected change, risk/resources/time, successful result, and stop or feedback path. Routine progress updates do not pause authorized work. When a project provides a reproducible local command for an affected CI job, run that equivalent job first or disclose the environment gap.
 ## 未发布：场景 2C 的可选诊断证据
 
 - 已执行：场景 2C 增加可选诊断证据字段和“行车记录仪”说明，明确日志、trace、请求标识、阶段产物或后台观测不是入场券；AI 能自行取得时不要求操作者重复提供。
