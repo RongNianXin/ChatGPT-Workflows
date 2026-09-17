@@ -81,9 +81,25 @@ function Error-Text([string]$Message) {
 }
 function Write-Atomic([string]$Path, [string]$Text) {
     $temp = $Path + '.pending'
-    [IO.File]::WriteAllText($temp, $Text, $utf8)
-    if ([IO.File]::Exists($Path)) { [IO.File]::Replace($temp, $Path, $Path + '.bak') }
-    else { [IO.File]::Move($temp, $Path) }
+    for ($attempt = 0; $attempt -lt 8; $attempt++) {
+        try {
+            [IO.File]::WriteAllText($temp, $Text, $utf8)
+            break
+        } catch [IO.IOException] {
+            if ($attempt -eq 7) { throw }
+            Start-Sleep -Milliseconds (100 * ($attempt + 1))
+        }
+    }
+    for ($attempt = 0; $attempt -lt 8; $attempt++) {
+        try {
+            if ([IO.File]::Exists($Path)) { [IO.File]::Replace($temp, $Path, $Path + '.bak') }
+            else { [IO.File]::Move($temp, $Path) }
+            return
+        } catch [IO.IOException] {
+            if ($attempt -eq 7) { throw }
+            Start-Sleep -Milliseconds (100 * ($attempt + 1))
+        }
+    }
 }
 function Valid-Id([string]$Id) { return $Id -cmatch '^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$' }
 function Save-Tasks {
@@ -176,7 +192,19 @@ function Update-Job($Job) {
     return @{id=$Job.id;run=$Job.run;language=$Job.language;state=$Job.state;output=$Job.output;error=$Job.error;finished=$Job.finished;nameChange=$Job.nameChange;metadataWarning=$Job.metadataWarning;level=$Job.level;score=$Job.score;contextPercent=$Job.contextPercent;historySaved=$Job.historySaved;reportAvailable=($Job.state -eq 'done')}
 }
 try {
-    try { $lock = [IO.File]::Open((Join-Path $data 'server.lock'), 'OpenOrCreate', 'ReadWrite', 'None'); $lockOwned=$true }
+    try {
+        $lockPath = Join-Path $data 'server.lock'
+        for ($attempt = 0; $attempt -lt 6; $attempt++) {
+            try {
+                $lock = [IO.File]::Open($lockPath, 'OpenOrCreate', 'ReadWrite', 'None')
+                $lockOwned=$true
+                break
+            } catch [IO.IOException] {
+                if ($attempt -eq 5) { throw }
+                Start-Sleep -Milliseconds (100 * ($attempt + 1))
+            }
+        }
+    }
     catch {
         # An existing instance owns this exact state directory. Never start a second writer.
         if (-not $NoBrowser -and [IO.File]::Exists($connectionPath)) {

@@ -2,6 +2,14 @@
 
 本文件记录 ChatGPT Workflows 的重要变更。
 
+## 未发布：Windows SessionDesk dev.10 同步盘兼容修复
+
+- 已确认：旧清单迁移后的页面超时来自同步盘短暂占用 `tasks.json`，接口返回共享冲突并留下 `tasks.json.pending`；服务快速重启时，`server.lock` 也可能被同步程序短暂占用。过深解压路径触发的 Windows PowerShell 5.1 路径限制是另一项独立环境问题。
+- 已修复：原子写入把临时文件写入和正式替换分成有限 `IOException` 重试；服务锁获取也采用有限重试。持续失败仍抛出错误，快照保存失败仍对页面可见，`FileShare.None` 单写者约束保持不变。
+- 已验证：同步盘最小迁移流程修复后连续 10 次返回 HTTP 200；精确的 10 文件 clean ZIP 在非同步短路径完整通过 47 项自动化模拟测试，`errors=[]`、`external=0`，未包含 `.local`、任务清单或连接文件。候选 SHA-256 为 `8C4D2E1C68A68C7B37A0F3977431704D99BA86A7A65AF5A018117D8EFC8BE0CC`。
+- 边界：完整回归仍是合成数据，不能代表所有电脑、同步软件和真实会话。同步盘内的完整测试还可能因测试脚本直接写入夹具时被占用而失败，因此发布验收使用从精确 ZIP 解压出的非同步短路径副本。
+- English: Added bounded retries for transient sync-folder sharing violations during atomic state writes and single-writer lock acquisition. Persistent failures remain visible. The exact ten-file clean ZIP passed all 47 synthetic checks from a non-synced short path with no page errors or external requests; its SHA-256 is `8C4D2E1C68A68C7B37A0F3977431704D99BA86A7A65AF5A018117D8EFC8BE0CC`. Coverage does not extend to every machine, sync client, or real session.
+
 ## 未发布：Windows SessionDesk dev.10 本地发布候选
 
 - 已执行：将工具中英文 README 的测试数量从 45 项改为实际记录的 47 项自动化模拟测试，并明确这些测试不代表覆盖所有电脑、系统环境或真实会话。
