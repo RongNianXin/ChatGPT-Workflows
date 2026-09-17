@@ -33,11 +33,13 @@ Scene 2C reconstructs the actual execution path as stable, reviewable steps and 
 
 ## Codex 会话交接评估 / Codex session handoff assessment
 
-Windows 工作台支持保存任务 ID、自动读取名称与项目、排序、双语查询和历史恢复。基本报告与详细报告分区展示；不再使用时点击“退出工具”，仅关闭网页不会停止后台服务。
+Windows 工作台支持保存任务 ID、自动读取名称与项目、排序、双语查询和历史恢复。基本报告与详细报告分区展示；不再使用时点击“退出工具”，仅关闭网页不会停止后台服务。截图对应 `0.2.0-dev.10` 本地发布候选；公开下载仍以已发布版本为准。
 
-The Windows desk saves task IDs, detects names and projects, and provides ordering, bilingual queries and history restoration. Basic and detailed reports are separate. Select Exit tool when finished; closing the page alone does not stop the service.
+The Windows desk saves task IDs, detects names and projects, and provides ordering, bilingual queries and history restoration. Basic and detailed reports are separate. Select Exit tool when finished; closing the page alone does not stop the service. The screenshot shows the local `0.2.0-dev.10` release candidate; public downloads remain tied to published releases.
 
 [打开工具说明 / Open the tool guide](实用小工具/Codex会话交接评估/README.md)
+
+[dev.10 测试清单 / dev.10 test manifest](实用小工具/Codex会话交接评估/DEV10_TEST_MANIFEST.md)
 
 [![Windows 会话工作台更新版脱敏真实运行截图](实用小工具/Codex会话交接评估/运行效果截图.png)](实用小工具/Codex会话交接评估/运行效果截图.png)
 
