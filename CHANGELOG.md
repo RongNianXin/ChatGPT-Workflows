@@ -31,6 +31,13 @@
 - 边界：采用稳定事件节点，不按固定分钟、消息数或工具调用后台轮询。该机制能留下重新加载证据并发现旧规则，不能直接控制模型注意力，也不能证明后续动作必然遵从。
 - English: Added an event-triggered `RULE-REFRESH` receipt for task/role start, context recovery, scope or authorization changes, long-task batch transitions, high-impact actions, and final reporting. It records fingerprints, actual reread scope, outcome, gaps and expiry conditions; it is auditable evidence of reloading, not a guarantee of model attention or compliance.
 
+## 未发布：Windows SessionDesk dev.10 发布前证据清单
+
+- 已执行：新增唯一的 47 项命名自动化模拟测试清单，明确排序、刷新和角色分组属于该清单内的覆盖内容，不再与其他统计口径重复相加。
+- 已验证：对 SHA-256 为 `8C4D2E1C68A68C7B37A0F3977431704D99BA86A7A65AF5A018117D8EFC8BE0CC` 的 10 文件候选 ZIP，在全新短路径非同步目录运行候选基线的测试脚本，结果为 47/47、`errors=[]`、`external=0`；非合成启动返回 `0.2.0-dev.10` 和 `local-readonly`，受控退出成功。现有公开截图的版本、布局和主要控件与该副本一致，但截图本身不证明构建哈希。
+- 边界：运行时、ZIP、测试脚本或存储位置变化都会使这份结果失效；自动化模拟不代表所有设备、同步客户端或真实会话。
+- English: Added a single manifest of 47 named automated simulation checks, with sorting, refresh, and role grouping counted only within that set. The exact ten-file ZIP with SHA-256 `8C4D2E1C68A68C7B37A0F3977431704D99BA86A7A65AF5A018117D8EFC8BE0CC` passed 47/47 checks from a fresh short non-synced extraction, with `errors=[]` and `external=0`. A non-synthetic startup reported `0.2.0-dev.10` and `local-readonly`, then stopped cleanly. The public screenshot matches its version, layout, and primary controls, but does not prove the build hash.
+
 ## 未发布：Windows SessionDesk dev.10 本地发布候选
 
 - 已执行：将工具中英文 README 的测试数量从 45 项改为实际记录的 47 项自动化模拟测试，并明确这些测试不代表覆盖所有电脑、系统环境或真实会话。
@@ -61,6 +68,7 @@
 - 已执行：项目提供可本地复现的受影响 CI Job 时，优先执行等价 Job；无法等价时，说明浏览器、服务、权限或环境差异的限制。规则不要求全量 CI 或特定项目参数。
 - 已验证：同步更新模板、授权规则、测试手册和静态耐久契约；来源项目的 PR、提交、浏览器、DOM、测试文件与 CI 结论均未写入本仓库。
 - English: Authorization requests now start with a plain-language summary of the action, rationale, expected change, risk/resources/time, successful result, and stop or feedback path. Routine progress updates do not pause authorized work. When a project provides a reproducible local command for an affected CI job, run that equivalent job first or disclose the environment gap.
+
 ## 未发布：场景 2C 的可选诊断证据
 
 - 已执行：场景 2C 增加可选诊断证据字段和“行车记录仪”说明，明确日志、trace、请求标识、阶段产物或后台观测不是入场券；AI 能自行取得时不要求操作者重复提供。
