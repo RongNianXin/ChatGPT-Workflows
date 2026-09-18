@@ -2,7 +2,7 @@
 
 [简体中文](README.md) | **English**
 
-<!-- README-SOURCE-SHA256: cbda6025e3b6406926e1cccc24da0e12db7781757aae5559d39fbe9d81c1928d -->
+<!-- README-SOURCE-SHA256: feb5667e649b2675ebc6e404e3561db1df9cf5c44a662a26b2c97a422b415ec2 -->
 
 This directory contains sanitized Codex and companion-tool incident records with explicit evidence boundaries. Start with the symptom table. You do not need to understand the directory layout or read every investigation.
 
@@ -17,6 +17,7 @@ This directory contains sanitized Codex and companion-tool incident records with
 | `TRB-005` | Migration is followed by `invalid paginated history lineage` or an out-of-range cutoff | **Unresolved: real operations suspended** | [Paginated-lineage damage](<02-账号与供应商切换/TRB-005-迁移后分页谱系损坏/TRB-005-invalid-paginated-history-lineage-分页谱系损坏与迁移暂停.md>) |
 | `TRB-006` | Messages between AI tasks receive no reply, repeat an old answer, end in an empty turn, or receive no acknowledgment | **Unresolved: log-based diagnosis and prevention procedures available; automatic interception not implemented** | [AI task messages receive no reply: diagnosis and prevention](<03-跨任务通信/TRB-006-AI任务间消息不回复-排查与预防.md>) |
 | `TRB-007` | A long task reports an explicit conversation-too-long 400, 401, unsupported-model 404, 429, either of two 502 signatures, 503, 504, or a dropped stream | **Partially resolved: triage and recovery available; failures still observed after the reported fix** | [Long tasks and HTTP errors index](<04-网络与上游错误/TRB-007-长任务断联与HTTP错误/TRB-007-总索引-跨错误码证据与共用流程.md>) |
+| `TRB-008` | The official ChatGPT account still shows Codex capacity, reconnects, and stream disconnects in a clean environment | **Unresolved: initial support reply; workspace and `/status` details pending** | [Official-account capacity and stream disconnect](<02-账号与供应商切换/TRB-008-Codex官方账号容量与断流/SYS-TRB-008-Codex-official-account-capacity-and-stream-disconnect.en.md>) |
 
 “Resolved” applies only to the platform, version, and evidence scope stated in the case. “Partially resolved” means that a verified recovery or workaround exists while the root cause, durable fix, or other environments remain open. “Unresolved” means that no verified solution is currently available; the record provides investigation progress, evidence, and stop conditions.
 
