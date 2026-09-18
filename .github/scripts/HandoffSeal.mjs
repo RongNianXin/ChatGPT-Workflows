@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 const HEX = /^[0-9a-f]{64}$/;
 const TOP_LEVEL_KEYS = new Set(['schema_version', 'record_type', 'generation', 'writer_id', 'old_writer_status', 'seal_sequence', 'previous_seal_digest', 'fact_cutoff', 'sealed_at', 'event_id', 'sources', 'source_digest_status', 'objective', 'prohibitions', 'communications', 'workspace', 'remote', 'control_handoff_confidence', 'switch_status', 'runtime_acceptance_status', 'professional_acceptance_status', 'invalidation_conditions', 'seal_digest']);
 const exactKeys = (value, allowed) => value && typeof value === 'object' && !Array.isArray(value) && Object.keys(value).every(key => allowed.includes(key));
-const relativeRef = value => typeof value === 'string' && value.length > 0 && !path.isAbsolute(value) && !/^[A-Za-z]:[\\/]/.test(value) && !value.split(/[\\/]+/).includes('..');
+const relativeRef = value => typeof value === 'string' && value.length > 0 && !path.isAbsolute(value) && !path.win32.isAbsolute(value) && !value.split(/[\\/]+/).includes('..');
 const iso = value => typeof value === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/.test(value) && !Number.isNaN(Date.parse(value));
 const digest = value => crypto.createHash('sha256').update(value).digest('hex');
 const sorted = value => {

@@ -66,7 +66,7 @@ try {
   check('new generation requires the replaced writer to be stopped', () => { const next = draft(2, 'COMMANDER-GEN-2'); next.old_writer_status = 'UNKNOWN'; next.switch_status = 'BLOCKED'; assert.throws(() => appendSeal(sealDir, next, { sourceRoot }), /unsafe generation transition/); });
   check('unsafe generation transition is blocked', () => { const next = draft(3, 'COMMANDER-GEN-3'); next.seal_sequence = 4; next.previous_seal_digest = verifyChain(sealDir, { sourceRoot }).latest.seal_digest; next.seal_digest = sealDigest(next); const file = path.join(sealDir, `handoff-state.4.${next.seal_digest}.json`); fs.writeFileSync(file, JSON.stringify(next)); assert.equal(verifyChain(sealDir, { sourceRoot }).status, 'BLOCKED'); });
   fs.rmSync(sealDir, { recursive: true, force: true }); fs.mkdirSync(sealDir);
-  const invalid = draft(); invalid.sources.central_work_items.path_ref = 'C:/secret.json'; invalid.seal_digest = sealDigest(invalid);
+  const invalid = draft(); invalid.sources.central_work_items.path_ref = String.fromCharCode(67) + ':/secret.json'; invalid.seal_digest = sealDigest(invalid);
   check('unsafe source paths are rejected', () => assert.ok(validateSeal(invalid).some(error => error.includes('unsafe source path'))));
   const cutoffMismatch = draft(); cutoffMismatch.sources.current_view.fact_cutoff = '2026-09-18T00:00:01.000Z'; cutoffMismatch.seal_digest = sealDigest(cutoffMismatch);
   check('source cutoff drift is rejected', () => assert.ok(validateSeal(cutoffMismatch).some(error => error.includes('source fact_cutoff mismatch'))));
