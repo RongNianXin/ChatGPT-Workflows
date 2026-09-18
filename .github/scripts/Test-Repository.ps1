@@ -99,7 +99,7 @@ function Test-MarkdownFiles {
     $errors = [Collections.Generic.List[string]]::new()
     foreach ($relativePath in (Get-CheckFiles -Pattern '*.md')) {
         $fullPath = Join-Path $repoRoot $relativePath
-        $content = Get-Content -LiteralPath $fullPath -Raw
+        $content = Get-Content -LiteralPath $fullPath -Raw -Encoding utf8
 
         $fenceCount = ([regex]::Matches($content, '(?m)^```')).Count
         if (($fenceCount % 2) -ne 0) {
@@ -140,7 +140,7 @@ function Test-MarkdownFiles {
 function Get-NormalizedTextSha256 {
     param([Parameter(Mandatory)][string]$Path)
 
-    $content = Get-Content -LiteralPath $Path -Raw
+    $content = Get-Content -LiteralPath $Path -Raw -Encoding utf8
     $normalized = $content.Replace("`r`n", "`n").Replace("`r", "`n")
     $bytes = [Text.Encoding]::UTF8.GetBytes($normalized)
     $sha = [Security.Cryptography.SHA256]::Create()
@@ -180,7 +180,7 @@ function Test-BilingualReadmes {
             continue
         }
 
-        $content = Get-Content -LiteralPath (Join-Path $repoRoot $relativePath) -Raw
+        $content = Get-Content -LiteralPath (Join-Path $repoRoot $relativePath) -Raw -Encoding utf8
         if ($content -notmatch '(?i)\[[^\]]+\]\((?:\./)?README\.en\.md(?:#[^)]+)?\)') {
             $errors.Add("中文 README 缺少英文切换链接：$relativePath")
         }
@@ -193,7 +193,7 @@ function Test-BilingualReadmes {
             continue
         }
 
-        $content = Get-Content -LiteralPath (Join-Path $repoRoot $relativePath) -Raw
+        $content = Get-Content -LiteralPath (Join-Path $repoRoot $relativePath) -Raw -Encoding utf8
         if ($content -notmatch '(?i)\[[^\]]+\]\((?:\./)?README\.md(?:#[^)]+)?\)') {
             $errors.Add("英文 README 缺少中文切换链接：$relativePath")
         }
@@ -278,7 +278,7 @@ function Test-CommanderDurableWorkflowContract {
         },
         @{
             Path = '总指挥工作流/第二代总指挥的工作模式/04-状态、目标变更与交接规范.md'
-            Required = @('耐久 Commit 台账与关键节点', '中央工作项清单与保存语义', '待实施、进行中、阻断、暂缓、待验收', '平行中央计划', '中央工作项清单作为全部非终态事项的主来源', '稳定 ID、状态、优先级、已确认成果、精确断点、下一动作、责任对象、恢复或启动条件、失效条件和证据指针', '只保存聚合事实与指针，不复制详细材料', '规范启动命令及自检输出', 'COMMIT-LEDGER', '保留级别：ROUTINE / KEY_NODE', '通用任务中断恢复与无正式总指挥交接', '不是所有中断任务的必经步骤', '恢复任务”不等于“接管项目', '执行恢复收益门禁', '换窗与归档前连续性门禁', '精简续接提示词的最小字段', '已完成且不得重复', '结果未知', '无待续任务', '使用者未通过消息表达而直接点击客户端归档', '未更新/待复核', '首个主回复末尾介绍一次', 'RECEIVED / BLOCKED / COMPLETED / FAILED', '读取接口不可见与目标没有收到分别记录', '调度任务核验与重建说明', '自动化交接清单', '最后可靠成功截点', '平台任务 ID 仅作为获准运行时的定位线索', 'VERIFY_ONLY', 'REBUILD_CANDIDATE_ONLY', '说明指纹一致只证明说明未漂移', '来源请求事件 + 规范化目标 + 交付类型', '完成且结果已交付', '原创建计划失效', '只返回 `clientThreadId`')
+            Required = @('耐久 Commit 台账与关键节点', '中央工作项清单与保存语义', '待实施、进行中、阻断、暂缓、待验收', '平行中央计划', '中央工作项清单作为全部非终态事项的主来源', '稳定 ID、状态、优先级、已确认成果、精确断点、下一动作、责任对象、恢复或启动条件、失效条件和证据指针', '只保存聚合事实与指针，不复制详细材料', '规范启动命令及自检输出', 'COMMIT-LEDGER', '保留级别：ROUTINE / KEY_NODE', '通用任务中断恢复与无正式总指挥交接', '不是所有中断任务的必经步骤', '恢复任务”不等于“接管项目', '执行恢复收益门禁', '换窗与归档前连续性门禁', '精简续接提示词的最小字段', '已完成且不得重复', '结果未知', '无待续任务', '使用者未通过消息表达而直接点击客户端归档', '未更新/待复核', '首个主回复末尾介绍一次', 'RECEIVED / BLOCKED / COMPLETED / FAILED', '读取接口不可见与目标没有收到分别记录', '调度任务核验与重建说明', '自动化交接清单', '最后可靠成功截点', '平台任务 ID 仅作为获准运行时的定位线索', 'VERIFY_ONLY', 'REBUILD_CANDIDATE_ONLY', '说明指纹一致只证明说明未漂移', '来源请求事件 + 规范化目标 + 交付类型', '完成且结果已交付', '原创建计划失效', '只返回 `clientThreadId`', 'control_handoff_confidence', 'switch_status', 'runtime_acceptance_status', 'professional_acceptance_status', '机器可读封条', 'expected previous digest')
         },
         @{
             Path = '总指挥工作流/第二代总指挥的工作模式/10-自动状态索引规范.md'
@@ -286,11 +286,11 @@ function Test-CommanderDurableWorkflowContract {
         },
         @{
             Path = '总指挥工作流/第二代总指挥的工作模式/07-总指挥交接记录模板.md'
-            Required = @('KEY_NODE', '中央工作项清单位置、最后回读截点与非终态状态计数', '## 中央工作项投影', '从中央工作项清单逐项投影全部待实施、进行中、阻断、暂缓和待验收事项', '| 稳定 ID | 状态 | 优先级 | 已确认成果 | 精确断点 | 下一动作 | 责任对象 | 恢复或启动条件 | 失效条件 | 证据指针 |', '只保留接续必需的聚合事实与证据指针，不复制', '运行身份', '规范启动命令及自检输出', '并存实现决议', '当前分步展示产物', '节点维护结果', '新总指挥不会重新询问', '统一接管汇报模板', '固定四段标题与字段', '调度重建说明', '自动化交接清单（如存在', '任务存在时只登记核验')
+            Required = @('KEY_NODE', '中央工作项清单位置、最后回读截点与非终态状态计数', '## 中央工作项投影', '从中央工作项清单逐项投影全部待实施、进行中、阻断、暂缓和待验收事项', '| 稳定 ID | 状态 | 优先级 | 已确认成果 | 精确断点 | 下一动作 | 责任对象 | 恢复或启动条件 | 失效条件 | 证据指针 |', '只保留接续必需的聚合事实与证据指针，不复制', '运行身份', '规范启动命令及自检输出', '并存实现决议', '当前分步展示产物', '节点维护结果', '新总指挥不会重新询问', '统一接管汇报模板', '固定四段标题与字段', '调度重建说明', '自动化交接清单（如存在', '任务存在时只登记核验', 'control_handoff_confidence', 'seal_sequence', 'source_digest_status', 'chain_status')
         },
         @{
             Path = '总指挥工作流/第二代总指挥的工作模式/总指挥轻量交接启动配置.md'
-            Required = @('KEY_NODE', 'central_work_items:', '待实施、进行中、阻断、暂缓、待验收', 'canonical_start_command', 'startup_check', 'commit_ledger', 'step_deck_pointer_and_hash', '场景 1G 是角色中立的任务中断恢复入口', '候选阶段不得询问是否启用', 'introduction: not-shown / shown / answered / ignored', '旧机器绝对路径', '## 7. 统一接管汇报模板', '1. 总指挥身份', '2. 交接结论', '3. 接续断点', '4. 下一步与边界', '当前任务 ID：', '当前范围交接条件：', '没有证据支持遗漏时写“无”', '不得承诺任意账号或窗口凭 ID 即可跨权限访问', 'scheduler_rebuild:', 'existing_task_check', 'authorization_required')
+            Required = @('KEY_NODE', 'central_work_items:', '待实施、进行中、阻断、暂缓、待验收', 'canonical_start_command', 'startup_check', 'commit_ledger', 'step_deck_pointer_and_hash', '场景 1G 是角色中立的任务中断恢复入口', '候选阶段不得询问是否启用', 'introduction: not-shown / shown / answered / ignored', '旧机器绝对路径', '## 7. 统一接管汇报模板', '1. 总指挥身份', '2. 交接结论', '3. 接续断点', '4. 下一步与边界', '当前任务 ID：', '当前范围交接条件：', '没有证据支持遗漏时写“无”', '不得承诺任意账号或窗口凭 ID 即可跨权限访问', 'scheduler_rebuild:', 'existing_task_check', 'authorization_required', 'control_handoff_confidence:', 'handoff_seal:', 'expected previous digest')
         },
         @{
             Path = '总指挥工作流/第二代总指挥的工作模式/templates/SCHEDULER_REBUILD_GUIDE.md'
@@ -1313,6 +1313,8 @@ Test-CommanderNextActionConvergenceCases
 Test-CommanderContinuityRoutingCases
 & node (Join-Path $PSScriptRoot 'Test-HandoffIdentity.mjs')
 if ($LASTEXITCODE -ne 0) { throw '成果连续性虚构检查失败。' }
+& node (Join-Path $PSScriptRoot 'Test-HandoffSeal.mjs')
+if ($LASTEXITCODE -ne 0) { throw '交接封条链合成检查失败。' }
 Test-TextFlowchartTemplateContract
 Test-PipelineStepDeckTemplate
 Test-PipelineStepDeckEnhancementTool

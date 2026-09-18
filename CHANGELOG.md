@@ -2,6 +2,17 @@
 
 本文件记录 ChatGPT Workflows 的重要变更。
 
+## 未发布：总指挥交接控制面封条与分层验收
+
+- 已执行：把交接结果拆为 `control_handoff_confidence`、`switch_status`、`runtime_acceptance_status` 和 `professional_acceptance_status`；运行或专业验收未知时，只限制依赖它们的动作，不把未知代签为通过。
+- 已执行：新增版本化 `HANDOFF_STATE.schema.json`、私有不可变封条链工具和交接合成测试。封条绑定世代、写者、单调序号、前序摘要、事件 ID、同截点来源摘要、`source_digest_status`、工作区/Git/远端基线和失效条件；写入使用独占锁、临时文件、flush/fsync、改名与 expected-previous CAS。
+- 已执行：校验拒绝未知字段、危险路径、序号/摘要链断裂（包括首条序号不从 1 开始）、文件名与正文不一致、同世代换写者、同写者伪造新世代、残留锁或临时文件、不一致事实截点、远端失败、未回算来源、来源未验证或旧写者未停止；旧格式没有新封条时只能作为 `CONTROL_UNKNOWN` 迁移候选。
+- 已验证：`node .github/scripts/Test-HandoffSeal.mjs` 通过 25 个合成案例，包含独立来源根目录的真实 SHA-256 回算、两个 Node 进程的锁/CAS 竞争、来源变更阻断、损坏 JSON、残留 `.tmp` 与残留锁；`node .github/scripts/Test-HandoffIdentity.mjs` 通过 16 个案例；仓库质量检查、Markdown 链接检查、双语 README、PowerShell 语法和 `git diff --check` 均通过。Markdown 检查同时修复了 Windows PowerShell 对无 BOM UTF-8 中文链接的误读。
+- 未验证：同步盘/网络文件系统的真实占用时序、冲突副本策略、断电或崩溃恢复、宿主级写入拦截、真实任务切换或运行/专业验收；这些结果不能由本地合成测试代签。
+- 验证边界：Windows PowerShell 5.1 已通过路径、Markdown 和双语 README 阶段，但随后在既有 `Repair-CodexThreadArchive.ps1` 的现代 PowerShell/JavaScript 语法处失败；因此没有把 5.1 全量仓库检查标为通过。PowerShell 7 等价检查已通过。
+- 边界：本批仅修改本地工作流规则、模板、校验脚本和履历，未 Commit、Push、创建或修改远端对象，也未修改产品代码。
+- English: Handoff results are now separated into control confidence, switch status, runtime acceptance, and professional acceptance. A versioned schema and private immutable seal chain bind generation, writer, sequence, predecessor digest, event, same-cutoff source digests, workspace/Git/remote baselines, and invalidation conditions. Deterministic tests cover 25 seal cases, including rejection of a chain that starts after sequence 1, SHA-256 recomputation from a separate source root, a two-process lock/CAS race, source drift, malformed JSON, leftover temporary artifacts, and stale locks. Real synced/network-storage contention and crash recovery, host-level fencing, real task switching, and runtime/professional acceptance remain unverified. This batch changed only local workflow rules, templates, validators, and the changelog; no commit or remote write was performed.
+
 ## 未发布：高资源验证分型
 
 - 已执行：高资源、浏览器或模型验证在任务卡中先声明“流程／生成效果／两者”。流程只覆盖入口、交互和运行状态；生成效果必须单列素材清单、原图哈希、模型/资产身份与参考或人工判据。

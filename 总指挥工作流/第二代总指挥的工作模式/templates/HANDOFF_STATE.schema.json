@@ -1,0 +1,56 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/codex-workflows/handoff-state.schema.json",
+  "title": "Commander handoff seal",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "record_type", "generation", "writer_id", "old_writer_status", "seal_sequence", "previous_seal_digest", "fact_cutoff", "sealed_at", "event_id", "sources", "source_digest_status", "objective", "prohibitions", "communications", "workspace", "remote", "control_handoff_confidence", "switch_status", "runtime_acceptance_status", "professional_acceptance_status", "invalidation_conditions", "seal_digest"],
+  "allOf": [
+    {
+      "if": { "properties": { "control_handoff_confidence": { "const": "HIGH" } } },
+      "then": { "properties": { "sources": { "required": ["central_work_items", "current_view", "status_index"] }, "source_digest_status": { "const": "PASS" }, "remote": { "properties": { "status": { "const": "PASS" } } } } }
+    },
+    {
+      "if": { "properties": { "switch_status": { "enum": ["READY", "READY_WITH_RESTRICTIONS", "COMPLETED"] } } },
+      "then": { "properties": { "sources": { "required": ["central_work_items", "current_view", "status_index"] }, "source_digest_status": { "const": "PASS" }, "remote": { "properties": { "status": { "const": "PASS" } } } } }
+    },
+    {
+      "if": { "properties": { "switch_status": { "enum": ["READY", "READY_WITH_RESTRICTIONS", "COMPLETED"] } } },
+      "then": { "properties": { "old_writer_status": { "enum": ["STOPPED_DISPATCH", "ARCHIVED"] } } }
+    },
+    {
+      "if": { "properties": { "switch_status": { "const": "COMPLETED" } } },
+      "then": { "properties": { "control_handoff_confidence": { "const": "HIGH" } } }
+    }
+  ],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "record_type": { "const": "handoff-seal" },
+    "generation": { "type": "integer", "minimum": 1 },
+    "writer_id": { "type": "string", "minLength": 1, "pattern": "^[A-Za-z0-9._-]+$" },
+    "old_writer_status": { "enum": ["IDLE", "STOPPED_DISPATCH", "ARCHIVED", "UNKNOWN"] },
+    "seal_sequence": { "type": "integer", "minimum": 1 },
+    "previous_seal_digest": { "type": ["string", "null"], "pattern": "^[0-9a-f]{64}$" },
+    "fact_cutoff": { "type": "string", "format": "date-time" },
+    "sealed_at": { "type": "string", "format": "date-time" },
+    "event_id": { "type": "string", "minLength": 1, "pattern": "^[A-Za-z0-9._:-]+$" },
+    "sources": { "type": "object", "minProperties": 1, "additionalProperties": { "$ref": "#/$defs/source" } },
+    "source_digest_status": { "enum": ["PASS", "UNKNOWN", "FAIL"] },
+    "objective": { "type": "object", "required": ["summary", "breakpoint"], "additionalProperties": false, "properties": { "summary": { "type": "string" }, "breakpoint": { "type": "string" } } },
+    "prohibitions": { "type": "array", "items": { "type": "string" } },
+    "communications": { "type": "object", "required": ["status"], "additionalProperties": false, "properties": { "status": { "enum": ["NONE", "AUTHORIZED", "PENDING_CONFIRMATION", "BLOCKED"] } } },
+    "workspace": { "$ref": "#/$defs/workspace" },
+    "remote": { "$ref": "#/$defs/remote" },
+    "control_handoff_confidence": { "enum": ["HIGH", "MEDIUM", "LOW"] },
+    "switch_status": { "enum": ["READY", "READY_WITH_RESTRICTIONS", "BLOCKED", "COMPLETED"] },
+    "runtime_acceptance_status": { "enum": ["PASS", "FAIL", "NOT_RUN", "UNKNOWN", "NOT_APPLICABLE"] },
+    "professional_acceptance_status": { "enum": ["PASS", "FAIL", "NOT_RUN", "UNKNOWN", "NOT_APPLICABLE"] },
+    "invalidation_conditions": { "type": "array", "minItems": 1, "items": { "type": "string" } },
+    "seal_digest": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+  },
+  "$defs": {
+    "source": { "type": "object", "required": ["owner", "path_ref", "digest", "fact_cutoff"], "additionalProperties": false, "properties": { "owner": { "type": "string", "minLength": 1 }, "path_ref": { "type": "string", "minLength": 1, "pattern": "^(?![A-Za-z]:[\\\\/])(?!/)(?!\\\\)(?!.*(?:^|[\\\\/])\\.\\.(?:[\\\\/]|$))" }, "digest": { "type": "string", "pattern": "^[0-9a-f]{64}$" }, "fact_cutoff": { "type": "string", "format": "date-time" } } },
+    "workspace": { "type": "object", "required": ["root_ref", "branch", "head", "tree", "staged_count", "tracked_modified_count", "untracked_count", "required_untracked"], "additionalProperties": false, "properties": { "root_ref": { "type": "string", "minLength": 1 }, "branch": { "type": "string", "minLength": 1 }, "head": { "type": "string", "pattern": "^[0-9a-f]{40,64}$" }, "tree": { "type": "string", "pattern": "^[0-9a-f]{40,64}$" }, "staged_count": { "type": "integer", "minimum": 0 }, "tracked_modified_count": { "type": "integer", "minimum": 0 }, "untracked_count": { "type": "integer", "minimum": 0 }, "required_untracked": { "type": "array", "items": { "type": "object", "required": ["path_ref", "sha256", "reason"], "additionalProperties": false, "properties": { "path_ref": { "type": "string", "minLength": 1, "pattern": "^(?![A-Za-z]:[\\\\/])(?!/)(?!\\\\)(?!.*(?:^|[\\\\/])\\.\\.(?:[\\\\/]|$))" }, "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" }, "reason": { "type": "string", "minLength": 1 } } } } } },
+    "remote": { "type": "object", "required": ["status", "default_ref", "head", "observed_at"], "additionalProperties": false, "properties": { "status": { "enum": ["PASS", "UNKNOWN", "FAIL", "NOT_APPLICABLE"] }, "default_ref": { "type": "string", "minLength": 1 }, "head": { "type": ["string", "null"], "pattern": "^[0-9a-f]{40,64}$" }, "observed_at": { "type": ["string", "null"], "format": "date-time" } } }
+  }
+}
