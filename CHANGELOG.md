@@ -2,6 +2,13 @@
 
 本文件记录 ChatGPT Workflows 的重要变更。
 
+## 未发布：高资源验证分型
+
+- 已执行：高资源、浏览器或模型验证在任务卡中先声明“流程／生成效果／两者”。流程只覆盖入口、交互和运行状态；生成效果必须单列素材清单、原图哈希、模型/资产身份与参考或人工判据。
+- 已执行：缺少生成效果所需素材、样本或判定标准时，自动降级为流程、运行身份或接口验证，不能把 Playwright、截图、CI 全绿或页面点击成功写成算法效果验收。
+- 已验证：测试手册将代码/资源到位、运行恢复、实际生成效果和人工验收分层报告；仓库检查锁定上述关键表述。
+- English: High-resource validation now declares whether it covers workflow behavior, generated output quality, or both. Missing material, sample, or acceptance evidence restricts conclusions to workflow, runtime identity, or interface checks; browser automation and green CI cannot stand in for output-quality acceptance.
+
 ## 未发布：发布候选的存储环境基线
 
 - 已执行：自动化测试最小契约新增操作系统、运行时或 shell、普通本地/同步/网络文件系统、实际路径长度和已知平台限制；未知环境只限制依赖它的结论，不自动判定产品失败。
