@@ -391,7 +391,7 @@ function Test-CommanderBoundedExecutionCases {
         @{ File='docs/PR_SUBMISSION_AND_REVIEW_STANDARD.md'; Required=@('尚未通读时只允许本地草稿', '没有代码变化无需制造新 Commit'); Forbidden=@('给出新的精确 Head') },
         @{ File='docs/EXECUTION_AND_INDEPENDENT_REVIEW.md'; Required=@('不等于一条命令', '实质失效', '正常修订和新增验证', '绝对上限三轮'); Forbidden=@('证据、权限、范围、中央暂停/停止、收口状态或互斥资源发生变化时') },
         @{ File='docs/AUTOMATED_TESTING_LESSONS.md'; Required=@('正式运行所用解析路径', '验证类型与问题', 'Playwright、截图、CI 全绿或页面点击成功', '生成效果输入与参考', '代码/资源到位、运行恢复、实际生成效果、人工验收', '人工认可绑定具体阶段', '枚举测试、配置检查及 AI 汇总另用输出位置', '先核对实际 schema', '可选工具失败只限制该工具'); Forbidden=@() },
-        @{ File='06-复盘与优化规则.md'; Required=@('等量删字不能替代收益证据', '重建须另获'); Forbidden=@('用等量删减抵消') },
+        @{ File='06-复盘与优化规则.md'; Required=@('等量删字不能替代收益证据', '重建须另获', '是否达到可复用门槛', '网友讨论、搜索摘要和无来源推测不得直接升级为根因', '优先增量更新已有案例'); Forbidden=@('用等量删减抵消') },
         @{ File='11-操作者协作画像规范.md'; Required=@('不自动删除、移动、复制或清空实例'); Forbidden=@('删除或隔离本地实例并清除索引指针') },
         @{ File='docs/SECURITY_BOUNDARY.md'; Required=@('已有 remote 不等于违规', '前台 FIFO 顺序'); Forbidden=@('确认没有 remote') }
     )

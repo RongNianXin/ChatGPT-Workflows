@@ -9,6 +9,13 @@
 - 已验证：测试手册将代码/资源到位、运行恢复、实际生成效果和人工验收分层报告；仓库检查锁定上述关键表述。
 - English: High-resource validation now declares whether it covers workflow behavior, generated output quality, or both. Missing material, sample, or acceptance evidence restricts conclusions to workflow, runtime identity, or interface checks; browser automation and green CI cannot stand in for output-quality acceptance.
 
+## 未发布：可复用故障的外部资料与本地收口
+
+- 已执行：涉及外部产品/版本、证据不足、连续失败或可复用规则时，才触发一次有边界的公开资料检索；来源、版本、日期、支持事实和未证实部分分开记录，网友猜测不直接升级为结论。
+- 已执行：达到故障库收口门槛后优先增量更新已有案例；只有新且可复用的问题才按命名规则新建记录，一次性小问题留在任务记录或变更日志。
+- 边界：检索前脱敏；发帖、评论、Issue、上传和其他远端写入仍需单独授权。本地故障库收口不产生远端发布授权。
+- English: Public research is triggered only for reusable, externally dependent, under-evidenced, or repeatedly failing problems. Existing incident records are updated before creating new cases; unverified discussions remain references, and any public posting still requires separate authorization.
+
 ## 未发布：发布候选的存储环境基线
 
 - 已执行：自动化测试最小契约新增操作系统、运行时或 shell、普通本地/同步/网络文件系统、实际路径长度和已知平台限制；未知环境只限制依赖它的结论，不自动判定产品失败。
