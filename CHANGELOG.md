@@ -2,6 +2,14 @@
 
 本文件记录 ChatGPT Workflows 的重要变更。
 
+## 未发布：跨任务成果运输、授权请求与写入租约分流
+
+- 已执行：把跨任务写入协作分为 `WRITE_HANDOFF`、`AUTH_REQUEST`、`LEASE_TRANSFER`；没有项目目录写入租约不再被表述为缺少用户业务授权。
+- 已执行：非写者通过结构化成果交接把已核验内容、目标落点、证据、禁止项和回执要求交给现任写者；正常路径压缩为一次入口核对、一次交接、一次写入回执。
+- 已执行：租约只保存在现有权威入口，中央索引仅保存指针和聚合字段；恢复时区分 `active/inProgress`、`idle`、`archived/notFound`，确认旧写者停止且无在途或结果未知写入后才转移租约。
+- 边界：三类事件不产生彼此的权限；租约不扩大读取、Git、远端、发布、费用或自动化授权。规则版本和指纹变化会使旧交接快照按既有条件失效。
+- English: Cross-task write coordination now separates `WRITE_HANDOFF`, `AUTH_REQUEST`, and `LEASE_TRANSFER`. Missing a directory lease is no longer reported as missing user authorization. Verified results move to the current writer through one structured handoff; lease state remains in the existing authoritative entry, while the central index stores only a pointer and aggregate fields. Lease recovery distinguishes active, idle, archived, and unavailable task states and requires the old writer to be stopped with no in-flight or unknown writes. None of the three event types grants the permissions represented by another type.
+
 ## 未发布：Markdown 阅读器远端相对链接回退
 
 - 已执行：普通文件重新载入保留远端地址；不再凭安全新窗口的返回值误报弹窗被阻止。此批仅本地收口，远端发布待确认；真实远端页面与操作者体验未代签验收。
