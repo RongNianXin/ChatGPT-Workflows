@@ -6,7 +6,7 @@ import path from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import crypto from 'node:crypto';
-import { appendSeal, sealDigest, validateSeal, verifyChain } from './HandoffSeal.mjs';
+import { appendSeal, prepareTransition, sealDigest, validateSeal, verifyChain } from './HandoffSeal.mjs';
 
 const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'handoff-seal-'));
 const sealDir = path.join(temp, 'seals');
@@ -32,16 +32,16 @@ try {
   child.on('close', status => resolve({ status, stderr }));
 });
 const stamp = '2026-09-18T00:00:00.000Z';
-const source = owner => { const relative = `state/${owner}.json`; const content = Buffer.from(`synthetic-${owner}`); const absolute = path.join(sourceRoot, relative); fs.mkdirSync(path.dirname(absolute), { recursive: true }); fs.writeFileSync(absolute, content); return { owner, path_ref: relative, digest: crypto.createHash('sha256').update(content).digest('hex'), fact_cutoff: stamp }; };
-const draft = (generation = 1, writer_id = 'COMMANDER-GEN-1') => ({
-  schema_version: 1, record_type: 'handoff-seal', generation, writer_id, old_writer_status: 'STOPPED_DISPATCH',
+const source = (owner, revision = 'base') => { const relative = `state/${owner}.json`; const content = Buffer.from(`synthetic-${owner}-${revision}`); const absolute = path.join(sourceRoot, relative); fs.mkdirSync(path.dirname(absolute), { recursive: true }); fs.writeFileSync(absolute, content); return { owner, path_ref: relative, digest: crypto.createHash('sha256').update(content).digest('hex'), fact_cutoff: stamp }; };
+const draft = (generation = 1, writer_id = 'COMMANDER-GEN-1', revision = 'base') => ({
+  schema_version: 2, record_type: 'handoff-seal', generation, writer_id, old_writer_status: 'STOPPED_DISPATCH',
   fact_cutoff: stamp, sealed_at: stamp, event_id: `evt-${generation}`,
-  sources: { central_work_items: source('central'), current_view: source('view'), status_index: source('index') }, source_digest_status: 'PASS',
+  sources: { central_work_items: source('central', revision), current_view: source('view', revision), status_index: source('index', revision) }, source_digest_status: 'PASS',
   objective: { summary: 'synthetic handoff', breakpoint: 'read-only verification' }, prohibitions: ['remote-write'],
   communications: { status: 'NONE' },
   workspace: { root_ref: '<PROJECT_ROOT>', branch: 'main', head: 'b'.repeat(40), tree: 'c'.repeat(40), staged_count: 0, tracked_modified_count: 0, untracked_count: 0, required_untracked: [] },
   remote: { status: 'PASS', default_ref: 'refs/heads/main', head: 'd'.repeat(40), observed_at: stamp },
-  control_handoff_confidence: 'HIGH', switch_status: 'READY', runtime_acceptance_status: 'UNKNOWN', professional_acceptance_status: 'NOT_RUN',
+  control_handoff_confidence: 'HIGH', candidate_verification_status: 'PASS', switch_status: 'READY', handoff_phase: 'MATERIAL_PREPARED', runtime_acceptance_status: 'UNKNOWN', professional_acceptance_status: 'NOT_RUN', transition: null, migration: null,
   invalidation_conditions: ['source digest drift', 'post-seal writer event'], seal_digest: ''
 });
 let passed = 0;
@@ -79,15 +79,59 @@ try {
   const sourceUnknownReady = draft(); sourceUnknownReady.control_handoff_confidence = 'LOW'; sourceUnknownReady.source_digest_status = 'UNKNOWN'; sourceUnknownReady.switch_status = 'READY'; sourceUnknownReady.seal_digest = sealDigest(sourceUnknownReady);
   check('unverified sources cannot be READY', () => assert.ok(validateSeal(sourceUnknownReady).some(error => error.includes('READY status'))));
   const restrictedUnknownWriter = draft(); restrictedUnknownWriter.control_handoff_confidence = 'MEDIUM'; restrictedUnknownWriter.switch_status = 'READY_WITH_RESTRICTIONS'; restrictedUnknownWriter.old_writer_status = 'UNKNOWN'; restrictedUnknownWriter.seal_digest = sealDigest(restrictedUnknownWriter);
-  check('READY_WITH_RESTRICTIONS still requires a stopped old writer', () => assert.ok(validateSeal(restrictedUnknownWriter).some(error => error.includes('old writer stopped'))));
+  check('candidate readiness does not assert old writer stopped', () => assert.ok(!validateSeal(restrictedUnknownWriter).some(error => error.includes('old writer stopped'))));
   const oldWriterUnknown = draft(); oldWriterUnknown.old_writer_status = 'UNKNOWN'; oldWriterUnknown.seal_digest = sealDigest(oldWriterUnknown);
-  check('unknown old writer cannot be READY', () => assert.ok(validateSeal(oldWriterUnknown).some(error => error.includes('old writer stopped'))));
+  check('READY is distinct from completed takeover', () => assert.ok(!validateSeal(oldWriterUnknown).some(error => error.includes('old writer stopped'))));
+  const premature = draft(); premature.old_writer_status = 'UNKNOWN'; premature.switch_status = 'COMPLETED'; premature.seal_digest = sealDigest(premature);
+  check('completion still requires stopped predecessor', () => assert.ok(validateSeal(premature).some(error => error.includes('old writer stopped'))));
+  const pointerDir = path.join(temp, 'pointer-seals');
+  const pointerDraft = draft(); pointerDraft.old_writer_status = 'UNKNOWN';
+  const pointerPath = path.join(sourceRoot, pointerDraft.sources.status_index.path_ref);
+  fs.writeFileSync(pointerPath, 'seal_directory_ref=pointer-seals; event_id=evt-1');
+  pointerDraft.sources.status_index.digest = crypto.createHash('sha256').update(fs.readFileSync(pointerPath)).digest('hex');
+  const pointerBefore = fs.readFileSync(pointerPath);
+  appendSeal(pointerDir, pointerDraft, { expectedPreviousDigest: null, sourceRoot });
+  check('directory pointer avoids self-reference without excluding source bytes', () => {
+    assert.deepEqual(fs.readFileSync(pointerPath), pointerBefore);
+    assert.equal(verifyChain(pointerDir, { sourceRoot }).status, 'PASS');
+    fs.appendFileSync(pointerPath, '; writer=unexpected');
+    assert.equal(verifyChain(pointerDir, { sourceRoot }).status, 'BLOCKED');
+    fs.writeFileSync(pointerPath, pointerBefore);
+  });
   appendSeal(sealDir, draft(), { sourceRoot });
   const viewPath = path.join(sourceRoot, 'state', 'view.json'); const viewContent = fs.readFileSync(viewPath); const mutationDraft = draft();
   fs.writeFileSync(viewPath, 'source-changed-after-seal');
   check('source mutation after sealing blocks recovery', () => { assert.equal(verifyChain(sealDir, { sourceRoot }).status, 'BLOCKED'); assert.throws(() => appendSeal(sealDir, mutationDraft, { sourceRoot }), /source verification failed|existing chain invalid/); });
   fs.writeFileSync(viewPath, viewContent);
   check('restored source returns the chain to PASS', () => { const restored = verifyChain(sealDir, { sourceRoot }); assert.equal(restored.status, 'PASS', restored.errors.join('; ')); });
+  const transitionDir = path.join(temp, 'transition-seals'); fs.mkdirSync(transitionDir);
+  const candidate = draft(1, 'COMMANDER-GEN-1', 'candidate'); candidate.old_writer_status = 'UNKNOWN';
+  const candidateSeal = appendSeal(transitionDir, candidate, { sourceRoot });
+  const prepared = prepareTransition(transitionDir, { sourceRoot, expectedPreviousDigest: candidateSeal.seal_digest, nextGeneration: 2, nextWriterId: 'COMMANDER-GEN-2', eventId: 'evt-2', preparedAt: stamp });
+  check('prepared transition is visible and blocks unrelated append', () => { const result = verifyChain(transitionDir, { sourceRoot }); assert.equal(result.status, 'PASS'); assert.equal(result.transition_status, 'PENDING'); assert.equal(result.pending_intents.length, 1); const unrelated = structuredClone(candidate); unrelated.event_id = 'evt-unrelated'; assert.throws(() => appendSeal(transitionDir, unrelated, { sourceRoot }), /unconsumed transition intent/); assert.throws(() => prepareTransition(transitionDir, { sourceRoot, nextGeneration: 2, nextWriterId: 'COMMANDER-GEN-X', eventId: 'evt-x' }), /unconsumed transition intent/); });
+  const completed = draft(2, 'COMMANDER-GEN-2', 'takeover'); completed.switch_status = 'COMPLETED'; completed.handoff_phase = 'TAKEOVER_COMPLETED'; completed.old_writer_status = 'STOPPED_DISPATCH';
+  const takeoverSeal = appendSeal(transitionDir, completed, { sourceRoot, expectedPreviousDigest: candidateSeal.seal_digest, transitionTicket: prepared.path });
+  check('four-stage takeover rotates live sources without invalidating history', () => { const result = verifyChain(transitionDir, { sourceRoot }); assert.equal(result.status, 'PASS', result.errors.join('; ')); assert.equal(result.transition_status, 'SETTLED'); assert.equal(result.records.length, 2); assert.equal(result.latest.seal_digest, takeoverSeal.seal_digest); assert.equal(result.latest.transition.previous_seal_digest, candidateSeal.seal_digest); });
+  check('missing consumed transition intent blocks the chain', () => { const ticketBytes = fs.readFileSync(prepared.path); fs.unlinkSync(prepared.path); assert.equal(verifyChain(transitionDir, { sourceRoot }).status, 'BLOCKED'); fs.writeFileSync(prepared.path, ticketBytes); });
+  check('tampered transition intent blocks the chain', () => { const ticketBytes = fs.readFileSync(prepared.path); const value = JSON.parse(ticketBytes); value.next_writer_id = 'COMMANDER-GEN-X'; fs.writeFileSync(prepared.path, JSON.stringify(value)); assert.equal(verifyChain(transitionDir, { sourceRoot }).status, 'BLOCKED'); fs.writeFileSync(prepared.path, ticketBytes); });
+  check('historical verification does not pretend old sources are still current', () => { const result = verifyChain(transitionDir, { sourceRoot, verifyLatestSources: false }); assert.equal(result.status, 'PASS'); assert.equal(result.latest_source_status, 'NOT_CHECKED'); });
+  const migrationDir = path.join(temp, 'migration-seals'); fs.mkdirSync(migrationDir); const migrated = draft(11, 'COMMANDER-GEN-11', 'migration'); migrated.switch_status = 'COMPLETED'; migrated.handoff_phase = 'CURRENT_MIGRATION'; migrated.old_writer_status = 'STOPPED_DISPATCH'; migrated.migration = { legacy_latest_seal_digest: 'a'.repeat(64), legacy_generation: 10, legacy_writer_id: 'COMMANDER-GEN-10', migrated_at: stamp, basis: 'CURRENT_ONLY_NO_RETROACTIVE_TRANSITION' };
+  check('first v2 seal can attest current-only migration without fabricating a transition', () => { const seal = appendSeal(migrationDir, migrated, { sourceRoot, expectedPreviousDigest: null }); const result = verifyChain(migrationDir, { sourceRoot }); assert.equal(result.status, 'PASS', result.errors.join('; ')); assert.equal(seal.handoff_phase, 'CURRENT_MIGRATION'); assert.equal(seal.previous_seal_digest, null); });
+  const migrationLatest = verifyChain(migrationDir, { sourceRoot }).latest;
+  const attestation = draft(11, 'COMMANDER-GEN-11', 'attestation'); attestation.switch_status = 'COMPLETED'; attestation.handoff_phase = 'CURRENT_ATTESTATION'; attestation.old_writer_status = 'STOPPED_DISPATCH';
+  check('same commander can attest updated current sources without a takeover transition', () => { const seal = appendSeal(migrationDir, attestation, { sourceRoot, expectedPreviousDigest: migrationLatest.seal_digest }); const result = verifyChain(migrationDir, { sourceRoot }); assert.equal(result.status, 'PASS', result.errors.join('; ')); assert.equal(seal.handoff_phase, 'CURRENT_ATTESTATION'); assert.equal(seal.generation, migrationLatest.generation); assert.equal(seal.writer_id, migrationLatest.writer_id); });
+  const firstAttestationDir = path.join(temp, 'first-attestation-seals'); fs.mkdirSync(firstAttestationDir); const firstAttestation = structuredClone(attestation);
+  check('current attestation cannot start an empty chain', () => assert.throws(() => appendSeal(firstAttestationDir, firstAttestation, { sourceRoot }), /existing seal/));
+  const wrongWriterAttestation = draft(11, 'COMMANDER-GEN-X', 'wrong-writer-attestation'); wrongWriterAttestation.switch_status = 'COMPLETED'; wrongWriterAttestation.handoff_phase = 'CURRENT_ATTESTATION';
+  check('current attestation cannot change writer', () => assert.throws(() => appendSeal(migrationDir, wrongWriterAttestation, { sourceRoot }), /writer change|same generation and writer/));
+  const wrongGenerationAttestation = draft(12, 'COMMANDER-GEN-12', 'wrong-generation-attestation'); wrongGenerationAttestation.switch_status = 'COMPLETED'; wrongGenerationAttestation.handoff_phase = 'CURRENT_ATTESTATION';
+  check('current attestation cannot change generation', () => assert.throws(() => appendSeal(migrationDir, wrongGenerationAttestation, { sourceRoot }), /generation transition|same generation and writer/));
+  const evidenceAttestation = structuredClone(attestation); evidenceAttestation.transition = { intent_digest: 'a'.repeat(64), previous_seal_digest: 'b'.repeat(64), prepared_at: stamp }; evidenceAttestation.migration = migrated.migration; evidenceAttestation.seal_digest = sealDigest(evidenceAttestation);
+  check('current attestation rejects transition and migration evidence', () => assert.ok(validateSeal(evidenceAttestation).some(error => error.includes('without transition or migration'))));
+  const fakeMigration = draft(2, 'COMMANDER-GEN-2', 'fake-migration'); fakeMigration.switch_status = 'COMPLETED'; fakeMigration.handoff_phase = 'CURRENT_MIGRATION'; fakeMigration.migration = migrated.migration; fakeMigration.seal_sequence = 2; fakeMigration.previous_seal_digest = 'b'.repeat(64); fakeMigration.seal_digest = sealDigest(fakeMigration);
+  check('migration cannot fabricate a later chain link', () => assert.ok(validateSeal(fakeMigration).some(error => error.includes('first completed seal'))));
+  const noIntentDir = path.join(temp, 'no-intent-seals'); fs.mkdirSync(noIntentDir); const noIntentFirst = appendSeal(noIntentDir, draft(1, 'COMMANDER-GEN-1', 'no-intent-old'), { sourceRoot }); const noIntentNext = draft(2, 'COMMANDER-GEN-2', 'no-intent-new'); noIntentNext.switch_status = 'COMPLETED'; noIntentNext.handoff_phase = 'TAKEOVER_COMPLETED';
+  check('generation transition cannot bypass pre-update verification', () => assert.throws(() => appendSeal(noIntentDir, noIntentNext, { sourceRoot, expectedPreviousDigest: noIntentFirst.seal_digest }), /source verification failed|pre-update intent/));
   const partialName = 'handoff-state.99.' + '0'.repeat(64) + '.json'; fs.writeFileSync(path.join(sealDir, partialName), '{"schema_version":1');
   check('partial JSON final artifact blocks recovery', () => assert.equal(verifyChain(sealDir, { sourceRoot }).status, 'BLOCKED'));
   fs.unlinkSync(path.join(sealDir, partialName));

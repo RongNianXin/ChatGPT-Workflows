@@ -2,6 +2,27 @@
 
 本文件记录 ChatGPT Workflows 的重要变更。
 
+## 未发布：本地检查点与 Tag 策略
+
+- 已执行：将“以可独立核验阶段建立本地 Commit、远端同步按实际协作或发布需要另行决定”写入总览、操作手册和核心规则。普通 Commit 默认不打 Tag；仅在已验证发布、明确回滚锚点或操作者指定稳定里程碑时建立中文本地 Tag，且不会自动推送。
+- 已验证：本批工作流规则与封条校验通过现有仓库质量检查；本次为规则迭代检查点，不建立 Tag，也不执行远端写入。
+- English: Local commits are now the default durable checkpoints for independently verifiable stages, while remote synchronization remains separately authorized and need-based. Tags are Chinese local markers only for verified releases, explicit rollback anchors, or operator-designated milestones; ordinary commits are not tagged or pushed automatically.
+
+## 未发布：跨项目规则刷新接纳协议
+
+- 已执行：操作者可用自然语言指定规则刷新目标与排除对象；发送方生成唯一 `RULE_REFRESH_ID`，把已发送、`RECEIVED`、实际重新加载、项目内耐久登记和合格 `COMPLETED` 分层核账。版本号与 SHA-256 只证明内容身份，不能代替语义接纳。
+- 已执行：目标总指挥按影响范围读取受影响标题，范围无法可靠限定时才全文回退；完成回执必须列出实际读取范围、项目化行为变化、冲突/缺口、受限动作、本地记录回读和失效条件。一次完成回执不产生业务恢复、远端授权、运行验收或未来必然遵从的保证。
+- 已验证：规则版本统一为 `2026-09-19.3`；仓库质量检查、40 项封条测试、Markdown/路径/隐私契约和 `git diff --check` 通过。本批未重新广播、未修改其他项目、未 Commit、未 Push。
+- English: Cross-project rule refreshes now separate delivery, receipt, actual reload, durable project-local recording, and accepted completion under one `RULE_REFRESH_ID`. Hashes prove content identity only. A valid completion must report what was read, project-specific behavioral impact, conflicts, restrictions, record readback, and invalidation conditions; it does not restore business work, grant remote authority, or guarantee future compliance.
+
+## 未发布：四阶段总指挥换任与封条轮换
+
+- 已执行：把正常换任固定为“旧总指挥准备并冻结材料 → 新候选只读核验 → 操作者停止或归档旧总指挥 → 第二段确认后正式登记”。候选阶段旧任务仍存在及 `active → idle` 不再单独造成置信度降级。
+- 已执行：封条 schema 升级为 v2，区分候选核验、`MATERIAL_PREPARED` 和 `TAKEOVER_COMPLETED`；正式跨世代写入必须消费在旧来源仍可回算时生成的不可变轮换意图。
+- 已执行：链校验区分历史结构链与最新实时来源，拒绝缺失、篡改、重复、错误前序及过期未消费的轮换意图；`--history-only` 明示最新来源未检查，不能作为 READY/COMPLETED 凭证。旧格式首次迁移用 `CURRENT_MIGRATION` 建立当前序号 1；同一写者更新 current 后用 `CURRENT_ATTESTATION` 追加证明，不伪装换任。
+- 已验证：封条合成测试通过 40 个案例，覆盖四阶段换任、pending intent、首次迁移、同世代重新证明、历史来源分层、CAS 与来源漂移。真实平台换任与跨任务确认在本轮广播后另按实际回执报告；未执行 Commit、Push 或远端写入。
+- English: Formal commander rotation now follows four stages: the old commander freezes and seals the handoff, the candidate performs read-only verification, the operator stops or archives the old commander, and the candidate completes registration only after the second confirmation. Schema v2 requires a pre-update immutable transition intent for generation changes and uses `CURRENT_ATTESTATION` when the same writer re-attests updated current sources. The 40-case synthetic suite passed; no commit, push, or remote write was performed.
+
 ## 未发布：项目配置引用未注册模型提供商故障记录
 
 - 已执行：新增 `TRB-009` 中英文脱敏记录，说明任务保存的 provider ID 与用户配置注册键不一致时，桌面端可能无法加载任务并反复显示 `Model provider 'OpenAI' not found`。
