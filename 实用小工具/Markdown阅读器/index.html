@@ -18,6 +18,7 @@
       <button id="find-text" class="icon-button" title="查找正文" aria-label="查找正文" aria-expanded="false"><i data-lucide="search"></i></button>
       <button id="open-files" class="primary"><i data-lucide="folder-open"></i><span>打开文档</span></button>
       <button id="refresh" class="icon-button" title="重新读取当前文件" aria-label="重新读取当前文件"><i data-lucide="refresh-cw"></i></button>
+      <button id="set-remote" class="icon-button" title="设置当前文档的远端地址" aria-label="设置当前文档的远端地址"><i data-lucide="link"></i></button>
       <button id="theme" class="icon-button" title="切换明暗主题" aria-label="切换明暗主题"><i data-lucide="sun-moon"></i></button>
       <button class="icon-button mobile-toggle" id="toggle-outline" title="章节目录" aria-label="章节目录" aria-expanded="false"><i data-lucide="list-tree"></i></button>
     </div>
@@ -44,6 +45,7 @@
   <input id="file-input" type="file" accept=".md,.markdown,.txt,text/markdown,text/plain" multiple hidden>
   <dialog id="copy-dialog" aria-labelledby="copy-title"><div class="dialog-heading"><strong id="copy-title">复制文本</strong><button id="close-copy" class="icon-button" title="关闭" aria-label="关闭"><i data-lucide="x"></i></button></div><textarea id="copy-fallback" aria-label="完整原文" readonly></textarea></dialog>
   <dialog id="link-dialog" aria-labelledby="link-title"><div class="dialog-heading"><strong id="link-title">选择链接对应的文档</strong><button id="close-link" class="icon-button" title="关闭文档选择" aria-label="关闭文档选择"><i data-lucide="x"></i></button></div><p id="link-target"></p><div id="link-choices"></div></dialog>
+  <dialog id="remote-dialog" aria-labelledby="remote-title"><div class="dialog-heading"><strong id="remote-title">设置当前文档的远端地址</strong><button id="close-remote" class="icon-button" title="关闭" aria-label="关闭"><i data-lucide="x"></i></button></div><p>填写当前 Markdown 在远端仓库中的完整页面地址，例如 GitHub 的 blob 链接。阅读器只在点击链接时打开，不会自动下载远端内容。</p><input id="remote-url" type="url" placeholder="https://github.com/组织/仓库/blob/main/路径/文件.md" aria-label="当前文档远端地址"><div class="dialog-actions"><button id="clear-remote">清除</button><button id="save-remote" class="primary">保存</button></div></dialog>
   <div id="toast" role="status" hidden></div>
 </body>
 </html>

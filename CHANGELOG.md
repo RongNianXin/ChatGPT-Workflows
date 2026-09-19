@@ -2,6 +2,17 @@
 
 本文件记录 ChatGPT Workflows 的重要变更。
 
+## 未发布：Markdown 阅读器远端相对链接回退
+
+- 已执行：普通文件重新载入保留远端地址；不再凭安全新窗口的返回值误报弹窗被阻止。此批仅本地收口，远端发布待确认；真实远端页面与操作者体验未代签验收。
+- English: Reloading a session file retains its remote URL. Secure window opening no longer misreports popup blocking based on its return value. This batch is finalized locally; remote publication awaits approval, and live remote content and user acceptance remain unverified.
+
+- 已执行：为本地 Markdown 阅读器增加当前文档远端页面地址设置；已载入目标仍优先在阅读器内跳转，未载入的相对链接可按 `URL` 规则解析后在新标签页打开。
+- 已执行：远端地址按文档保存，不硬编码仓库、账号或分支；只在用户点击后打开，不自动下载远端内容；未配置时保留原有离线行为。
+- 已验证：阅读器语法与资源检查通过；Windows 无头浏览器回归通过，覆盖远端相对路径、中文路径/锚点编码、本地候选与远端候选共存、页面异常和外部请求检查。
+- 边界：浏览器是否允许新标签页、远端仓库权限、远端页面当前内容和 GitHub 锚点实际显示效果仍由浏览器/远端服务决定；本批未执行 Commit 或远端写入。
+- English: Added a per-document remote page URL for the local Markdown reader. Loaded targets still navigate locally; unloaded relative links resolve with standard URL rules and open in a new tab. The URL is stored per document, never hardcodes a repository or branch, and is used only after an explicit click; unset configuration preserves offline behavior. Syntax/resource checks and the Windows headless browser regression passed, including remote relative paths, encoded Chinese paths/fragments, local/remote candidate coexistence, page errors, and external-request checks. Browser popup policy, repository permissions, remote content, and GitHub anchor rendering remain environment-dependent; no commit or remote write was performed.
+
 ## 未发布：总指挥交接控制面封条与分层验收
 
 - 已执行：把交接结果拆为 `control_handoff_confidence`、`switch_status`、`runtime_acceptance_status` 和 `professional_acceptance_status`；运行或专业验收未知时，只限制依赖它们的动作，不把未知代签为通过。

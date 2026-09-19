@@ -1,5 +1,5 @@
 [中文](README.md)
-<!-- README-SOURCE-SHA256: 77e307a29c75c4f3784ba2ac84f56c9aea8a3462a9b876c18452eeedefc3e108 -->
+<!-- README-SOURCE-SHA256: 75899ddf907da002612abeb85b3431709c472db437389b1c024f155f1f2ce5fb -->
 
 # Markdown Reader
 
@@ -25,7 +25,7 @@ Only explicitly selected files are accessed; the reader does not scan the comput
 - The toolbar magnifier opens a search field for the current document, including code, with controls for the previous and next results. Search highlights up to 1000 matches, does not match across separate text nodes created by formatting, and does not save queries. Closing search clears the highlights.
 - The copy icon copies only the original fenced text, preserving indentation and line breaks with CRLF normalized to LF. Explanatory text outside the block is excluded. If clipboard access fails, a read-only text area opens with all text selected for the system copy command.
 - The theme control switches light/dark mode and remembers the preference when browser storage permits. Browser printing omits toolbars and sidebars.
-- Ordinary heading anchors and standalone empty `<a id="..."></a>` / `<a name="..."></a>` anchors are supported. Relative file links list already loaded same-name candidates for the user to confirm before navigating. File selection does not reveal full paths, so filenames alone cannot establish project relationships. Unloaded targets must be explicitly selected.
+- Ordinary heading anchors and standalone empty `<a id="..."></a>` / `<a name="..."></a>` anchors are supported. Relative file links first list already loaded same-name candidates. After setting the current document's remote page URL, an unloaded target can be resolved as a relative URL and opened in a new remote tab. The remote address is used only after an explicit click; content is never fetched automatically, and leaving it unset preserves offline behavior. File selection does not reveal full paths, so filenames alone cannot establish project relationships.
 
 ## Synchronizing Markdown Changes
 

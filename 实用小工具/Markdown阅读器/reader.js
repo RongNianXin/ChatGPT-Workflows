@@ -63,7 +63,8 @@ async function persist(entry, remove = false) {
         text: entry.text || '',
         modified: entry.modified || 0,
         readAt: entry.readAt || null,
-        order: entry.order ?? 0
+        order: entry.order ?? 0,
+        remoteUrl: entry.remoteUrl || ''
       });
       tx.oncomplete = resolve;
       tx.onerror = () => reject(tx.error);
@@ -281,8 +282,12 @@ function renderContent(entry) {
         if (file) {
           const name = file.split(/[\\/]/).pop();
           const candidates = [...documents.values()].filter((item) => item.name === name);
-          if (!candidates.length) { notify('请先通过“打开文档”选择链接对应的文件'); return; }
-          chooseLinkDocument(target, candidates, fragment);
+          const remoteUrl = resolveRemoteTarget(target);
+          if (!candidates.length) {
+            if (remoteUrl) { openRemoteTarget(remoteUrl); return; }
+            notify('请先通过“打开文档”选择链接对应的文件，或设置当前文档的远端地址'); return;
+          }
+          chooseLinkDocument(target, candidates, fragment, remoteUrl);
           return;
         }
         if (fragment) {
@@ -298,7 +303,19 @@ function renderContent(entry) {
   updateTextSearch(false);
   icons();
 }
-function chooseLinkDocument(target, candidates, fragment) {
+function resolveRemoteTarget(target) {
+  const entry = documents.get(activeId);
+  const base = entry?.remoteUrl || '';
+  if (!base) return null;
+  try {
+    const url = new URL(target, base);
+    return /^https?:$/i.test(url.protocol) ? url.href : null;
+  } catch { return null; }
+}
+function openRemoteTarget(url) {
+  window.open(url, '_blank', 'noopener,noreferrer');
+}
+function chooseLinkDocument(target, candidates, fragment, remoteUrl) {
   $('link-target').textContent = target;
   $('link-choices').replaceChildren();
   candidates.forEach((entry, index) => {
@@ -315,6 +332,12 @@ function chooseLinkDocument(target, candidates, fragment) {
     });
     $('link-choices').append(button);
   });
+  if (remoteUrl) {
+    const button = document.createElement('button');
+    button.textContent = '在远端文档中打开';
+    button.addEventListener('click', () => { $('link-dialog').close(); openRemoteTarget(remoteUrl); });
+    $('link-choices').append(button);
+  }
   $('link-dialog').showModal();
 }
 function updateTextSearch(scroll = true) {
@@ -403,6 +426,7 @@ function showEntryState(entry) {
   $('file-name').textContent = entry.name;
   $('source-state').textContent = statusLabel(entry) + (entry.readAt ? ' · ' + entry.readAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) + ' 读取' : '');
   $('refresh').disabled = false;
+  $('set-remote').disabled = false;
   if (entry.error) note(entry.error + (entry.text ? '；当前显示上次成功读取的内容。' : ''), () => refreshCurrent(true), '重新授权 / 重试');
   else if (entry.kind === 'session') note('本次载入的文件副本；读取最新版本需重新选择文件。', () => chooseReplacement(entry.id), '重新选择');
   else if (!entry.saved) note('浏览器未能记住文件授权，关闭页面后需要重新选择。');
@@ -423,7 +447,7 @@ function showEmpty() {
   updateTextSearch(false);
   $('find-bar').hidden = true;
   $('find-text').setAttribute('aria-expanded', 'false');
-  $('find-text').disabled = $('refresh').disabled = true;
+  $('find-text').disabled = $('refresh').disabled = $('set-remote').disabled = true;
   $('empty-state').hidden = false;
   document.querySelector('.document-end').hidden = true;
   note(''); renderDocuments();
@@ -476,7 +500,7 @@ async function addSessionFiles(files) {
   for (const file of files) {
     try {
       if (replace && (files.length !== 1 || file.name !== replace.name)) { notify('请选择同名原文件，当前文档未替换'); break; }
-      const entry = { id: replace?.id || crypto.randomUUID(), name: file.name, kind: 'session', text: await readFile(file), readAt: new Date(), position: replace?.position };
+      const entry = { id: replace?.id || crypto.randomUUID(), name: file.name, kind: 'session', text: await readFile(file), readAt: new Date(), position: replace?.position, remoteUrl: replace?.remoteUrl || '' };
       documents.set(entry.id, entry); last = entry.id;
     } catch (error) { notify(file.name + '：' + error.message); }
   }
@@ -521,6 +545,13 @@ $('open-files').addEventListener('click', openFiles);
 $('empty-open').addEventListener('click', openFiles);
 $('file-input').addEventListener('change', async (event) => { await addSessionFiles([...event.target.files]); event.target.value = ''; });
 $('refresh').addEventListener('click', () => refreshCurrent(true));
+$('set-remote').addEventListener('click', () => {
+  const entry = documents.get(activeId);
+  if (!entry) return;
+  $('remote-url').value = entry.remoteUrl || '';
+  $('remote-dialog').showModal();
+  $('remote-url').focus();
+});
 $('document-search').addEventListener('input', renderDocuments);
 $('heading-search').addEventListener('input', filterHeadings);
 $('back-top').addEventListener('click', () => { window.scrollTo(0, 0); syncOutline(); });
@@ -530,6 +561,20 @@ window.addEventListener('scroll', () => {
 }, { passive: true });
 $('close-copy').addEventListener('click', () => $('copy-dialog').close());
 $('close-link').addEventListener('click', () => $('link-dialog').close());
+$('close-remote').addEventListener('click', () => $('remote-dialog').close());
+$('clear-remote').addEventListener('click', async () => {
+  const entry = documents.get(activeId); if (!entry) return;
+  entry.remoteUrl = ''; await persist(entry); $('remote-dialog').close(); notify('已清除当前文档的远端地址');
+});
+$('save-remote').addEventListener('click', async () => {
+  const entry = documents.get(activeId); if (!entry) return;
+  const value = $('remote-url').value.trim();
+  try {
+    const url = new URL(value);
+    if (!/^https?:$/i.test(url.protocol)) throw new Error('仅支持 HTTP 或 HTTPS 地址');
+    entry.remoteUrl = url.href; await persist(entry); $('remote-dialog').close(); notify('已保存当前文档的远端地址');
+  } catch (error) { notify('远端地址无效：' + error.message); }
+});
 $('find-text').addEventListener('click', () => {
   $('find-bar').hidden = !$('find-bar').hidden;
   $('find-text').setAttribute('aria-expanded', String(!$('find-bar').hidden));

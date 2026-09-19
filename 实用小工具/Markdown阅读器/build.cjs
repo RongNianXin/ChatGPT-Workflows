@@ -12,7 +12,7 @@ for (const [from, to] of [
 const cn = path.join(root, 'README.md');
 const en = path.join(root, 'README.en.md');
 if (fs.existsSync(cn) && fs.existsSync(en)) {
-  const hash = crypto.createHash('sha256').update(fs.readFileSync(cn)).digest('hex');
+  const hash = crypto.createHash('sha256').update(fs.readFileSync(cn, 'utf8').replace(/\r\n/g, '\n')).digest('hex');
   fs.writeFileSync(en, fs.readFileSync(en, 'utf8').replace(/README-SOURCE-SHA256: \S+/, 'README-SOURCE-SHA256: ' + hash));
 }
 console.log('Built offline assets. All documents are selected and read at runtime.');
