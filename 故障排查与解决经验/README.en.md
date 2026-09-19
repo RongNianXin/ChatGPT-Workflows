@@ -2,7 +2,7 @@
 
 [简体中文](README.md) | **English**
 
-<!-- README-SOURCE-SHA256: feb5667e649b2675ebc6e404e3561db1df9cf5c44a662a26b2c97a422b415ec2 -->
+<!-- README-SOURCE-SHA256: 8cfa8c292590e436a9baad5ddbba54a124439d590ddcb862262f5758acb7c139 -->
 
 This directory contains sanitized Codex and companion-tool incident records with explicit evidence boundaries. Start with the symptom table. You do not need to understand the directory layout or read every investigation.
 
@@ -18,6 +18,7 @@ This directory contains sanitized Codex and companion-tool incident records with
 | `TRB-006` | Messages between AI tasks receive no reply, repeat an old answer, end in an empty turn, or receive no acknowledgment | **Unresolved: log-based diagnosis and prevention procedures available; automatic interception not implemented** | [AI task messages receive no reply: diagnosis and prevention](<03-跨任务通信/TRB-006-AI任务间消息不回复-排查与预防.md>) |
 | `TRB-007` | A long task reports an explicit conversation-too-long 400, 401, unsupported-model 404, 429, either of two 502 signatures, 503, 504, or a dropped stream | **Partially resolved: triage and recovery available; failures still observed after the reported fix** | [Long tasks and HTTP errors index](<04-网络与上游错误/TRB-007-长任务断联与HTTP错误/TRB-007-总索引-跨错误码证据与共用流程.md>) |
 | `TRB-008` | The official ChatGPT account still shows Codex capacity, reconnects, and stream disconnects in a clean environment | **Unresolved: initial support reply; workspace and `/status` details pending** | [Official-account capacity and stream disconnect](<02-账号与供应商切换/TRB-008-Codex官方账号容量与断流/SYS-TRB-008-Codex-official-account-capacity-and-stream-disconnect.en.md>) |
+| `TRB-009` | A task flashes `Model provider 'OpenAI' not found` and cannot load `config.toml` | **Resolved: provider alias added and loading verified for this case** | [Missing model provider in project configuration](<02-账号与供应商切换/TRB-009-项目配置中的模型提供商不存在/SYS-TRB-009-项目配置中的模型提供商不存在.en.md>) |
 
 “Resolved” applies only to the platform, version, and evidence scope stated in the case. “Partially resolved” means that a verified recovery or workaround exists while the root cause, durable fix, or other environments remain open. “Unresolved” means that no verified solution is currently available; the record provides investigation progress, evidence, and stop conditions.
 

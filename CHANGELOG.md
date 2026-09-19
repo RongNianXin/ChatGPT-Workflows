@@ -2,6 +2,13 @@
 
 本文件记录 ChatGPT Workflows 的重要变更。
 
+## 未发布：项目配置引用未注册模型提供商故障记录
+
+- 已执行：新增 `TRB-009` 中英文脱敏记录，说明任务保存的 provider ID 与用户配置注册键不一致时，桌面端可能无法加载任务并反复显示 `Model provider 'OpenAI' not found`。
+- 已验证：保留原 provider 配置并增加匹配别名后，目标任务由 `notLoaded` 恢复为 `idle`；公开记录未保留真实任务名称、配置原文、凭据或本机路径。
+- 未验证：尚未发送新消息做业务回归，未取得网络请求日志或桌面端精确版本；本案例不能证明闪烁期间存在高频远端请求，也不能自动推广到其他任务。
+- English: Added a sanitized bilingual `TRB-009` record for a task whose saved provider ID did not match the registered user-configuration key. Preserving the existing provider and adding a matching alias restored the task from `notLoaded` to `idle`. A fresh-message regression, network-request evidence, and the exact desktop version remain unverified; the record excludes the real task name, raw configuration, credentials, and machine-specific paths.
+
 ## 未发布：跨任务成果运输、授权请求与写入租约分流
 
 - 已执行：把跨任务写入协作分为 `WRITE_HANDOFF`、`AUTH_REQUEST`、`LEASE_TRANSFER`；没有项目目录写入租约不再被表述为缺少用户业务授权。
