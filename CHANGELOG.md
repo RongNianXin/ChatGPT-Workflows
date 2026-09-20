@@ -2,6 +2,12 @@
 
 本文件记录 ChatGPT Workflows 的重要变更。
 
+## 未发布：2E 人工验收数据来源
+
+- 已执行：场景 2E 的人工反馈模板新增“测试的数据来源（可选）”，可填无、附件、路径或链接；反馈匹配范围扩展到数据来源，状态索引的人工验收记录同步保留该字段。
+- 已验证：仓库质量检查与 Markdown 差异检查通过；数据来源只是证据定位信息，不自动证明测试覆盖、数据有效或验收通过。
+- English: Scenario 2E now includes an optional test-data-source field. It can point to none, an attachment, a path, or a link; the field supports evidence traceability but does not itself prove coverage, data validity, or acceptance.
+
 ## 未发布：本地检查点与 Tag 策略
 
 - 已执行：将“以可独立核验阶段建立本地 Commit、远端同步按实际协作或发布需要另行决定”写入总览、操作手册和核心规则。普通 Commit 默认不打 Tag；仅在已验证发布、明确回滚锚点或操作者指定稳定里程碑时建立中文本地 Tag，且不会自动推送。
