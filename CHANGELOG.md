@@ -2,6 +2,14 @@
 
 本文件记录 ChatGPT Workflows 的重要变更。
 
+## 未发布：非空答复提前结束故障防护
+
+- 已执行：新增 `TRB-010`，将“任务未闭环即进入非空最终答复”与 TRB-006 的跨任务空回合分开记录；同一事故中的目标载体未消歧作为独立故障面，不伪造共同根因。
+- 已执行：多部分请求和本轮执行承诺在最终出口按“请求项—实际动作—证据—状态”核账；跨任务发送先确认目标是 Codex 任务、用户还是群聊。质量脚本同步增加 TRB-010 结构检查和关键规则短语。
+- 未验证：仓库没有宿主 pre-final 拦截入口，也尚未实现会话级事后告警；本批静态验证不能证明真实回合不会再次提前结束。
+- 遗留风险：故障知识库结构检查仍未覆盖既有 TRB-008/009；本批没有借新增案例改写这两个旧记录。
+- English: Added TRB-010 for non-empty responses that end before the task is closed, distinct from TRB-006 cross-task empty turns. Multi-part requests and in-turn action commitments now require a request/action/evidence/status check before completion, while outbound messaging must resolve the target channel and entity type first. No host-level pre-final interceptor or session-level detector has been implemented yet.
+
 ## 未发布：事故证据优先回归验证
 
 - 已执行：自动化验证现在先将操作者上一轮提供且相关的故障证据整理为最小回归清单，在可获得且获准的等价条件下逐项复现和验收，再运行常规回归。
