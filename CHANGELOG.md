@@ -2,6 +2,13 @@
 
 本文件记录 ChatGPT Workflows 的重要变更。
 
+## 未发布：正式交接材料提交顺序
+
+- 已执行：正式候选附件改为先收敛唯一 CURRENT、登记封条元数据、保存来源并实时验证 `MATERIAL_PREPARED` 封条，再生成和回读 `final-*`；阻断期间只允许 `draft-*` 诊断材料，不得送候选评分。
+- 已执行：明确封条工具路径与项目实例 `source-root` 分开定位，附件 SHA-256 保存在封条来源之外，避免回写中央来源造成自引用；CURRENT 只保留唯一当前视图，历史迁入 HISTORY 并保留回查指针。
+- 待验证：规则和静态检查通过后仍需由真实项目在下一次交接中验证该顺序；规则不能阻止绕过工具的宿主级写入。
+- English: Formal handoff attachments are now created only after the single CURRENT view is converged and a live `MATERIAL_PREPARED` seal passes. Blocked diagnostics use `draft-*` and cannot be submitted for candidate scoring. Tool lookup, project source-root resolution, attachment hashing, and CURRENT/HISTORY ownership are now explicit to prevent source drift and self-reference.
+
 ## 未发布：非空答复提前结束故障防护
 
 - 已执行：新增 `TRB-010`，将“任务未闭环即进入非空最终答复”与 TRB-006 的跨任务空回合分开记录；同一事故中的目标载体未消歧作为独立故障面，不伪造共同根因。
