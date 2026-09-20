@@ -2,6 +2,12 @@
 
 本文件记录 ChatGPT Workflows 的重要变更。
 
+## 未发布：事故证据优先回归验证
+
+- 已执行：自动化验证现在先将操作者上一轮提供且相关的故障证据整理为最小回归清单，在可获得且获准的等价条件下逐项复现和验收，再运行常规回归。
+- 已执行：结果单列“已复现且已修复、已复现但仍失败、未能复现、证据或环境缺失、常规验证、未覆盖或待确认”。常规测试通过不能替代对原事故的验收；敏感来源、受控环境、前台控制和远端动作仍须另获授权。
+- English: Automation now prioritizes relevant incident evidence supplied in the prior operator round. It recreates and verifies each incident under available, authorized equivalent conditions before routine regression. Routine passing tests cannot substitute for incident acceptance, and missing evidence or environments remain explicitly uncovered.
+
 ## 未发布：2E 人工验收数据来源
 
 - 已执行：场景 2E 的人工反馈模板新增“测试的数据来源（可选）”，可填无、附件、路径或链接；反馈匹配范围扩展到数据来源，状态索引的人工验收记录同步保留该字段。
