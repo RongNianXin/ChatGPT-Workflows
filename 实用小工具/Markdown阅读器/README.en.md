@@ -1,5 +1,5 @@
 [中文](README.md)
-<!-- README-SOURCE-SHA256: 75899ddf907da002612abeb85b3431709c472db437389b1c024f155f1f2ce5fb -->
+<!-- README-SOURCE-SHA256: b4f2fef0caf0a0c6a8d4912892b7e89b1f5ead11c06ffb7e9021818726fc70c2 -->
 
 # Markdown Reader
 
@@ -11,7 +11,7 @@ Double-click [index.html](index.html) to read Markdown in a browser. Select sour
 2. Select “打开文档” (Open documents) and choose the manual's original `.md` file or any other document. Expect a new or selected entry labeled as an original file or session import. The old bundled snapshot no longer appears; existing saved file references remain in use.
 3. Continue opening Markdown from other locations. Each document has its own content and outline. Filter the library using its search field. Identical filenames receive sequence labels; removing an entry does not delete the file.
 
-Drag document entries up or down to reorder the library. Remembered original files keep this order. Dragging changes only the reader list; it never moves or renames files on disk.
+Drag document entries up or down to reorder the library. Dropping on the upper half of a target inserts before it; dropping on the lower half inserts after it, with a solid line on the matching edge. Remembered original files keep this order. Dragging changes only the reader list; it never moves or renames files on disk.
 
 The toolbar has one Open documents control. It first requests access that allows rereading the source file. If the browser does not support or cannot provide that access, it automatically falls back to ordinary file selection, labeled “本次载入” (Session import). Canceling selection does not import a file or open another picker.
 

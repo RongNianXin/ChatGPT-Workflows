@@ -2,6 +2,12 @@
 
 本文件记录 ChatGPT Workflows 的重要变更。
 
+## 未发布：Markdown 阅读器拖拽位置提示
+
+- 已执行：文档条目拖到目标上半区时插入前方，下半区时插入后方；对应边缘显示实线，避免原先只能猜测插入位置。
+- 已验证：Windows 无头浏览器回归通过，覆盖前插、后插、桌面和移动视图、深色模式、链接与外部请求边界。
+- English: Markdown Reader drag-and-drop now inserts before or after the target based on pointer position and shows the matching edge. The Windows headless-browser regression passed.
+
 ## 未发布：故障资料入口改名与暂停工具标识
 
 - 已执行：故障库一级分类和案例资料夹改为按用户实际看到的现象命名，保留 `TRB-xxx`、`HTTP-xxx`、`SYS-` 等稳定索引；根目录症状表、跨模块引用、双语 README 和质量脚本同步更新。

@@ -93,14 +93,15 @@ async function persistDocumentOrder() {
   });
   await Promise.all(jobs);
 }
-function moveDocument(id, beforeId) {
-  if (id === beforeId) return;
+function moveDocument(id, targetId, after = false) {
+  if (id === targetId) return;
   const entries = [...documents.values()];
   const moving = documents.get(id);
   if (!moving) return;
   const remaining = entries.filter(entry => entry.id !== id);
-  const targetIndex = beforeId ? remaining.findIndex(entry => entry.id === beforeId) : remaining.length;
-  remaining.splice(targetIndex < 0 ? remaining.length : targetIndex, 0, moving);
+  const targetIndex = targetId ? remaining.findIndex(entry => entry.id === targetId) : remaining.length;
+  const insertAt = targetIndex < 0 ? remaining.length : targetIndex + Number(after);
+  remaining.splice(insertAt, 0, moving);
   documents.clear();
   remaining.forEach(entry => documents.set(entry.id, entry));
   renderDocuments();
@@ -122,12 +123,24 @@ function renderDocuments() {
       event.dataTransfer.setData('text/plain', entry.id);
       row.classList.add('dragging');
     });
-    row.addEventListener('dragend', () => row.classList.remove('dragging'));
-    row.addEventListener('dragover', (event) => { event.preventDefault(); event.dataTransfer.dropEffect = 'move'; row.classList.add('drag-over'); });
-    row.addEventListener('dragleave', () => row.classList.remove('drag-over'));
+    row.addEventListener('dragend', () => {
+      row.classList.remove('dragging');
+      document.querySelectorAll('.document-row.drag-before, .document-row.drag-after').forEach(item => item.classList.remove('drag-before', 'drag-after'));
+    });
+    row.addEventListener('dragover', (event) => {
+      event.preventDefault(); event.dataTransfer.dropEffect = 'move';
+      const after = event.clientY >= row.getBoundingClientRect().top + row.getBoundingClientRect().height / 2;
+      document.querySelectorAll('.document-row.drag-before, .document-row.drag-after').forEach(item => item.classList.remove('drag-before', 'drag-after'));
+      row.classList.add(after ? 'drag-after' : 'drag-before');
+    });
+    row.addEventListener('dragleave', (event) => {
+      if (!row.contains(event.relatedTarget)) row.classList.remove('drag-before', 'drag-after');
+    });
     row.addEventListener('drop', (event) => {
-      event.preventDefault(); row.classList.remove('drag-over');
-      moveDocument(event.dataTransfer.getData('text/plain'), entry.id);
+      event.preventDefault();
+      const after = event.clientY >= row.getBoundingClientRect().top + row.getBoundingClientRect().height / 2;
+      row.classList.remove('drag-before', 'drag-after');
+      moveDocument(event.dataTransfer.getData('text/plain'), entry.id, after);
     });
     const button = document.createElement('button');
     button.className = 'document-button';
