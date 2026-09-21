@@ -22,6 +22,7 @@ const SCAN_CONCURRENCY = 6;
 const MAX_EXPORT_BYTES = 100 * 1024 * 1024;
 const RPC_TIMEOUT_MS = 45_000;
 const TURN_TIMEOUT_MS = 12 * 60_000;
+const TURN_POLL_MS = 2_000;
 const OUTPUT_ROOT = join(homedir(), "Documents", "Codex", "CodexHandoffs");
 const TEST_PREFIX = "[自动测试] Codex 一键交接";
 const HANDOFF_SUFFIX = "-交接对话";
@@ -981,12 +982,33 @@ function parseRecoveryStatus(text) {
 async function runTurn(client, params) {
   const turnStarted = await client.request("turn/start", params);
   const turnId = turnStarted.turn.id;
-  const completed = await client.waitFor(
-    "turn/completed",
-    (event) => event?.threadId === params.threadId && event?.turn?.id === turnId,
-    TURN_TIMEOUT_MS,
-  );
-  return completed.turn;
+  const startedAt = Date.now();
+  const deadline = Date.now() + TURN_TIMEOUT_MS;
+  const runningStatuses = new Set(["inProgress", "in_progress", "running", "pending"]);
+  while (Date.now() < deadline) {
+    const completed = client.notifications.findLast(
+      (message) => message.method === "turn/completed"
+        && message.params?.threadId === params.threadId
+        && message.params?.turn?.id === turnId,
+    );
+    if (completed?.params?.turn) return completed.params.turn;
+
+    await new Promise((resolvePromise) => setTimeout(resolvePromise, TURN_POLL_MS));
+    let snapshot;
+    try {
+      snapshot = await client.request("thread/read", {
+        threadId: params.threadId,
+        includeTurns: true,
+      });
+    } catch (error) {
+      const transientInitializationError = /failed to read session metadata|rollout .* is empty/i.test(error.message);
+      if (transientInitializationError && Date.now() - startedAt < 15_000) continue;
+      throw error;
+    }
+    const current = snapshot.thread?.turns?.find((turn) => turn.id === turnId);
+    if (current?.status && !runningStatuses.has(current.status)) return current;
+  }
+  throw new Error(`等待任务完成超时（${Math.round(TURN_TIMEOUT_MS / 60_000)} 分钟）。`);
 }
 
 async function readAgentText(client, threadId) {
@@ -1024,10 +1046,9 @@ async function createRecoveryThread(
   const threadId = started.thread.id;
   const titleBase = testMarker ? TEST_PREFIX : targetTitle;
 
-  let prompt = recoveryPrompt(exported, sourceThread);
-  if (testMarker) {
-    prompt += `\n\n这是隔离自动测试，不执行原任务业务。请在末尾输出 ${testMarker}，并选择 HANDOFF_RECOVERY_STATUS: BLOCKED。`;
-  }
+  const prompt = testMarker
+    ? `这是隔离自动测试，不执行原任务业务，也不读取当前工作目录。请只读以下四个临时测试文件，核对 manifest 中的 SHA-256，并确认三份文件都能读取：\n${join(exported.dir, "manifest.json")}\n${join(exported.dir, "交接索引.md")}\n${join(exported.dir, "可见历史证据目录.md")}\n${join(exported.dir, "可迁移记录.json")}\n\n最后输出 ${testMarker}，并单独输出 HANDOFF_RECOVERY_STATUS: BLOCKED。`
+    : recoveryPrompt(exported, sourceThread);
   try {
     await client.request("thread/name/set", { threadId, name: titleBase });
     const verifiedThread = (await client.request("thread/read", { threadId, includeTurns: false })).thread;

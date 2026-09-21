@@ -2,6 +2,13 @@
 
 本文件记录 ChatGPT Workflows 的重要变更。
 
+## 未发布：一键交接工具的完成状态回读
+
+- 已执行：等待接续任务完成时，除监听完成事件外，定时回读任务状态，降低事件未送达导致误判超时的风险。
+- 已执行：隔离集成测试的恢复提示只允许读取临时测试文件，不再引用当前工作目录。
+- 已验证：JavaScript 语法检查与离线 `--self-test` 通过。未运行会读取真实任务或创建测试任务的扫描、交接或集成测试。
+- English: The handoff tool now polls the continuation task status when a completion event is missing, and its isolated integration-test prompt is limited to temporary test files. Syntax and offline self-tests passed; no live scan, handoff, or integration test was run.
+
 ## 未发布：Git 仓库状态罗盘产品方案
 
 - 已执行：记录面向 Git 新手的本地优先、只读桌面工具产品方案，明确区分工作区、本地提交、远端跟踪引用和 GitHub PR。
