@@ -2,6 +2,11 @@
 
 本文件记录 ChatGPT Workflows 的重要变更。
 
+## 未发布：明确 ChatGPT Workflows 与 GitStateCompass 的远端边界
+
+- 已执行：登记本项目只使用 `legacy-origin` 作为 ChatGPT Workflows 的远端候选；`origin` 与 `实用小工具/GitStateCompass/` 明确排除在本项目提交和远端发布范围外。
+- 已验证：本次仅修改边界声明和变更记录，未读取、修改、暂存或提交 GitStateCompass 内容；远端未写入。
+
 ## 未发布：经验库索引闭环与按需加载收敛
 
 - 已执行：把跨项目经验索引加入项目启用声明和新项目初始化清单，明确它是可选共享来源；新项目记录相对路径、版本、修订和 SHA-256，缺失时只标记 `EXPERIENCE_INDEX_UNAVAILABLE`。
