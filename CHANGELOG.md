@@ -2,6 +2,13 @@
 
 本文件记录 ChatGPT Workflows 的重要变更。
 
+## 未发布：跨窗口最小充分 Token 控制
+
+- 已执行：在全局 Codex 指令中加入最小充分输出、按需读取、工具结果摘要和质量门禁规则；规则保持短小，不引入常驻压缩器。
+- 已执行：在总指挥 Token 控制章节补充成功/失败输出的证据下限、复杂度路由和“减少重复与返工优先于盲目降档”原则。
+- 已验证：仅修改规则与履历文件；未安装第三方 Skill 或代理，未宣称已获得实际 Token 节省率。既有未提交工具改动未纳入本次变更。
+- English: Added a compact global baseline and commander-specific rules for minimal-sufficient output, scoped reads, summarized tool results, and evidence-preserving verification. No third-party compressor was installed and no measured token saving is claimed.
+
 ## 未发布：本地成果先整理到远端可执行状态
 
 - 已执行：发布流程改为先在现有授权范围内连续核对、修复、验证并分组提交本地成果，不再要求操作者先批准 Git 技术方案；来源不明、删除意图不明、损坏、敏感或验证失败的对象只做局部暂停。
