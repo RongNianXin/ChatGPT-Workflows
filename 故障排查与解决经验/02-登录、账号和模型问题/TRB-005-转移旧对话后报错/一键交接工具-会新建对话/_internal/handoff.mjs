@@ -297,6 +297,10 @@ function parseArgs(argv) {
       options.mode = "audit-source";
       options.sourceId = argv[++index] ?? null;
     }
+    else if (arg === "--export-source") {
+      options.mode = "export-source";
+      options.sourceId = argv[++index] ?? null;
+    }
     else if (arg === "--self-test") options.mode = "self-test";
     else if (arg === "--scan-only") options.mode = "scan-only";
     else if (arg === "--integration-test") options.mode = "integration-test";
@@ -1285,6 +1289,49 @@ async function runSourceAudit(client, sourceId) {
   console.log(`SOURCE_AUDIT_STATS ${JSON.stringify(stats)}`);
 }
 
+async function runSourceExport(client, sourceId) {
+  if (!sourceId) throw new Error("--export-source 缺少任务 ID。");
+  const rawSource = await selectCandidate(client, sourceId);
+  const desktopState = await loadDesktopProjectAssignments();
+  if (desktopState.error) throw new Error(`无法核对桌面项目归属：${desktopState.error}`);
+  const [source] = applyProjectAssignments([rawSource], desktopState);
+  if (source._projectResolution === "unknown") {
+    throw new Error("无法确认原任务属于哪个项目，已停止导出。");
+  }
+  if (threadStatus(source) === "active") {
+    throw new Error("原任务仍在执行或等待交互。请先让原任务停止，再重新导出。");
+  }
+
+  const targetTitle = handoffTitle(source);
+  const allThreads = applyProjectAssignments(await listCandidates(client), desktopState);
+  const duplicate = allThreads.find((thread) =>
+    thread.id !== source.id
+    && titleKey(thread.projectId, threadTitle(thread)) === titleKey(source.projectId, targetTitle));
+  if (duplicate) {
+    throw new Error(`同一项目中已经存在“${targetTitle}”（ID：${duplicate.id}），已停止，避免重复创建。`);
+  }
+
+  const exported = await exportThread(client, source);
+  const result = {
+    format: "codex-handoff-export-v1",
+    source: {
+      threadId: source.id,
+      title: threadTitle(source),
+      projectId: source.projectId ?? null,
+      cwd: source.cwd,
+      updatedAt: source.updatedAt,
+    },
+    targetTitle,
+    exportDir: exported.dir,
+    manifestPath: join(exported.dir, "manifest.json"),
+    indexPath: join(exported.dir, "交接索引.md"),
+    evidenceCatalogPath: join(exported.dir, "可见历史证据目录.md"),
+    recordPath: join(exported.dir, "可迁移记录.json"),
+    recoveryPrompt: recoveryPrompt(exported, source),
+  };
+  console.log(`HANDOFF_EXPORT_JSON ${JSON.stringify(result)}`);
+}
+
 async function runSelfTest() {
   const stats = {
     redactions: 0,
@@ -1406,6 +1453,10 @@ async function main() {
     }
     if (options.mode === "audit-source") {
       await runSourceAudit(client, options.sourceId);
+      return;
+    }
+    if (options.mode === "export-source") {
+      await runSourceExport(client, options.sourceId);
       return;
     }
     if (options.mode === "scan-only") {
