@@ -52,7 +52,7 @@ The Windows desk saves task IDs, detects names and projects, and provides orderi
 
 This utility scans known Codex task-path anomalies and asks for confirmation before repair. The screenshot shows the manual confirmation state after an anomaly is detected.
 
-[![Codex 归档路径修复工具的脱敏真实运行截图](故障排查与解决经验/01-会话与归档/TRB-001-Windows归档路径异常/assets/codex-archive-repair-preview.png)](故障排查与解决经验/01-会话与归档/TRB-001-Windows归档路径异常/assets/codex-archive-repair-preview.png)
+[![Codex 归档路径修复工具的脱敏真实运行截图](故障排查与解决经验/01-对话与归档/TRB-001-归档时提示路径不存在/assets/codex-archive-repair-preview.png)](故障排查与解决经验/01-对话与归档/TRB-001-归档时提示路径不存在/assets/codex-archive-repair-preview.png)
 
 > 隐私说明：截图未显示真实任务 ID、个人联系方式、凭据或本机路径；仅保留工具名称、通用提示和人工确认流程。
 > Privacy: no real task ID, personal contact, credential or local path is visible; the tool name, generic messages and manual confirmation flow are retained.

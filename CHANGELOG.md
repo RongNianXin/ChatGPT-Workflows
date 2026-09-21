@@ -2,6 +2,13 @@
 
 本文件记录 ChatGPT Workflows 的重要变更。
 
+## 未发布：故障资料入口改名与暂停工具标识
+
+- 已执行：故障库一级分类和案例资料夹改为按用户实际看到的现象命名，保留 `TRB-xxx`、`HTTP-xxx`、`SYS-` 等稳定索引；根目录症状表、跨模块引用、双语 README 和质量脚本同步更新。
+- 已执行：`TRB-005` 的旧迁移研究、当前不可用的修复工具和会新建接续任务的交接工具均改为明确状态名；删除两个已暂停的真实操作入口，并保留纯虚构自测与安全边界。
+- 已验证：Markdown 链接、双语 README、路径可移植性、隐私边界和故障库 10 个案例的仓库检查通过；交接工具离线 `--self-test`、旧迁移研究的安全与分页谱系测试通过。未执行真实迁移、真实回滚或创建接续任务。
+- English: The troubleshooting library now names categories and cases by visible symptoms while retaining stable `TRB`, `HTTP`, and `SYS` identifiers. TRB-005 clearly separates legacy research, an unavailable repair tool, and a handoff tool that creates a continuation task. Repository checks, synthetic tests, and the offline handoff self-test passed; no real migration, rollback, or continuation-task creation was run.
+
 ## 未发布：交接封条 v3 与正式附件原子门禁
 
 - 已执行：封条新写入升级为 schema v3，拒绝跨序号时间倒退、`sealed_at < fact_cutoff`、事件 ID 复用、轮换准备时间越界和无变化 `CURRENT_ATTESTATION`；旧 v1/v2 链只读保留并明确标为 `LEGACY_UNVERIFIED`。

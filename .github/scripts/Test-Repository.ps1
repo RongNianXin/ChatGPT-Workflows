@@ -1136,7 +1136,7 @@ function Get-CSharpCompiler {
 }
 
 function Test-ArchiveRepairLauncher {
-    $caseRoot = Join-Path $repoRoot '故障排查与解决经验/01-会话与归档/TRB-001-Windows归档路径异常'
+    $caseRoot = Join-Path $repoRoot '故障排查与解决经验/01-对话与归档/TRB-001-归档时提示路径不存在'
     $source = Join-Path $caseRoot 'CodexArchiveRepairLauncher.cs'
     $resource = Join-Path $caseRoot 'Repair-CodexThreadArchive.ps1'
     $checkedExe = Join-Path $caseRoot 'Codex归档修复工具.exe'
@@ -1220,14 +1220,16 @@ function Test-ArchiveRepairLauncher {
 function Test-TroubleshootingKnowledgeBase {
     $root = Join-Path $repoRoot '故障排查与解决经验'
     $cases = @(
-        @{ Id = 'TRB-001'; Path = '01-会话与归档/TRB-001-Windows归档路径异常/TRB-001-2-thread-store-归档路径缺失.md'; Status = '已解决' },
-        @{ Id = 'TRB-002'; Path = '01-会话与归档/TRB-002-thread-not-found/TRB-002-thread-not-found-恢复方案.md'; Status = '部分解决' },
-        @{ Id = 'TRB-003'; Path = '02-账号与供应商切换/TRB-003-历史列表分裂/TRB-003-历史列表分裂-账号切换后无法共享对话.md'; Status = '部分解决' },
-        @{ Id = 'TRB-004'; Path = '02-账号与供应商切换/TRB-004-旧对话无法继续/TRB-004-旧对话无法继续-账号切换后无法继续.md'; Status = '部分解决' },
-        @{ Id = 'TRB-005'; Path = '02-账号与供应商切换/TRB-005-迁移后分页谱系损坏/TRB-005-invalid-paginated-history-lineage-分页谱系损坏与迁移暂停.md'; Status = '未解决' },
-        @{ Id = 'TRB-006'; Path = '03-跨任务通信/TRB-006-AI任务间消息不回复-排查与预防.md'; Status = '未解决' },
-        @{ Id = 'TRB-007'; Path = '04-网络与上游错误/TRB-007-长任务断联与HTTP错误/TRB-007-总索引-跨错误码证据与共用流程.md'; Status = '部分解决' },
-        @{ Id = 'TRB-010'; Path = '05-任务执行与交付/TRB-010-非空答复提前结束/SYS-TRB-010-任务未闭环却提前结束.md'; Status = '未解决' }
+        @{ Id = 'TRB-001'; Path = '01-对话与归档/TRB-001-归档时提示路径不存在/TRB-001-归档时提示路径不存在.md'; Status = '已解决' },
+        @{ Id = 'TRB-002'; Path = '01-对话与归档/TRB-002-对话提示找不到/TRB-002-对话提示找不到-恢复方法.md'; Status = '部分解决' },
+        @{ Id = 'TRB-003'; Path = '02-账号、登录与模型配置/TRB-003-换账号后看不到原对话/TRB-003-换账号后看不到原对话-历史列表分裂.md'; Status = '部分解决' },
+        @{ Id = 'TRB-004'; Path = '02-账号、登录与模型配置/TRB-004-换账号后旧对话无法继续/TRB-004-换账号后旧对话无法继续-恢复方法.md'; Status = '部分解决' },
+        @{ Id = 'TRB-005'; Path = '02-账号、登录与模型配置/TRB-005-迁移后历史记录损坏/TRB-005-迁移后历史记录损坏-处理暂停.md'; Status = '未解决' },
+        @{ Id = 'TRB-006'; Path = '03-AI任务之间通信/TRB-006-任务间消息没有回复-排查与预防.md'; Status = '未解决' },
+        @{ Id = 'TRB-007'; Path = '04-网络与服务错误/TRB-007-长任务断流和网络错误/TRB-007-长任务和网络错误-总说明.md'; Status = '部分解决' },
+        @{ Id = 'TRB-008'; Path = '02-账号、登录与模型配置/TRB-008-官方账号容量和断流/SYS-TRB-008-官方账号容量和断流.md'; Status = '未解决' },
+        @{ Id = 'TRB-009'; Path = '02-账号、登录与模型配置/TRB-009-项目配置找不到模型提供商/SYS-TRB-009-项目配置找不到模型提供商.md'; Status = '已解决' },
+        @{ Id = 'TRB-010'; Path = '05-任务执行与结果交付/TRB-010-任务没完成就提前结束/SYS-TRB-010-任务没完成就提前结束.md'; Status = '未解决' }
     )
 
     $index = Get-Content -LiteralPath (Join-Path $root 'README.md') -Raw -Encoding utf8
@@ -1274,7 +1276,7 @@ function Test-TroubleshootingKnowledgeBase {
         }
     }
 
-    $migration = Join-Path $root '02-账号与供应商切换/TRB-005-迁移后分页谱系损坏/迁移工具研究材料-真实操作已暂停/install_bulk_codex_migration.mjs'
+    $migration = Join-Path $root '02-账号、登录与模型配置/TRB-005-迁移后历史记录损坏/旧版迁移工具研究-真实数据操作已暂停/install_bulk_codex_migration.mjs'
     $migrationRoot = Split-Path -Parent $migration
     foreach ($syntheticTest in @(
         @{ Path = (Join-Path $migrationRoot 'safety_tests.mjs'); Label = '内容保真与失败关闭' },

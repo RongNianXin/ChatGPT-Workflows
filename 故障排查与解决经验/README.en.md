@@ -2,24 +2,23 @@
 
 [简体中文](README.md) | **English**
 
-<!-- README-SOURCE-SHA256: 6ae721b925ae9a1e8fc5de80b5bbd7d2ed1b36241bf47a4b30137abd40313482 -->
-
+<!-- README-SOURCE-SHA256: 7a523558fbea9f368e7e3f7ba0a9ab9e601362259c7628115a516850fa96fb23 -->
 This directory contains sanitized Codex and companion-tool incident records with explicit evidence boundaries. Start with the symptom table. You do not need to understand the directory layout or read every investigation.
 
 ## Find a case by symptom
 
 | ID | Symptom | Current status | Entry |
 | --- | --- | --- | --- |
-| `TRB-001` | Archiving on Windows reports `thread-store` / `os error 2`, although the session file exists | **Resolved: local repair verified** | [Archive-path failure](<01-会话与归档/TRB-001-Windows归档路径异常/TRB-001-2-thread-store-归档路径缺失.md>) |
-| `TRB-002` | The original task shows `thread not found`, while its record may still exist | **Partially resolved: one recovery case verified** | [`thread not found` recovery](<01-会话与归档/TRB-002-thread-not-found/TRB-002-thread-not-found-恢复方案.md>) |
-| `TRB-003` | Tasks disappear from the list after an account or route switch, although files remain | **Partially resolved: historical workaround verified** | [Split history lists](<02-账号与供应商切换/TRB-003-历史列表分裂/TRB-003-历史列表分裂-账号切换后无法共享对话.md>) |
-| `TRB-004` | A task remains visible but cannot continue after an account or provider switch and reports ciphertext validation errors | **Partially resolved: no general fix** | [Old task cannot continue](<02-账号与供应商切换/TRB-004-旧对话无法继续/TRB-004-旧对话无法继续-账号切换后无法继续.md>) |
-| `TRB-005` | Migration is followed by `invalid paginated history lineage` or an out-of-range cutoff | **Unresolved: real operations suspended** | [Paginated-lineage damage](<02-账号与供应商切换/TRB-005-迁移后分页谱系损坏/TRB-005-invalid-paginated-history-lineage-分页谱系损坏与迁移暂停.md>) |
-| `TRB-006` | Messages between AI tasks receive no reply, repeat an old answer, end in an empty turn, or receive no acknowledgment | **Unresolved: log-based diagnosis and prevention procedures available; automatic interception not implemented** | [AI task messages receive no reply: diagnosis and prevention](<03-跨任务通信/TRB-006-AI任务间消息不回复-排查与预防.md>) |
-| `TRB-007` | A long task reports an explicit conversation-too-long 400, 401, unsupported-model 404, 429, either of two 502 signatures, 503, 504, or a dropped stream | **Partially resolved: triage and recovery available; failures still observed after the reported fix** | [Long tasks and HTTP errors index](<04-网络与上游错误/TRB-007-长任务断联与HTTP错误/TRB-007-总索引-跨错误码证据与共用流程.md>) |
-| `TRB-008` | The official ChatGPT account still shows Codex capacity, reconnects, and stream disconnects in a clean environment | **Unresolved: initial support reply; workspace and `/status` details pending** | [Official-account capacity and stream disconnect](<02-账号与供应商切换/TRB-008-Codex官方账号容量与断流/SYS-TRB-008-Codex-official-account-capacity-and-stream-disconnect.en.md>) |
-| `TRB-009` | A task flashes `Model provider 'OpenAI' not found` and cannot load `config.toml` | **Resolved: provider alias added and loading verified for this case** | [Missing model provider in project configuration](<02-账号与供应商切换/TRB-009-项目配置中的模型提供商不存在/SYS-TRB-009-项目配置中的模型提供商不存在.en.md>) |
-| `TRB-010` | A multi-part request receives only a kickoff note or promised next action, then ends with a non-empty answer before the task is complete | **Unresolved: behavioral guard added; live regression and host-level interception are unavailable** | [Task ended before closure](<05-任务执行与交付/TRB-010-非空答复提前结束/SYS-TRB-010-任务未闭环却提前结束.md>) |
+| `TRB-001` | Archiving on Windows reports `thread-store` / `os error 2`, although the session file exists | **Resolved: local repair verified** | [Archive-path failure](<01-对话与归档/TRB-001-归档时提示路径不存在/TRB-001-归档时提示路径不存在.md>) |
+| `TRB-002` | The original task shows `thread not found`, while its record may still exist | **Partially resolved: one recovery case verified** | [`thread not found` recovery](<01-对话与归档/TRB-002-对话提示找不到/TRB-002-对话提示找不到-恢复方法.md>) |
+| `TRB-003` | Tasks disappear from the list after an account or route switch, although files remain | **Partially resolved: historical workaround verified** | [Split history lists](<02-账号、登录与模型配置/TRB-003-换账号后看不到原对话/TRB-003-换账号后看不到原对话-历史列表分裂.md>) |
+| `TRB-004` | A task remains visible but cannot continue after an account or provider switch and reports ciphertext validation errors | **Partially resolved: no general fix** | [Old task cannot continue](<02-账号、登录与模型配置/TRB-004-换账号后旧对话无法继续/TRB-004-换账号后旧对话无法继续-恢复方法.md>) |
+| `TRB-005` | Migration is followed by `invalid paginated history lineage` or an out-of-range cutoff | **Unresolved: real operations suspended** | [Paginated-lineage damage](<02-账号、登录与模型配置/TRB-005-迁移后历史记录损坏/TRB-005-迁移后历史记录损坏-处理暂停.md>) |
+| `TRB-006` | Messages between AI tasks receive no reply, repeat an old answer, end in an empty turn, or receive no acknowledgment | **Unresolved: log-based diagnosis and prevention procedures available; automatic interception not implemented** | [AI task messages receive no reply: diagnosis and prevention](<03-AI任务之间通信/TRB-006-任务间消息没有回复-排查与预防.md>) |
+| `TRB-007` | A long task reports an explicit conversation-too-long 400, 401, unsupported-model 404, 429, either of two 502 signatures, 503, 504, or a dropped stream | **Partially resolved: triage and recovery available; failures still observed after the reported fix** | [Long tasks and HTTP errors index](<04-网络与服务错误/TRB-007-长任务断流和网络错误/TRB-007-长任务和网络错误-总说明.md>) |
+| `TRB-008` | The official ChatGPT account still shows Codex capacity, reconnects, and stream disconnects in a clean environment | **Unresolved: initial support reply; workspace and `/status` details pending** | [Official-account capacity and stream disconnect](<02-账号、登录与模型配置/TRB-008-官方账号容量和断流/SYS-TRB-008-官方账号容量和断流.en.md>) |
+| `TRB-009` | A task flashes `Model provider 'OpenAI' not found` and cannot load `config.toml` | **Resolved: provider alias added and loading verified for this case** | [Missing model provider in project configuration](<02-账号、登录与模型配置/TRB-009-项目配置找不到模型提供商/SYS-TRB-009-项目配置找不到模型提供商.en.md>) |
+| `TRB-010` | A multi-part request receives only a kickoff note or promised next action, then ends with a non-empty answer before the task is complete | **Unresolved: behavioral guard added; live regression and host-level interception are unavailable** | [Task ended before closure](<05-任务执行与结果交付/TRB-010-任务没完成就提前结束/SYS-TRB-010-任务没完成就提前结束.md>) |
 
 “Resolved” applies only to the platform, version, and evidence scope stated in the case. “Partially resolved” means that a verified recovery or workaround exists while the root cause, durable fix, or other environments remain open. “Unresolved” means that no verified solution is currently available; the record provides investigation progress, evidence, and stop conditions.
 
@@ -33,14 +32,14 @@ This directory contains sanitized Codex and companion-tool incident records with
 
 | Code | Dedicated handling note |
 | --- | --- |
-| `400` conversation too long | [HTTP-400-TRB-007-conversation-too-long](<04-网络与上游错误/TRB-007-长任务断联与HTTP错误/HTTP-400-TRB-007-对话过长.md>) |
-| `400` tool-call pairing | [HTTP-400-TRB-007-tool-call-pairing](<04-网络与上游错误/TRB-007-长任务断联与HTTP错误/HTTP-400-TRB-007-工具调用配对.md>) |
-| `401` | [HTTP-401-TRB-007-credentials-or-authorization](<04-网络与上游错误/TRB-007-长任务断联与HTTP错误/HTTP-401-TRB-007-凭据或授权拒绝.md>) |
-| `404` | [HTTP-404-TRB-007-model-not-supported](<04-网络与上游错误/TRB-007-长任务断联与HTTP错误/HTTP-404-TRB-007-模型不支持.md>) |
-| `429` | [HTTP-429-TRB-007-model-route-rate-limit](<04-网络与上游错误/TRB-007-长任务断联与HTTP错误/HTTP-429-TRB-007-模型线路限流.md>) |
-| `502` | [HTTP-502-TRB-007-upstream-gateway](<04-网络与上游错误/TRB-007-长任务断联与HTTP错误/HTTP-502-TRB-007-上游网关错误.md>) |
-| `503` | [HTTP-503-TRB-007-service-unavailable](<04-网络与上游错误/TRB-007-长任务断联与HTTP错误/HTTP-503-TRB-007-服务暂不可用.md>) |
-| `504` | [HTTP-504-TRB-007-gateway-timeout](<04-网络与上游错误/TRB-007-长任务断联与HTTP错误/HTTP-504-TRB-007-网关超时与断流.md>) |
+| `400` conversation too long | [HTTP-400-TRB-007-conversation-too-long](<04-网络与服务错误/TRB-007-长任务断流和网络错误/HTTP-400-TRB-007-对话过长.md>) |
+| `400` tool-call pairing | [HTTP-400-TRB-007-tool-call-pairing](<04-网络与服务错误/TRB-007-长任务断流和网络错误/HTTP-400-TRB-007-工具调用前后不匹配.md>) |
+| `401` | [HTTP-401-TRB-007-credentials-or-authorization](<04-网络与服务错误/TRB-007-长任务断流和网络错误/HTTP-401-TRB-007-登录或授权被拒绝.md>) |
+| `404` | [HTTP-404-TRB-007-model-not-supported](<04-网络与服务错误/TRB-007-长任务断流和网络错误/HTTP-404-TRB-007-模型不支持.md>) |
+| `429` | [HTTP-429-TRB-007-model-route-rate-limit](<04-网络与服务错误/TRB-007-长任务断流和网络错误/HTTP-429-TRB-007-模型请求被限流.md>) |
+| `502` | [HTTP-502-TRB-007-upstream-gateway](<04-网络与服务错误/TRB-007-长任务断流和网络错误/HTTP-502-TRB-007-上游网关错误.md>) |
+| `503` | [HTTP-503-TRB-007-service-unavailable](<04-网络与服务错误/TRB-007-长任务断流和网络错误/HTTP-503-TRB-007-服务暂不可用.md>) |
+| `504` | [HTTP-504-TRB-007-gateway-timeout](<04-网络与服务错误/TRB-007-长任务断流和网络错误/HTTP-504-TRB-007-网关超时与断流.md>) |
 
 ## Directory rules
 
@@ -65,8 +64,8 @@ Use the [Chinese record template](故障记录模板.md) or the [English templat
 
 ## Tool status
 
-- [`TRB-001` archive repair tool](<01-会话与归档/TRB-001-Windows归档路径异常/TRB-001-2-thread-store-归档路径缺失.md#四最简单的使用方式双击-exe>): a Windows local tool that repairs one path field and does not archive tasks. The checked-in executable is unsigned; read its boundary before use.
-- [`TRB-005` migration research material](<02-账号与供应商切换/TRB-005-迁移后分页谱系损坏/迁移工具研究材料-真实操作已暂停/README.en.md>): installation and rollback against real data are suspended. Only synthetic tests and source review are allowed.
+- [`TRB-001` archive repair tool](<01-对话与归档/TRB-001-归档时提示路径不存在/TRB-001-归档时提示路径不存在.md#四最简单的使用方式双击-exe>): a Windows local tool that repairs one path field and does not archive tasks. The checked-in executable is unsigned; read its boundary before use.
+- [`TRB-005` migration research material](<02-账号、登录与模型配置/TRB-005-迁移后历史记录损坏/旧版迁移工具研究-真实数据操作已暂停/README.en.md>): installation and rollback against real data are suspended. Only synthetic tests and source review are allowed.
 
 ## Publication and safety boundaries
 
