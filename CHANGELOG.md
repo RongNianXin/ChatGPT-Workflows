@@ -2,6 +2,13 @@
 
 本文件记录 ChatGPT Workflows 的重要变更。
 
+## 未发布：Git 仓库状态罗盘产品方案
+
+- 已执行：记录面向 Git 新手的本地优先、只读桌面工具产品方案，明确区分工作区、本地提交、远端跟踪引用和 GitHub PR。
+- 已执行：定义 v0 技术验证门禁、v1 功能边界、隐私与只读契约、测试夹具及已接受风险；该方案不包含代码实现、创建远端仓库或任何远端写操作。
+- 已审查：方案结论为 `PASS_WITH_ACCEPTED_RISKS`；Wails/WebView2 兼容性、构建体积、安装与签名仍须在后续样机中验证。
+- English: Added the Git State Compass product proposal for a local-first, read-only desktop assistant for Git beginners. It defines v0/v1 gates, safety boundaries, fixtures, and accepted risks; no implementation or remote operation was performed.
+
 ## 未发布：一键交接工具的批量选择与重复保护
 
 - 已执行：一键交接工具可对列表中的单个已确认密文故障任务交接；只有人工输入 `Y` 才会批量处理该列表。批量项彼此独立，活动任务和同项目同名接续任务会跳过。
