@@ -15,7 +15,7 @@ import { basename, join, relative, resolve, sep } from "node:path";
 import { createInterface } from "node:readline";
 import { createInterface as createPrompt } from "node:readline/promises";
 
-const VERSION = "2.0.0";
+const VERSION = "2.0.1";
 const PAGE_SIZE = 200;
 const LIST_PAGE_SIZE = 200;
 const SCAN_CONCURRENCY = 6;
@@ -471,6 +471,32 @@ function applyProjectAssignments(threads, desktopState) {
     if (desktopState.projectless.has(thread.id)) return { ...thread, projectId: null, _projectResolution: "projectless" };
     return { ...thread, projectId: null, _projectResolution: "unknown" };
   });
+}
+
+function normalizedPath(path) {
+  const value = resolve(path);
+  return process.platform === "win32" ? value.toLocaleLowerCase("en-US") : value;
+}
+
+async function resolveStartProjectId(client, desktopProjectId) {
+  if (!desktopProjectId) return null;
+  const [appProjects, desktopState] = await Promise.all([
+    listProjects(client),
+    loadDesktopProjectAssignments(),
+  ]);
+  if (desktopState.error) throw new Error(`无法读取桌面项目映射：${desktopState.error}`);
+  if (appProjects.some((project) => project.id === desktopProjectId)) return desktopProjectId;
+
+  const desktopProject = desktopState.projects.find((project) => project.id === desktopProjectId);
+  if (!desktopProject) throw new Error(`桌面项目不存在：${desktopProjectId}`);
+  const desktopRoots = new Set(desktopProject.roots.map((root) => normalizedPath(root.path)));
+  const matches = appProjects.filter((project) => project.roots?.some(
+    (root) => desktopRoots.has(normalizedPath(root.path)),
+  ));
+  if (matches.length !== 1) {
+    throw new Error(`无法把桌面项目唯一映射到 app-server 项目（匹配数 ${matches.length}）。`);
+  }
+  return matches[0].id;
 }
 
 async function mapLimit(items, limit, mapper) {
@@ -996,16 +1022,18 @@ async function runTurn(client, params) {
     await new Promise((resolvePromise) => setTimeout(resolvePromise, TURN_POLL_MS));
     let snapshot;
     try {
-      snapshot = await client.request("thread/read", {
+      snapshot = await client.request("thread/turns/list", {
         threadId: params.threadId,
-        includeTurns: true,
+        limit: 10,
+        sortDirection: "desc",
+        itemsView: "notLoaded",
       });
     } catch (error) {
       const transientInitializationError = /failed to read session metadata|rollout .* is empty/i.test(error.message);
       if (transientInitializationError && Date.now() - startedAt < 15_000) continue;
       throw error;
     }
-    const current = snapshot.thread?.turns?.find((turn) => turn.id === turnId);
+    const current = snapshot.data?.find((turn) => turn.id === turnId);
     if (current?.status && !runningStatuses.has(current.status)) return current;
   }
   throw new Error(`等待任务完成超时（${Math.round(TURN_TIMEOUT_MS / 60_000)} 分钟）。`);
@@ -1034,6 +1062,7 @@ async function createRecoveryThread(
   if (!continuationProfile) {
     throw new Error("当前 Codex 不允许 :workspace 权限档，无法创建可继续工作的接续任务。");
   }
+  const startProjectId = await resolveStartProjectId(client, sourceThread.projectId ?? null);
   const started = await client.request("thread/start", {
     cwd,
     runtimeWorkspaceRoots: roots,
@@ -1041,7 +1070,7 @@ async function createRecoveryThread(
     ephemeral: false,
     historyMode: "paginated",
     threadSource: "codex-handoff-tool",
-    projectId: sourceThread.projectId ?? null,
+    projectId: startProjectId,
   });
   const threadId = started.thread.id;
   const titleBase = testMarker ? TEST_PREFIX : targetTitle;
@@ -1053,9 +1082,6 @@ async function createRecoveryThread(
     await client.request("thread/name/set", { threadId, name: titleBase });
     const verifiedThread = (await client.request("thread/read", { threadId, includeTurns: false })).thread;
     if (verifiedThread.name !== titleBase) throw new Error("新任务标题回读不一致。");
-    if ((verifiedThread.projectId ?? null) !== (sourceThread.projectId ?? null)) {
-      throw new Error("新任务项目归属回读不一致。");
-    }
 
     const recoveryTurn = await runTurn(client, {
       threadId,
@@ -1120,7 +1146,7 @@ async function createRecoveryThread(
       continuationStatus,
       continuationError,
       title: titleBase,
-      projectId: verifiedThread.projectId ?? null,
+      projectId: sourceThread.projectId ?? null,
     };
   } catch (error) {
     await client.request("thread/archive", { threadId }).catch(() => {});
@@ -1180,6 +1206,9 @@ async function processHandoff(client, sourceThread, reservedTitles) {
   const refreshed = applyProjectAssignments([refreshedRaw], desktopState)[0];
   if (refreshed._projectResolution === "unknown") {
     throw new Error("无法确认原任务属于哪个项目。为避免把新任务放错位置，本次已停止。");
+  }
+  if (refreshed.projectId) {
+    throw new Error("当前官方外部接口不能保证把新任务放回桌面端原项目。为避免生成位置错误的任务，本次已停止；原任务没有被修改。");
   }
   if (threadStatus(refreshed) === "active") {
     throw new Error("该任务仍在执行或等待交互。请先让原任务停止，再重新运行工具。");
@@ -1330,11 +1359,13 @@ async function runIntegrationTest(client) {
     createdAt: Math.floor(Date.now() / 1000),
     updatedAt: Math.floor(Date.now() / 1000),
   };
-  const projects = await listProjects(client);
-  const testProject = projects.find((project) => project.roots?.some((root) => existsSync(root.path))) ?? null;
+  const desktopState = await loadDesktopProjectAssignments();
+  if (desktopState.error) throw new Error(`集成测试无法读取桌面项目映射：${desktopState.error}`);
+  const testProject = desktopState.projects.find((project) => project.roots?.some((root) => existsSync(root.path))) ?? null;
+  if (!testProject) throw new Error("集成测试没有找到可用的桌面项目。");
   const sourceCwd = testProject?.roots?.find((root) => existsSync(root.path))?.path ?? temp;
   source.cwd = sourceCwd;
-  source.projectId = testProject?.id ?? null;
+  source.projectId = testProject.id;
   const exported = { dir: temp, manifest, indexText, evidenceCatalogText, recordText };
   const marker = `HANDOFF_TEST_OK_${randomBytes(4).toString("hex")}`;
   try {
