@@ -2,6 +2,13 @@
 
 本文件记录 ChatGPT Workflows 的重要变更。
 
+## 未发布：本地成果先整理到远端可执行状态
+
+- 已执行：发布流程改为先在现有授权范围内连续核对、修复、验证并分组提交本地成果，不再要求操作者先批准 Git 技术方案；来源不明、删除意图不明、损坏、敏感或验证失败的对象只做局部暂停。
+- 已执行：只有候选内成果已进入明确 Commit、待上传历史和精确引用已核对、验证与隐私检查有结果、远端基线有效时，才生成一次最终远端执行卡；Push、PR、Merge、Tag 和 Release 仍须按实际动作确认。
+- 已验证：发布就绪契约定向检查、Markdown 链接、双语 README、路径可移植性与 PowerShell 语法通过；完整仓库检查被一份既有损坏的核心规则文件阻断，本条不能代签全库通过或远端发布就绪。
+- English: Local release preparation now proceeds continuously within existing authorization: inspect, fix clear issues, verify, and create scoped commits without asking the operator to choose Git mechanics. Ambiguous, damaged, sensitive, or failing groups are isolated. A single remote execution card is produced only after the candidate is stable; remote writes still require action-specific approval.
+
 ## 未发布：故障库改为按人话现象命名
 
 - 已执行：公开故障分类、案例文件夹和用户需要打开的记录文件改为按可见现象命名，例如 `TRB-005-转移旧对话后报错`、`TRB-006-发消息给AI任务却没回应` 和 `TRB-007-任务太长或网络报错`。
