@@ -301,6 +301,7 @@ function parseArgs(argv) {
       options.mode = "export-source";
       options.sourceId = argv[++index] ?? null;
     }
+    else if (arg === "--catalog-json") options.mode = "catalog-json";
     else if (arg === "--self-test") options.mode = "self-test";
     else if (arg === "--scan-only") options.mode = "scan-only";
     else if (arg === "--integration-test") options.mode = "integration-test";
@@ -973,12 +974,42 @@ async function exportThread(client, thread) {
   }
 }
 
-function recoveryPrompt(exported, sourceThread) {
+function recoveryPrompt(exported, sourceThread, targetThreadId = null) {
   const indexPath = join(exported.dir, "交接索引.md");
   const evidenceCatalogPath = join(exported.dir, "可见历史证据目录.md");
   const recordPath = join(exported.dir, "可迁移记录.json");
   const manifestPath = join(exported.dir, "manifest.json");
   return `这是“一键交接工具”创建的新任务。原任务 ${sourceThread.id} 没有被修改；本任务不得继承或重放旧账号的 encrypted_content。
+
+先用人话给操作者一个短结果，再给必要证据。不要让操作者先读内部编号、哈希、日志或 A/B/C/D 标签。
+
+请严格按下面四段标题输出最终接管报告（字段都要填写；没有内容写“无”，当前任务 ID 不可见写“待创建方回填”）：
+1. 新窗口身份
+- 当前新窗口任务 ID：${targetThreadId ?? "待创建方回填"}
+- 新窗口名称与所属项目：
+- 交接质量：HIGH（高）/ MID（中）/ LOW（低）
+- 一句话结论：已经接上、部分接上，或没有接上
+2. 交接结论
+- 已经接上的内容：用普通人能看懂的话说
+- 没有接上的内容或风险：逐项列出
+- 当前能不能继续：能继续 / 只能先查看 / 不能继续，并说明原因
+3. 未完成事项
+- 把目前仍未完成的事项全部列出；每项写清谁负责（AI、操作者、其他任务、外部平台或待确认）和完成条件
+- 不要把“有风险”当成一项，也不要只写一个“唯一下一步”而漏掉其他未完成事项
+4. 现在最推荐做什么
+- 只给操作者一个最先动作，写清在哪里做、做什么、目的、成功时看到什么、出错时提供什么
+- 如果无需操作者操作，明确写“无需操作，AI 将继续执行”或“无需操作，当前已经结束”
+- 旧授权、远端发布、删除、费用、生产环境和不可逆操作不能因本报告自动获得授权
+
+报告正文中可以在四段之后追加“核验依据（给需要查证的人）”，但不能用它替代前四段。
+
+最后单独输出且只能二选一：
+HANDOFF_QUALITY: HIGH
+HANDOFF_QUALITY: MID
+HANDOFF_QUALITY: LOW
+HANDOFF_RECOVERY_STATUS: READY_LOCAL
+HANDOFF_RECOVERY_STATUS: BLOCKED`;
+/*
 
 本轮先做恢复核验，不修改工作区。请按以下顺序只读：
 1. ${manifestPath}
@@ -1002,10 +1033,16 @@ function recoveryPrompt(exported, sourceThread) {
 若核心目标、身份、实际状态或断点不足，写“恢复未通过”并列出最少补充资料。若恢复充分且唯一下一步属于原范围内、低风险、可回滚的本地动作，可判定为可自动继续；其他情况必须停止。最后单独输出且只能二选一：
 HANDOFF_RECOVERY_STATUS: READY_LOCAL
 HANDOFF_RECOVERY_STATUS: BLOCKED`;
+*/
 }
 
 function parseRecoveryStatus(text) {
   const matches = [...String(text).matchAll(/^HANDOFF_RECOVERY_STATUS:\s*(READY_LOCAL|BLOCKED)\s*$/gim)];
+  return matches.length ? matches.at(-1)[1].toUpperCase() : null;
+}
+
+function parseHandoffQuality(text) {
+  const matches = [...String(text).matchAll(/^HANDOFF_QUALITY:\s*(HIGH|MID|LOW)\s*$/gim)];
   return matches.length ? matches.at(-1)[1].toUpperCase() : null;
 }
 
@@ -1080,8 +1117,8 @@ async function createRecoveryThread(
   const titleBase = testMarker ? TEST_PREFIX : targetTitle;
 
   const prompt = testMarker
-    ? `这是隔离自动测试，不执行原任务业务，也不读取当前工作目录。请只读以下四个临时测试文件，核对 manifest 中的 SHA-256，并确认三份文件都能读取：\n${join(exported.dir, "manifest.json")}\n${join(exported.dir, "交接索引.md")}\n${join(exported.dir, "可见历史证据目录.md")}\n${join(exported.dir, "可迁移记录.json")}\n\n最后输出 ${testMarker}，并单独输出 HANDOFF_RECOVERY_STATUS: BLOCKED。`
-    : recoveryPrompt(exported, sourceThread);
+    ? `这是隔离自动测试，不执行原任务业务，也不读取当前工作目录。请只读以下四个临时测试文件，核对 manifest 中的 SHA-256，并确认三份文件都能读取：\n${join(exported.dir, "manifest.json")}\n${join(exported.dir, "交接索引.md")}\n${join(exported.dir, "可见历史证据目录.md")}\n${join(exported.dir, "可迁移记录.json")}\n\n最后输出 ${testMarker}，并单独输出 HANDOFF_QUALITY: HIGH 和 HANDOFF_RECOVERY_STATUS: BLOCKED。`
+    : recoveryPrompt(exported, sourceThread, threadId);
   try {
     await client.request("thread/name/set", { threadId, name: titleBase });
     const verifiedThread = (await client.request("thread/read", { threadId, includeTurns: false })).thread;
@@ -1105,6 +1142,8 @@ async function createRecoveryThread(
     if (testMarker && !agentText.includes(testMarker)) throw new Error("自动测试任务未返回预期标记。");
     const recoveryStatus = parseRecoveryStatus(agentText);
     if (!recoveryStatus) throw new Error("新任务没有返回可验证的恢复状态标记。");
+    const handoffQuality = parseHandoffQuality(agentText);
+    if (!handoffQuality) throw new Error("新任务没有返回交接质量评级。");
 
     const restoreSettings = {
       threadId,
@@ -1147,6 +1186,7 @@ async function createRecoveryThread(
       agentText,
       restoredPermission: continuationProfile.id,
       recoveryStatus,
+      handoffQuality,
       continuationStatus,
       continuationError,
       title: titleBase,
@@ -1247,6 +1287,29 @@ async function runScanOnly(client) {
   printSection(`已确认的密文故障：${catalog.failures.length} 个`);
   printFailureList(catalog.failures, catalog.projectById);
   console.log(`\nSCAN_ONLY_OK threads=${catalog.threads.length} failures=${catalog.failures.length} warnings=${catalog.warnings.length}`);
+}
+
+async function runCatalogJson(client) {
+  const catalog = await buildCatalog(client);
+  const projectNameById = new Map([...catalog.projectById.entries()].map(([id, project]) => [id, project.name]));
+  const payload = {
+    format: "codex-handoff-catalog-v1",
+    threads: catalog.threads.map((thread) => ({
+      id: thread.id,
+      title: threadTitle(thread),
+      projectId: thread.projectId ?? null,
+      projectName: projectInfo(thread, catalog.projectById).name,
+      status: threadStatus(thread),
+      cwd: thread.cwd,
+      updatedAt: thread.updatedAt,
+      recencyAt: thread.recencyAt ?? null,
+      isEncryptedFailure: catalog.failures.some((failure) => failure.id === thread.id),
+    })),
+    failures: catalog.failures.map((thread) => thread.id),
+    warnings: catalog.warnings.map((warning) => ({ threadId: warning.thread?.id ?? null, error: warning.error ?? null })),
+    projects: [...projectNameById.entries()].map(([id, name]) => ({ id, name })),
+  };
+  console.log(`HANDOFF_CATALOG_JSON ${JSON.stringify(payload)}`);
 }
 
 async function runInspect(client, sourceId) {
@@ -1376,6 +1439,10 @@ async function runSelfTest() {
     throw new Error("离线测试失败：恢复状态解析异常。");
   }
   if (parseRecoveryStatus("没有机器状态标记") !== null) throw new Error("离线测试失败：无标记文本被误判。");
+  if (parseHandoffQuality("交接评分\nHANDOFF_QUALITY: HIGH") !== "HIGH") {
+    throw new Error("离线测试失败：交接质量解析异常。");
+  }
+  if (parseHandoffQuality("没有质量标记") !== null) throw new Error("离线测试失败：无质量标记文本被误判。");
   console.log("SELF_TEST_OK");
 }
 
@@ -1461,6 +1528,10 @@ async function main() {
     }
     if (options.mode === "scan-only") {
       await runScanOnly(client);
+      return;
+    }
+    if (options.mode === "catalog-json") {
+      await runCatalogJson(client);
       return;
     }
     if (options.mode === "integration-test") {

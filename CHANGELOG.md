@@ -70,8 +70,9 @@
 - 已执行：桌面项目 ID 与官方外部接口项目 ID 无法唯一对应时失败关闭；项目内任务不再尝试生成可能落到错误位置的接续任务，未归属项目任务仍可按原流程处理。
 - 已执行：使用说明明确区分当前可用的扫描/未归属任务交接与暂不可用的项目内自动交接，并提示只有工具明确成功后才进入新任务。
 - 已执行：新增 `--export-source` 只读导出入口，复用项目归属、活动状态和重复标题保护后输出可审计的交接导出信息；未创建接续任务或修改原任务。
-- 已验证：JavaScript 语法检查与离线 `--self-test` 通过。未运行会读取真实任务或创建测试任务的扫描、交接或集成测试。
-- English: The handoff tool now polls the continuation task status when a completion event is missing, and its isolated integration-test prompt is limited to temporary test files. Syntax and offline self-tests passed; no live scan, handoff, or integration test was run.
+- 已执行：增加 `--catalog-json` 只读目录输出；正式接管和隔离集成测试统一要求 `HANDOFF_QUALITY` 与 `HANDOFF_RECOVERY_STATUS`，并在离线自测中覆盖质量评级解析。
+- 已验证：JavaScript 语法检查、离线 `--self-test`、差异检查和仓库质量检查通过；集成测试需启动 app-server 并创建隔离任务，本批未获得成功回执，不能代签集成通过。
+- English: The handoff tool now polls continuation status, offers a read-only `--catalog-json` catalog, and requires both `HANDOFF_QUALITY` and `HANDOFF_RECOVERY_STATUS` for normal and isolated recovery prompts. Syntax, offline self-tests, diff checks, and repository quality checks passed; live integration was not confirmed because it requires an app-server and a temporary task.
 
 ## 未发布：Git 仓库状态罗盘产品方案
 
