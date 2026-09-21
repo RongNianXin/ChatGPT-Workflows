@@ -384,6 +384,94 @@ async function listProjects(client) {
   throw new Error("项目列表分页超过安全上限，已停止扫描。");
 }
 
+async function loadDesktopProjectAssignments() {
+  const statePath = join(homedir(), ".codex", ".codex-global-state.json");
+  let lastError = null;
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      const state = JSON.parse(await readFile(statePath, "utf8"));
+      const assignments = new Map();
+      const rawAssignments = state["thread-project-assignments"];
+      if (rawAssignments && typeof rawAssignments === "object" && !Array.isArray(rawAssignments)) {
+        for (const [threadId, value] of Object.entries(rawAssignments)) {
+          if (typeof value?.projectId === "string" && value.projectId) assignments.set(threadId, value.projectId);
+        }
+      }
+      const sidebarOrders = state["sidebar-project-thread-orders"];
+      if (sidebarOrders && typeof sidebarOrders === "object" && !Array.isArray(sidebarOrders)) {
+        for (const [projectId, value] of Object.entries(sidebarOrders)) {
+          for (const threadId of value?.threadIds ?? []) {
+            if (typeof threadId === "string" && !assignments.has(threadId)) assignments.set(threadId, projectId);
+          }
+        }
+      }
+      const projectless = new Set(
+        Array.isArray(state["projectless-thread-ids"])
+          ? state["projectless-thread-ids"].filter((value) => typeof value === "string")
+          : [],
+      );
+      const projectOrder = new Map(
+        (Array.isArray(state["project-order"]) ? state["project-order"] : [])
+          .filter((value) => typeof value === "string")
+          .map((projectId, index) => [projectId, index]),
+      );
+      const projects = [];
+      const localProjects = state["local-projects"];
+      if (localProjects && typeof localProjects === "object" && !Array.isArray(localProjects)) {
+        for (const [key, value] of Object.entries(localProjects)) {
+          const id = typeof value?.id === "string" ? value.id : key;
+          if (!id || typeof value?.name !== "string") continue;
+          const rootPaths = Array.isArray(value.rootPaths)
+            ? value.rootPaths.filter((path) => typeof path === "string")
+            : [];
+          projects.push({
+            id,
+            name: value.name,
+            roots: rootPaths.map((path) => ({ path })),
+            position: projectOrder.get(id) ?? Number.MAX_SAFE_INTEGER - 2,
+            createdAt: value.createdAt ?? 0,
+            updatedAt: value.updatedAt ?? 0,
+            recencyAt: null,
+          });
+        }
+      }
+      return { assignments, projectless, projects, error: null };
+    } catch (error) {
+      lastError = error;
+      if (attempt === 0) await new Promise((resolvePromise) => setTimeout(resolvePromise, 100));
+    }
+  }
+  return {
+    assignments: new Map(),
+    projectless: new Set(),
+    projects: [],
+    error: lastError?.message ?? "未知错误",
+  };
+}
+
+function mergeProjects(appServerProjects, desktopProjects) {
+  const merged = new Map(appServerProjects.map((project) => [project.id, project]));
+  for (const project of desktopProjects) {
+    const existing = merged.get(project.id);
+    merged.set(project.id, {
+      ...existing,
+      ...project,
+      roots: project.roots.length ? project.roots : (existing?.roots ?? []),
+    });
+  }
+  return [...merged.values()];
+}
+
+function applyProjectAssignments(threads, desktopState) {
+  return threads.map((thread) => {
+    if (thread.projectId) return { ...thread, _projectResolution: "app-server" };
+    const assignedProjectId = desktopState.assignments.get(thread.id);
+    if (assignedProjectId) return { ...thread, projectId: assignedProjectId, _projectResolution: "desktop-state" };
+    if (desktopState.projectless.has(thread.id)) return { ...thread, projectId: null, _projectResolution: "projectless" };
+    return { ...thread, projectId: null, _projectResolution: "unknown" };
+  });
+}
+
 async function mapLimit(items, limit, mapper) {
   const results = new Array(items.length);
   let nextIndex = 0;
@@ -432,7 +520,10 @@ async function scanEncryptedFailures(client, threads) {
 }
 
 function projectInfo(task, projectById) {
-  if (!task.projectId) return { id: null, name: "未归属项目", order: Number.MAX_SAFE_INTEGER };
+  if (!task.projectId && task._projectResolution === "unknown") {
+    return { id: `unknown:${task.id}`, name: "项目归属待确认", order: Number.MAX_SAFE_INTEGER };
+  }
+  if (!task.projectId) return { id: null, name: "未归属项目", order: Number.MAX_SAFE_INTEGER - 1 };
   const project = projectById.get(task.projectId);
   if (!project) return { id: task.projectId, name: "未知项目", order: Number.MAX_SAFE_INTEGER - 1 };
   return { id: project.id, name: project.name, order: project.position ?? Number.MAX_SAFE_INTEGER - 2 };
@@ -468,7 +559,14 @@ function printFailureList(failures, projectById) {
 
 async function buildCatalog(client) {
   printStep("正在读取项目和全部未归档任务……");
-  const [projects, threads] = await Promise.all([listProjects(client), listCandidates(client)]);
+  const [appServerProjects, rawThreads, desktopState] = await Promise.all([
+    listProjects(client),
+    listCandidates(client),
+    loadDesktopProjectAssignments(),
+  ]);
+  const projects = mergeProjects(appServerProjects, desktopState.projects);
+  const threads = applyProjectAssignments(rawThreads, desktopState);
+  if (desktopState.error) printWarning(`无法读取桌面项目映射：${desktopState.error}`);
   printStep(`正在检查 ${threads.length} 个任务的最近一次执行结果……`);
   const scanned = await scanEncryptedFailures(client, threads);
   const projectById = new Map(projects.map((project) => [project.id, project]));
@@ -478,6 +576,7 @@ async function buildCatalog(client) {
     threads,
     failures: sortByProjectAndRecency(scanned.failures, projectById),
     warnings: scanned.warnings,
+    projectStateError: desktopState.error,
   };
 }
 
@@ -1046,6 +1145,56 @@ async function confirmCandidate(thread, forcedYes) {
   return /^y$/i.test(answer.trim());
 }
 
+function titleKey(projectId, title) {
+  return `${projectId ?? "__unassigned__"}\u0000${normalizedTitle(title)}`;
+}
+
+async function processHandoff(client, sourceThread, reservedTitles) {
+  const refreshedRaw = (await client.request("thread/read", {
+    threadId: sourceThread.id,
+    includeTurns: false,
+  })).thread;
+  const desktopState = await loadDesktopProjectAssignments();
+  if (desktopState.error) throw new Error(`无法核对桌面项目归属：${desktopState.error}`);
+  const refreshed = applyProjectAssignments([refreshedRaw], desktopState)[0];
+  if (refreshed._projectResolution === "unknown") {
+    throw new Error("无法确认原任务属于哪个项目。为避免把新任务放错位置，本次已停止。");
+  }
+  if (threadStatus(refreshed) === "active") {
+    throw new Error("该任务仍在执行或等待交互。请先让原任务停止，再重新运行工具。");
+  }
+
+  const targetTitle = handoffTitle(refreshed);
+  const key = titleKey(refreshed.projectId, targetTitle);
+  if (reservedTitles.has(key)) {
+    throw new Error(`同一项目中已经存在“${targetTitle}”。为避免重复和误选，本次已跳过。`);
+  }
+
+  printStep(`读取并检查：${threadTitle(refreshed)}`);
+  const exported = await exportThread(client, refreshed);
+  printSuccess(`已生成安全交接记录：${exported.dir}`);
+  printStep(`创建新任务：${targetTitle}`);
+  const created = await createRecoveryThread(client, refreshed, exported, { targetTitle });
+  reservedTitles.add(key);
+  if (created.continuationStatus === "completed") {
+    printSuccess("恢复核验通过，已从低风险本地断点继续执行。");
+  } else if (created.continuationStatus === "blocked") {
+    printWarning("恢复材料已建立，但存在缺口或高风险下一步；新任务已停在恢复卡等待确认。");
+  } else if (created.continuationStatus === "failed") {
+    printWarning(`恢复任务已保留，但自动续做未完成：${created.continuationError}`);
+  } else {
+    printSuccess("恢复核验通过，新任务已准备继续。");
+  }
+  return { source: refreshed, exported, created };
+}
+
+async function runScanOnly(client) {
+  const catalog = await buildCatalog(client);
+  printSection(`已确认的密文故障：${catalog.failures.length} 个`);
+  printFailureList(catalog.failures, catalog.projectById);
+  console.log(`\nSCAN_ONLY_OK threads=${catalog.threads.length} failures=${catalog.failures.length} warnings=${catalog.warnings.length}`);
+}
+
 async function runInspect(client, sourceId) {
   const candidate = await selectCandidate(client, sourceId);
   console.log(JSON.stringify({
@@ -1053,6 +1202,7 @@ async function runInspect(client, sourceId) {
     name: candidate.name,
     preview: candidate.preview,
     cwd: candidate.cwd,
+    projectId: candidate.projectId ?? null,
     updatedAt: candidate.updatedAt,
     status: candidate.status,
   }, null, 2));
@@ -1112,19 +1262,39 @@ async function runSelfTest() {
   const child = safeChild(temp, join(temp, "child", "file.json"));
   if (!child.startsWith(resolve(temp))) throw new Error("离线测试失败：路径边界检查异常。");
   await rm(temp, { recursive: true, force: true });
+  const encryptedFailure = {
+    status: "failed",
+    error: { message: '{"code":"invalid_encrypted_content","message":"Encrypted content could not be decrypted or parsed."}' },
+  };
+  if (!isEncryptedContentFailure(encryptedFailure)) throw new Error("离线测试失败：未识别密文故障。");
+  if (isEncryptedContentFailure({ status: "failed", error: { message: "429 Too Many Requests" } })) {
+    throw new Error("离线测试失败：把非密文错误误判为密文故障。");
+  }
+  const longTitle = "甲".repeat(200);
+  const generatedTitle = handoffTitle({ name: longTitle, preview: "" });
+  if ([...generatedTitle].length > MAX_THREAD_TITLE_CHARS || !generatedTitle.endsWith(HANDOFF_SUFFIX)) {
+    throw new Error("离线测试失败：交接标题长度或后缀异常。");
+  }
+  if (parseRecoveryStatus("恢复完成\nHANDOFF_RECOVERY_STATUS: READY_LOCAL") !== "READY_LOCAL") {
+    throw new Error("离线测试失败：恢复状态解析异常。");
+  }
+  if (parseRecoveryStatus("没有机器状态标记") !== null) throw new Error("离线测试失败：无标记文本被误判。");
   console.log("SELF_TEST_OK");
 }
 
 async function runIntegrationTest(client) {
   const temp = await mkdtemp(join(tmpdir(), "codex-handoff-integration-"));
   const indexText = "# 隔离测试交接索引\n\n- 目标：验证官方 app-server 能创建并完成只读恢复任务。\n- 不含真实任务数据。\n";
+  const evidenceCatalogText = "# 可见历史证据目录\n\n- TEST_EVIDENCE\n";
   const recordText = `${JSON.stringify({ format: "test", entries: [{ role: "user", text: "TEST_EVIDENCE" }] }, null, 2)}\n`;
   await writeFile(join(temp, "交接索引.md"), indexText, "utf8");
+  await writeFile(join(temp, "可见历史证据目录.md"), evidenceCatalogText, "utf8");
   await writeFile(join(temp, "可迁移记录.json"), recordText, "utf8");
   const manifest = {
     format: "codex-handoff-manifest-v1-test",
     files: {
       "交接索引.md": { sha256: sha256(indexText) },
+      "可见历史证据目录.md": { sha256: sha256(evidenceCatalogText) },
       "可迁移记录.json": { sha256: sha256(recordText) },
     },
   };
@@ -1139,11 +1309,17 @@ async function runIntegrationTest(client) {
     createdAt: Math.floor(Date.now() / 1000),
     updatedAt: Math.floor(Date.now() / 1000),
   };
-  const exported = { dir: temp, manifest, indexText, recordText };
+  const projects = await listProjects(client);
+  const testProject = projects.find((project) => project.roots?.some((root) => existsSync(root.path))) ?? null;
+  const sourceCwd = testProject?.roots?.find((root) => existsSync(root.path))?.path ?? temp;
+  source.cwd = sourceCwd;
+  source.projectId = testProject?.id ?? null;
+  const exported = { dir: temp, manifest, indexText, evidenceCatalogText, recordText };
   const marker = `HANDOFF_TEST_OK_${randomBytes(4).toString("hex")}`;
   try {
-    const created = await createRecoveryThread(client, source, exported, { testMarker: marker });
-    console.log(`INTEGRATION_TEST_OK threadId=${created.threadId} marker=${marker} restoredPermission=${created.restoredPermission}`);
+    const created = await createRecoveryThread(client, source, exported, { testMarker: marker, autoContinue: false });
+    if ((created.projectId ?? null) !== (source.projectId ?? null)) throw new Error("集成测试项目归属不一致。");
+    console.log(`INTEGRATION_TEST_OK threadId=${created.threadId} marker=${marker} projectId=${created.projectId ?? "null"} restoredPermission=${created.restoredPermission}`);
     return created.threadId;
   } finally {
     await rm(temp, { recursive: true, force: true }).catch(() => {});
@@ -1167,10 +1343,7 @@ async function main() {
     return;
   }
 
-  console.log("========================================");
-  console.log("Codex 多账号一键交接工具");
-  console.log("========================================");
-  console.log("原任务不会被修改、覆盖或删除。\n");
+  printBanner();
 
   const client = new AppServerClient(resolveCodexBinary());
   await client.start();
@@ -1183,6 +1356,10 @@ async function main() {
       await runSourceAudit(client, options.sourceId);
       return;
     }
+    if (options.mode === "scan-only") {
+      await runScanOnly(client);
+      return;
+    }
     if (options.mode === "integration-test") {
       await runIntegrationTest(client);
       return;
@@ -1192,23 +1369,56 @@ async function main() {
       return;
     }
 
-    const source = options.sourceId
-      ? await selectCandidate(client, options.sourceId)
-      : await chooseTask(client);
-    if (!source || (options.sourceId && !(await confirmCandidate(source, options.yes)))) {
+    let catalog;
+    let choice;
+    if (options.sourceId) {
+      const rawSource = await selectCandidate(client, options.sourceId);
+      const desktopState = await loadDesktopProjectAssignments();
+      const [source] = applyProjectAssignments([rawSource], desktopState);
+      if (!(await confirmCandidate(source, options.yes))) {
+        console.log("已取消，没有创建交接记录或新任务。");
+        return;
+      }
+      const threads = applyProjectAssignments(await listCandidates(client), desktopState);
+      catalog = { threads };
+      choice = { mode: "single", threads: [source] };
+    } else {
+      catalog = await buildCatalog(client);
+      choice = await chooseTasks(catalog);
+    }
+    if (choice.mode === "cancel") {
       console.log("已取消，没有创建交接记录或新任务。");
       return;
     }
 
-    console.log("\n正在读取并检查原任务，请不要在原任务中继续发送消息……");
-    const exported = await exportThread(client, source);
-    console.log(`已生成安全交接记录：${exported.dir}`);
-    console.log("正在创建新任务并执行只读恢复核验……");
-    const created = await createRecoveryThread(client, source, exported);
-    console.log(`恢复任务已完成：${created.threadId}`);
+    const reservedTitles = new Set(catalog.threads.map((thread) => titleKey(thread.projectId, threadTitle(thread))));
+    const results = [];
+    printSection(choice.mode === "batch" ? `开始批量交接：${choice.threads.length} 个任务` : "开始交接");
+    for (let index = 0; index < choice.threads.length; index += 1) {
+      const source = choice.threads[index];
+      if (choice.mode === "batch") console.log(`\n${paint(`[${index + 1}/${choice.threads.length}]`, "bold")} ${threadTitle(source)}`);
+      try {
+        const result = await processHandoff(client, source, reservedTitles);
+        results.push({ ok: true, source, result });
+      } catch (error) {
+        console.error(`${paint("[失败]", "red")} ${threadTitle(source)}：${error.message}`);
+        results.push({ ok: false, source, error: error.message });
+      }
+    }
+
+    const succeeded = results.filter((result) => result.ok);
+    const failed = results.filter((result) => !result.ok);
+    printSection("处理结果");
+    console.log(`  成功：${paint(String(succeeded.length), "green")}  失败/跳过：${failed.length ? paint(String(failed.length), "red") : "0"}`);
+    succeeded.forEach((item) => console.log(`  [成功] ${item.result.created.title}  ID：${item.result.created.threadId.slice(-8)}`));
+    failed.forEach((item) => console.log(`  [失败] ${threadTitle(item.source)}：${item.error}`));
+    if (!succeeded.length) throw new Error("没有创建可用的交接任务。");
+
     if (!options.noOpen) {
-      await openThread(created.threadId);
-      console.log("已请求 Codex 桌面客户端打开接续任务。");
+      await openThread(succeeded[0].result.created.threadId);
+      printSuccess(choice.mode === "batch"
+        ? "已打开第一个交接任务；其余成功任务已出现在各自项目中。"
+        : "已请求 Codex 桌面客户端打开交接任务。");
     }
   } finally {
     await client.close();
@@ -1220,5 +1430,5 @@ main().catch((error) => {
   if (process.env.CODEX_HANDOFF_DEBUG === "1" && error.stack) console.error(error.stack);
   process.exitCode = 1;
 }).finally(() => {
-  console.log("\n处理结束。可关闭本窗口；如有失败，请保留上方错误信息。");
+  console.log("\n处理结束。按任意键关闭窗口；如有失败，请保留上方错误信息。");
 });

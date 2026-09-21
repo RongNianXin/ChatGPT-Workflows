@@ -2,6 +2,13 @@
 
 本文件记录 ChatGPT Workflows 的重要变更。
 
+## 未发布：一键交接工具的批量选择与重复保护
+
+- 已执行：一键交接工具可对列表中的单个已确认密文故障任务交接；只有人工输入 `Y` 才会批量处理该列表。批量项彼此独立，活动任务和同项目同名接续任务会跳过。
+- 已执行：接续标题按字符数截断并保留后缀；离线自测补充密文故障识别、标题长度和恢复状态解析检查。
+- 已验证：`--self-test` 与 JavaScript 语法检查通过。未执行扫描真实任务、批量交接、创建接续任务或集成测试；`--help` 尚未实现。
+- English: The handoff tool supports one selected confirmed encrypted-content case, or an explicit `Y` batch choice. It skips active tasks and duplicate continuation titles in the same project. Offline self-tests passed; real scans, handoffs, and integration tests were not run, and `--help` is not implemented yet.
+
 ## 未发布：Markdown 阅读器拖拽位置提示
 
 - 已执行：文档条目拖到目标上半区时插入前方，下半区时插入后方；对应边缘显示实线，避免原先只能猜测插入位置。
