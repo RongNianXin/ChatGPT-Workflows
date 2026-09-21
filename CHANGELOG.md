@@ -13,6 +13,7 @@
 
 - 已执行：公开故障分类、案例文件夹和用户需要打开的记录文件改为按可见现象命名，例如 `TRB-005-转移旧对话后报错`、`TRB-006-发消息给AI任务却没回应` 和 `TRB-007-任务太长或网络报错`。
 - 已执行：保留 `TRB`、`HTTP`、`SYS` 稳定编号与原有案例层级；同步更新公开链接、双语索引、展示页和故障库质量检查路径。
+- 已执行：补齐历史记录和 8 个 HTTP 分流页遗漏的改名后总索引链接，避免读者从具体错误页返回旧文件名。
 - 已验证：Markdown 链接和双语 README 检查通过。全库检查被一项独立的未提交总指挥规则改动阻断，不能据此声称全库通过。
 - English: Renamed public troubleshooting categories, case folders, and user-facing record files around visible symptoms while retaining stable `TRB`, `HTTP`, and `SYS` identifiers. Links and bilingual README checks passed; an unrelated uncommitted commander-rule change blocks the full repository check.
 

@@ -22,4 +22,4 @@
 
 官方参考：[OpenAI API error codes](https://platform.openai.com/docs/guides/error-codes)。
 
-来源与共用安全流程见 [TRB-007 总索引](TRB-007-长任务和网络错误-总说明.md)。
+来源与共用安全流程见 [TRB-007 总索引](TRB-007-任务太长或网络报错-总说明.md)。
