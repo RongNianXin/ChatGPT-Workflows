@@ -40,7 +40,7 @@
     }
   ],
   "properties": {
-    "schema_version": { "const": 2 },
+    "schema_version": { "const": 3 },
     "record_type": { "const": "handoff-seal" },
     "generation": { "type": "integer", "minimum": 1 },
     "writer_id": { "type": "string", "minLength": 1, "pattern": "^[A-Za-z0-9._-]+$" },

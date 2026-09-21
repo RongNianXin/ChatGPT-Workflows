@@ -2,6 +2,14 @@
 
 本文件记录 ChatGPT Workflows 的重要变更。
 
+## 未发布：交接封条 v3 与正式附件原子门禁
+
+- 已执行：封条新写入升级为 schema v3，拒绝跨序号时间倒退、`sealed_at < fact_cutoff`、事件 ID 复用、轮换准备时间越界和无变化 `CURRENT_ATTESTATION`；旧 v1/v2 链只读保留并明确标为 `LEGACY_UNVERIFIED`。
+- 已执行：新增正式附件生成器，依次核对受跟踪工具、规则 manifest、真实来源根、唯一 CURRENT/HISTORY 结构、Unicode 路径、封条和二次漂移，再通过临时文件与不可覆盖链接原子生成 `final-*`；失败不留下正式附件，交付回执明确为 `GENERATED_NOT_DELIVERED`。
+- 已执行：正式交接状态收敛为 `READY / READY_WITH_RESTRICTIONS / BLOCKED / COMPLETED`，未注册颜色码或近似拼写不得进入封条、交接结论和完成回执。
+- 已验证：封条定向测试通过 49 项，正式附件测试通过 7 项，覆盖原事故的时间回退、事件复用、无变化重复证明、CURRENT/HISTORY 越界、中文/空格/组合字符及长路径、NFC/NFD 冲突、`core.quotePath` 两种设置、私有封条目录和仓库外交付边界。真实项目下一次交接仍需生成实例封条并回读，工具无法阻止绕过它的宿主写入。
+- English: New handoff writes use schema v3 and reject timestamp rollback, invalid transition timing, reused event IDs, and no-change attestations. Legacy v1/v2 chains remain readable as `LEGACY_UNVERIFIED`. A new atomic artifact builder verifies the tracked tool, rule manifest, live sources, CURRENT/HISTORY structure, and Unicode paths before creating a non-overwriting `final-*` file; unregistered status aliases are not accepted.
+
 ## 未发布：正式交接材料提交顺序
 
 - 已执行：正式候选附件改为先收敛唯一 CURRENT、登记封条元数据、保存来源并实时验证 `MATERIAL_PREPARED` 封条，再生成和回读 `final-*`；阻断期间只允许 `draft-*` 诊断材料，不得送候选评分。

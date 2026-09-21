@@ -38,7 +38,7 @@ export function validateSeal(seal, { checkDigest = true } = {}) {
   const errors = [];
   if (!seal || typeof seal !== 'object' || Array.isArray(seal)) return ['seal must be an object'];
   for (const key of Object.keys(seal)) if (!TOP_LEVEL_KEYS.has(key)) fail(errors, `unknown top-level field: ${key}`);
-  if (![1, 2].includes(seal.schema_version)) fail(errors, 'schema_version must be 1 or 2');
+  if (![1, 2, 3].includes(seal.schema_version)) fail(errors, 'schema_version must be 1, 2, or 3');
   if (seal.record_type !== 'handoff-seal') fail(errors, 'record_type must be handoff-seal');
   if (!Number.isInteger(seal.generation) || seal.generation < 1) fail(errors, 'generation must be a positive integer');
   if (!/^[A-Za-z0-9._-]+$/.test(seal.writer_id || '')) fail(errors, 'writer_id is not a portable logical id');
@@ -46,6 +46,7 @@ export function validateSeal(seal, { checkDigest = true } = {}) {
   if (!Number.isInteger(seal.seal_sequence) || seal.seal_sequence < 1) fail(errors, 'seal_sequence must be positive');
   if (seal.previous_seal_digest !== null && !HEX.test(seal.previous_seal_digest || '')) fail(errors, 'invalid previous_seal_digest');
   for (const key of ['fact_cutoff', 'sealed_at']) if (!iso(seal[key])) fail(errors, `${key} must be an ISO timestamp`);
+  if (seal.schema_version === 3 && iso(seal.fact_cutoff) && iso(seal.sealed_at) && Date.parse(seal.sealed_at) < Date.parse(seal.fact_cutoff)) fail(errors, 'sealed_at must not precede fact_cutoff');
   if (!/^[A-Za-z0-9._:-]+$/.test(seal.event_id || '')) fail(errors, 'event_id is not a portable logical id');
   if (!seal.sources || typeof seal.sources !== 'object' || Array.isArray(seal.sources) || !Object.keys(seal.sources).length) fail(errors, 'sources must be non-empty');
   else for (const [name, source] of Object.entries(seal.sources)) {
@@ -64,7 +65,7 @@ export function validateSeal(seal, { checkDigest = true } = {}) {
   if (!exactKeys(r, ['status', 'default_ref', 'head', 'observed_at']) || !['PASS', 'UNKNOWN', 'FAIL', 'NOT_APPLICABLE'].includes(r.status) || typeof r.default_ref !== 'string' || !r.default_ref || (r.head !== null && !/^[0-9a-f]{40,64}$/.test(r.head || '')) || (r.observed_at !== null && !iso(r.observed_at))) fail(errors, 'invalid remote baseline');
   if (!['HIGH', 'MEDIUM', 'LOW'].includes(seal.control_handoff_confidence)) fail(errors, 'invalid control_handoff_confidence');
   if (!['READY', 'READY_WITH_RESTRICTIONS', 'BLOCKED', 'COMPLETED'].includes(seal.switch_status)) fail(errors, 'invalid switch_status');
-  if (seal.schema_version === 2) {
+  if (seal.schema_version >= 2) {
     if (!['NOT_RUN', 'PASS', 'PASS_WITH_RESTRICTIONS', 'FAIL'].includes(seal.candidate_verification_status)) fail(errors, 'invalid candidate_verification_status');
     if (!['MATERIAL_PREPARED', 'TAKEOVER_COMPLETED', 'CURRENT_MIGRATION', 'CURRENT_ATTESTATION'].includes(seal.handoff_phase)) fail(errors, 'invalid handoff_phase');
     if (seal.handoff_phase === 'MATERIAL_PREPARED' && seal.switch_status === 'COMPLETED') fail(errors, 'material preparation cannot be COMPLETED');
@@ -85,7 +86,7 @@ export function validateSeal(seal, { checkDigest = true } = {}) {
   // READY describes candidate material readiness, not a transfer of authority.
   if (seal.switch_status === 'COMPLETED' && !['STOPPED_DISPATCH', 'ARCHIVED'].includes(seal.old_writer_status)) fail(errors, 'COMPLETED requires old writer stopped or archived');
   if (seal.switch_status === 'COMPLETED' && seal.control_handoff_confidence !== 'HIGH') fail(errors, 'COMPLETED requires control_handoff_confidence HIGH');
-  if (seal.schema_version === 2 && seal.switch_status === 'COMPLETED') {
+  if (seal.schema_version >= 2 && seal.switch_status === 'COMPLETED') {
     if (!['PASS', 'PASS_WITH_RESTRICTIONS'].includes(seal.candidate_verification_status)) fail(errors, 'COMPLETED requires candidate verification');
     if (!['CURRENT_MIGRATION', 'CURRENT_ATTESTATION'].includes(seal.handoff_phase) && (!exactKeys(seal.transition, ['intent_digest', 'previous_seal_digest', 'prepared_at']) || !HEX.test(seal.transition?.intent_digest || '') || !HEX.test(seal.transition?.previous_seal_digest || '') || !iso(seal.transition?.prepared_at))) fail(errors, 'COMPLETED requires a valid transition intent');
   }
@@ -123,8 +124,14 @@ export function readChain(dir, { ignoreOwnLock = false } = {}) {
     } catch (error) { fail(errors, `${file}: ${error.message}`); }
   }
   const seen = new Set();
+  const seenEventIds = new Set();
+  let hasLegacyRecords = false;
+  let seenStrictV3 = false;
   records.sort((a, b) => a.seal_sequence - b.seal_sequence);
   records.forEach((seal, index) => {
+    if (seal.schema_version < 3) hasLegacyRecords = true;
+    if (seal.schema_version < 3 && seenStrictV3) fail(errors, `legacy schema record appears after v3 at sequence ${seal.seal_sequence}`);
+    if (seal.schema_version === 3) seenStrictV3 = true;
     if (seen.has(seal.seal_sequence)) fail(errors, `duplicate seal_sequence: ${seal.seal_sequence}`); seen.add(seal.seal_sequence);
     const previous = records[index - 1];
     if (!previous && seal.seal_sequence !== 1) fail(errors, 'first seal must have sequence 1');
@@ -133,12 +140,22 @@ export function readChain(dir, { ignoreOwnLock = false } = {}) {
     if (previous && seal.generation < previous.generation) fail(errors, `generation rollback at sequence ${seal.seal_sequence}`);
     if (previous && seal.generation === previous.generation && seal.writer_id !== previous.writer_id) fail(errors, `writer change without generation transition at sequence ${seal.seal_sequence}`);
     if (previous && seal.generation > previous.generation && (seal.generation !== previous.generation + 1 || seal.writer_id === previous.writer_id || !['STOPPED_DISPATCH', 'ARCHIVED'].includes(seal.old_writer_status))) fail(errors, `unsafe generation transition at sequence ${seal.seal_sequence}`);
+    if (seal.schema_version === 3 && seenEventIds.has(seal.event_id)) fail(errors, `duplicate event_id at sequence ${seal.seal_sequence}: ${seal.event_id}`);
+    if (seal.schema_version === 3 && previous && Date.parse(seal.fact_cutoff) < Date.parse(previous.fact_cutoff)) fail(errors, `fact_cutoff rollback at sequence ${seal.seal_sequence}`);
+    if (seal.schema_version === 3 && previous && Date.parse(seal.sealed_at) < Date.parse(previous.sealed_at)) fail(errors, `sealed_at rollback at sequence ${seal.seal_sequence}`);
     if (seal.handoff_phase === 'CURRENT_ATTESTATION' && (!previous || seal.generation !== previous.generation || seal.writer_id !== previous.writer_id || seal.transition !== null || seal.migration !== null)) fail(errors, `invalid current attestation at sequence ${seal.seal_sequence}`);
+    if (seal.schema_version === 3 && seal.handoff_phase === 'CURRENT_ATTESTATION' && previous) {
+      const names = new Set([...Object.keys(previous.sources ?? {}), ...Object.keys(seal.sources ?? {})]);
+      if (![...names].some(name => previous.sources?.[name]?.digest !== seal.sources?.[name]?.digest)) fail(errors, `current attestation has no source change at sequence ${seal.seal_sequence}`);
+    }
     if (seal.transition !== null && seal.transition !== undefined) {
       const intent = intents.get(seal.transition.intent_digest);
       if (!intent) fail(errors, `missing transition intent at sequence ${seal.seal_sequence}`);
       else if (!previous || intent.previous_seal_digest !== previous.seal_digest || intent.previous_sequence !== previous.seal_sequence || intent.previous_generation !== previous.generation || intent.previous_writer_id !== previous.writer_id || intent.next_generation !== seal.generation || intent.next_writer_id !== seal.writer_id || intent.event_id !== seal.event_id || seal.transition.previous_seal_digest !== intent.previous_seal_digest || seal.transition.prepared_at !== intent.prepared_at) fail(errors, `transition intent mismatch at sequence ${seal.seal_sequence}`);
+      if (seal.schema_version === 3 && previous && Date.parse(seal.transition.prepared_at) < Date.parse(previous.sealed_at)) fail(errors, `transition prepared_at precedes predecessor seal at sequence ${seal.seal_sequence}`);
+      if (seal.schema_version === 3 && Date.parse(seal.transition.prepared_at) > Date.parse(seal.sealed_at)) fail(errors, `transition prepared_at follows takeover seal at sequence ${seal.seal_sequence}`);
     }
+    seenEventIds.add(seal.event_id);
   });
   const consumed = new Map();
   for (const seal of records) if (seal.transition?.intent_digest) consumed.set(seal.transition.intent_digest, (consumed.get(seal.transition.intent_digest) ?? 0) + 1);
@@ -146,7 +163,7 @@ export function readChain(dir, { ignoreOwnLock = false } = {}) {
   const pendingIntents = [...intents.values()].filter(intent => !consumed.has(intent.transition_digest));
   const latest = records.at(-1);
   for (const intent of pendingIntents) if (!latest || intent.previous_seal_digest !== latest.seal_digest || intent.previous_sequence !== latest.seal_sequence || intent.previous_generation !== latest.generation || intent.previous_writer_id !== latest.writer_id) fail(errors, `stale unconsumed transition intent: ${intent.transition_digest}`);
-  return { records, intents: [...intents.values()], pending_intents: pendingIntents, errors };
+  return { records, intents: [...intents.values()], pending_intents: pendingIntents, historical_assurance: hasLegacyRecords ? 'LEGACY_UNVERIFIED' : 'STRICT_V3', errors };
 }
 
 export function verifyChain(dir, options = {}) {
@@ -194,12 +211,16 @@ export function prepareTransition(dir, { sourceRoot, expectedPreviousDigest, nex
     const generationTransition = nextGeneration === previous.generation + 1 && nextWriterId !== previous.writer_id;
     if (!generationTransition) throw new Error('transition intent requires the next generation and a different writer');
     if (current.pending_intents.length) throw new Error('an unconsumed transition intent already exists');
+    if (current.records.some(record => record.event_id === eventId) || current.intents.some(intent => intent.event_id === eventId)) throw new Error('event_id already exists in the handoff chain');
+    if (Date.parse(preparedAt) < Date.parse(previous.sealed_at)) throw new Error('transition prepared_at precedes predecessor seal');
     const intent = {
       record_type: 'handoff-transition-intent', previous_seal_digest: previous.seal_digest, previous_sequence: previous.seal_sequence,
       previous_generation: previous.generation, previous_writer_id: previous.writer_id, next_generation: nextGeneration,
       next_writer_id: nextWriterId, event_id: eventId, prepared_at: preparedAt, previous_source_status: 'PASS', transition_digest: ''
     };
     intent.transition_digest = transitionDigest(intent);
+    const intentErrors = validateTransitionIntent(intent);
+    if (intentErrors.length) throw new Error(`transition intent invalid: ${intentErrors.join('; ')}`);
     const finalPath = path.join(dir, `handoff-transition.${intent.previous_sequence}.${intent.transition_digest}.json`);
     const tempPath = `${finalPath}.${process.pid}.tmp`;
     const out = fs.openSync(tempPath, 'wx');
@@ -222,6 +243,7 @@ export function appendSeal(dir, draft, { expectedPreviousDigest, sourceRoot, tra
     if (expectedPreviousDigest !== undefined && expectedPreviousDigest !== actualPreviousDigest) throw new Error('expected previous digest mismatch');
     if (current.pending_intents.length && !transitionTicket) throw new Error('an unconsumed transition intent must be consumed or explicitly recovered before appending');
     const seal = structuredClone(draft);
+    if (seal.schema_version !== 3) throw new Error('new seal writes require schema_version 3; schema 1/2 records are read-only legacy history');
     if (previous && seal.generation < previous.generation) throw new Error('generation rollback');
     if (previous && seal.generation === previous.generation && seal.writer_id !== previous.writer_id) throw new Error('writer change without generation transition');
     if (previous && seal.generation > previous.generation && (seal.generation !== previous.generation + 1 || seal.writer_id === previous.writer_id || !['STOPPED_DISPATCH', 'ARCHIVED'].includes(seal.old_writer_status))) throw new Error('unsafe generation transition');
@@ -237,10 +259,18 @@ export function appendSeal(dir, draft, { expectedPreviousDigest, sourceRoot, tra
     } else if (previousSourceErrors.length && seal.handoff_phase !== 'CURRENT_ATTESTATION') throw new Error(previousSourceErrors.join('; '));
     if (previous && seal.generation > previous.generation && !intent) throw new Error('generation transition requires a pre-update intent');
     if (intent && (!previous || seal.generation === previous.generation)) throw new Error('transition intent may only be consumed by a generation transition');
-    if (previous && seal.generation > previous.generation && (seal.schema_version !== 2 || seal.switch_status !== 'COMPLETED')) throw new Error('generation transition requires a version 2 completed seal');
+    if (previous && seal.generation > previous.generation && seal.switch_status !== 'COMPLETED') throw new Error('generation transition requires a completed seal');
     if (seal.handoff_phase === 'CURRENT_ATTESTATION' && (!previous || seal.generation !== previous.generation || seal.writer_id !== previous.writer_id || transitionTicket)) throw new Error('current attestation requires an existing seal with the same generation and writer');
     seal.seal_sequence = (previous?.seal_sequence ?? 0) + 1;
     seal.previous_seal_digest = previous?.seal_digest ?? null;
+    if (current.records.some(record => record.event_id === seal.event_id)) throw new Error('event_id already exists in the handoff chain');
+    if (previous && Date.parse(seal.fact_cutoff) < Date.parse(previous.fact_cutoff)) throw new Error('fact_cutoff rollback');
+    if (previous && Date.parse(seal.sealed_at) < Date.parse(previous.sealed_at)) throw new Error('sealed_at rollback');
+    if (intent && Date.parse(intent.prepared_at) > Date.parse(seal.sealed_at)) throw new Error('transition prepared_at follows takeover seal');
+    if (seal.handoff_phase === 'CURRENT_ATTESTATION' && previous) {
+      const names = new Set([...Object.keys(previous.sources ?? {}), ...Object.keys(seal.sources ?? {})]);
+      if (![...names].some(name => previous.sources?.[name]?.digest !== seal.sources?.[name]?.digest)) throw new Error('current attestation requires at least one changed source digest');
+    }
     seal.seal_digest = sealDigest(seal);
     const errors = validateSeal(seal);
     if (errors.length) throw new Error(`draft invalid: ${errors.join('; ')}`);
