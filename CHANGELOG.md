@@ -2,6 +2,12 @@
 
 本文件记录 ChatGPT Workflows 的重要变更。
 
+## 未发布：长任务批次化与低打断执行规则
+
+- 已执行：在 `02` 增加 `AUTO_BATCH / CHECKPOINT / HUMAN_GATE` 的最小判定和局部失败策略；同一契约、基线、授权和可机械验证链内连续执行，不因命令或微步骤逐次汇报。
+- 已执行：在 `09` 复用该判定，并明确新增授权、事实漂移、远端/不可逆动作和人工语义验收才触发停顿；未改变远端授权或专项任务门禁。
+- 已验证：`git diff --check` 与 `.github/scripts/Test-Repository.ps1` 均通过，规则版本和链接一致；未执行远端写入。
+
 ## 未发布：明确 ChatGPT Workflows 与 GitStateCompass 的远端边界
 
 - 已执行：登记本项目只使用 `legacy-origin` 作为 ChatGPT Workflows 的远端候选；`origin` 与 `实用小工具/GitStateCompass/` 明确排除在本项目提交和远端发布范围外。
