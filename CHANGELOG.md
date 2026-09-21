@@ -7,6 +7,7 @@
 - 已执行：在全局 Codex 指令中加入最小充分输出、按需读取、工具结果摘要和质量门禁规则；规则保持短小，不引入常驻压缩器。
 - 已执行：在总指挥 Token 控制章节补充成功/失败输出的证据下限、复杂度路由和“减少重复与返工优先于盲目降档”原则。
 - 已验证：仅修改规则与履历文件；未安装第三方 Skill 或代理，未宣称已获得实际 Token 节省率。既有未提交工具改动未纳入本次变更。
+- 已执行：核对现有会话评估工具已支持本地输入、缓存、输出和推理 Token 快照；尝试通过 Windows `winget` 安装 RTK，但软件源更新失败，未启用 RTK。Headroom 等代理型工具仍按门禁保持未接入。
 - English: Added a compact global baseline and commander-specific rules for minimal-sufficient output, scoped reads, summarized tool results, and evidence-preserving verification. No third-party compressor was installed and no measured token saving is claimed.
 
 ## 未发布：本地成果先整理到远端可执行状态
