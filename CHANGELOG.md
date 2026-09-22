@@ -2,6 +2,13 @@
 
 本文件记录 ChatGPT Workflows 的重要变更。
 
+## 未发布：场景五审阅回执闭环
+
+- 已执行：明确标注“场景五”“场景 5A”或等价执行者—独立审查者请求时，接收窗口必须按场景五逐项审阅并发送正式回执；后续确认、质疑和补充证据继续归入同一事件轮次，直到明确收口或记录真实阻断，不能把工具完成标记或一次初始回执当作闭环。
+- 已执行：补充唯一事件标识、状态回执、未决项、禁止动作和下一行动方要求；未指明场景的普通自检或只读解释仍不会自动触发场景五。
+- English: Explicit “Scenario 5”, “Scenario 5A”, or equivalent executor–independent-reviewer requests now require the receiving window to perform the requested review and send a formal receipt. Follow-up confirmations, objections, and evidence remain in the same event until closure or a recorded real block; a tool completion marker or one initial receipt is not closure.
+- English: Added requirements for a unique event identifier, status receipt, open items, prohibitions, and next action owner. Ordinary self-checks or read-only explanations without an explicit Scenario 5 signal do not enter this workflow.
+
 ## 未发布：场景模型建议的目录显示优化
 
 - 已执行：将操作手册各场景标题后的模型建议改为标题下方的加粗正文，避免右侧目录重复显示推荐模型，同时保留场景内的可见提示。
