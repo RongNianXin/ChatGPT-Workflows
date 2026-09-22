@@ -41,7 +41,7 @@ function makeDraft(eventId) {
     sources: {
       central_work_items: writeCurrent('状态/中央 工作项.md', 'central'),
       current_view: writeCurrent('状态/当前视图-e\u0301.md', 'view'),
-      status_index: writeCurrent(LONG_STATUS_PATH, 'index')
+      status_index: writeCurrent(LONG_STATUS_PATH, `项目键：synthetic\n远端目标：refs/heads/main\nHEAD=${'b'.repeat(40)}`)
     },
     source_digest_status: 'PASS',
     objective: { summary: 'synthetic formal handoff', breakpoint: 'candidate verification' },
@@ -83,6 +83,7 @@ function prepareCase(number, eventId) {
     final_output_path: finalPath,
     receipt_output_path: receiptPath,
     rule_manifest_path: path.join(temp, 'rule-manifest.json'),
+    project_key: 'synthetic',
     expected_previous_digest: null
   });
   return { configPath, finalPath, receiptPath };
@@ -111,6 +112,34 @@ try {
     assert.ok(LONG_STATUS_PATH.length > 150);
     assert.equal(sha256(fs.readFileSync(first.finalPath)), firstResult.receipt.snapshot_sha256);
     assert.doesNotMatch(fs.readFileSync(first.finalPath, 'utf8'), /{{[A-Z_]+}}/);
+  });
+
+  const badTemplate = prepareCase(11, 'formal-event-11');
+  const badTemplateConfig = readJsonForTest(badTemplate.configPath);
+  const badTemplatePath = path.join(path.dirname(badTemplate.configPath), 'bad-template.md');
+  fs.writeFileSync(badTemplatePath, '# {{SNAPSHOT_ID}}\nseal={{SEAL_DIGEST}}\n', 'utf8');
+  badTemplateConfig.snapshot_template_path = badTemplatePath;
+  writeJson(badTemplate.configPath, badTemplateConfig);
+  const badSealDir = path.resolve(sourceRoot, '.handoff-private', 'case-11');
+  const sealsBeforeTemplateFailure = fs.existsSync(badSealDir) ? fs.readdirSync(badSealDir).length : 0;
+  check('malformed delivery template fails before appending a seal', () => {
+    assert.throws(() => prepareFormalHandoff(badTemplate.configPath), /missing placeholder/);
+    assert.equal(fs.existsSync(badTemplate.finalPath), false);
+    assert.equal(fs.existsSync(badTemplate.receiptPath), false);
+    const sealsAfterTemplateFailure = fs.existsSync(badSealDir) ? fs.readdirSync(badSealDir).length : 0;
+    assert.equal(sealsAfterTemplateFailure, sealsBeforeTemplateFailure);
+  });
+
+  const retryable = prepareCase(12, 'formal-event-12');
+  check('artifact retry reuses an already appended seal', () => {
+    const first = prepareFormalHandoff(retryable.configPath);
+    fs.rmSync(retryable.finalPath, { force: true });
+    fs.rmSync(retryable.receiptPath, { force: true });
+    const second = prepareFormalHandoff(retryable.configPath);
+    assert.equal(second.receipt.seal_digest, first.receipt.seal_digest);
+    assert.equal(second.receipt.event_id, first.receipt.event_id);
+    const seals = fs.readdirSync(path.resolve(sourceRoot, '.handoff-private', 'case-12')).filter(name => name.startsWith('handoff-state.'));
+    assert.equal(seals.length, 1);
   });
 
   spawnSync('git', ['-C', sourceRoot, 'config', 'core.quotePath', 'false']);
@@ -142,6 +171,59 @@ try {
   visibleSealConfig.seal_directory = path.join(sourceRoot, 'visible-seals');
   writeJson(visibleSeal.configPath, visibleSealConfig);
   check('seal directory must be protected by source repository ignore rules', () => assert.throws(() => prepareFormalHandoff(visibleSeal.configPath), /must be excluded/));
+
+  const staleBinding = prepareCase(6, 'formal-event-6');
+  const staleDraft = readJsonForTest(path.join(path.dirname(staleBinding.configPath), 'draft.json'));
+  const staleIndex = path.join(sourceRoot, staleDraft.sources.status_index.path_ref);
+  fs.writeFileSync(staleIndex, fs.readFileSync(staleIndex, 'utf8').replace(/远端目标：refs\/heads\/main/g, '远端目标：origin/main'), 'utf8');
+  staleDraft.sources.status_index.digest = sha256(fs.readFileSync(staleIndex));
+  writeJson(path.join(path.dirname(staleBinding.configPath), 'draft.json'), staleDraft);
+  check('stale project binding blocks formal output', () => {
+    assert.throws(() => prepareFormalHandoff(staleBinding.configPath), /project key|remote target|workspace HEAD/);
+    assert.equal(fs.existsSync(staleBinding.finalPath), false);
+    assert.equal(fs.existsSync(staleBinding.receiptPath), false);
+  });
+
+  const duplicateBinding = prepareCase(7, 'formal-event-7');
+  const duplicateIndex = path.join(sourceRoot, '历史', 'AI状态索引.md');
+  fs.mkdirSync(path.dirname(duplicateIndex), { recursive: true });
+  fs.writeFileSync(duplicateIndex, '<!-- CURRENT:BEGIN -->\nold\n<!-- CURRENT:END -->\n', 'utf8');
+  check('duplicate active control planes block formal output', () => {
+    assert.throws(() => prepareFormalHandoff(duplicateBinding.configPath), /DUPLICATE_CONTROL_PLANE/);
+    assert.equal(fs.existsSync(duplicateBinding.finalPath), false);
+    assert.equal(fs.existsSync(duplicateBinding.receiptPath), false);
+  });
+  fs.rmSync(path.dirname(duplicateIndex), { recursive: true, force: true });
+  const registeredLegacy = prepareCase(9, 'formal-event-9');
+  const registeredDraft = readJsonForTest(path.join(path.dirname(registeredLegacy.configPath), 'draft.json'));
+  const legacyPath = path.join(sourceRoot, 'legacy', 'AI状态索引.md');
+  fs.mkdirSync(path.dirname(legacyPath), { recursive: true });
+  fs.writeFileSync(legacyPath, '<!-- CURRENT:BEGIN -->\nlegacy\n<!-- CURRENT:END -->\n<!-- HISTORY:BEGIN -->\n', 'utf8');
+  const registryPath = path.join(sourceRoot, 'control-plane-registry.json');
+  writeJson(registryPath, { schema_version: 1, canonical_index: registeredDraft.sources.status_index.path_ref, legacy_indexes: [{ path: 'legacy/AI状态索引.md', status: 'HISTORICAL_ONLY', sha256: sha256(fs.readFileSync(legacyPath)), reason: 'preserved historical evidence' }] });
+  registeredDraft.sources.control_plane_registry = { owner: 'current-commander', path_ref: 'control-plane-registry.json', digest: sha256(fs.readFileSync(registryPath)), fact_cutoff: stamp };
+  writeJson(path.join(path.dirname(registeredLegacy.configPath), 'draft.json'), registeredDraft);
+  check('registered historical control plane does not block formal output', () => {
+    const result = prepareFormalHandoff(registeredLegacy.configPath);
+    assert.equal(result.chain_status, 'PASS');
+    assert.equal(fs.existsSync(registeredLegacy.finalPath), true);
+  });
+  fs.writeFileSync(legacyPath, fs.readFileSync(legacyPath, 'utf8').replace('legacy', 'drifted'), 'utf8');
+  const drifted = prepareCase(10, 'formal-event-10');
+  const driftedDraft = readJsonForTest(path.join(path.dirname(drifted.configPath), 'draft.json'));
+  driftedDraft.sources.control_plane_registry = registeredDraft.sources.control_plane_registry;
+  writeJson(path.join(path.dirname(drifted.configPath), 'draft.json'), driftedDraft);
+  check('registered historical control-plane drift blocks output', () => {
+    assert.throws(() => prepareFormalHandoff(drifted.configPath), /source digest|control-plane registry|historical control-plane/);
+    assert.equal(fs.existsSync(drifted.finalPath), false);
+  });
+  const wrongProject = prepareCase(8, 'formal-event-8');
+  const wrongConfig = readJsonForTest(wrongProject.configPath); wrongConfig.project_key = 'other-project'; writeJson(wrongProject.configPath, wrongConfig);
+  check('project key mismatch blocks formal output', () => {
+    assert.throws(() => prepareFormalHandoff(wrongProject.configPath), /project key/);
+    assert.equal(fs.existsSync(wrongProject.finalPath), false);
+    assert.equal(fs.existsSync(wrongProject.receiptPath), false);
+  });
   console.log(`Prepare handoff: PASS (${passed} cases)`);
 } finally {
   fs.rmSync(temp, { recursive: true, force: true });

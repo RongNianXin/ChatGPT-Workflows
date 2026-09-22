@@ -4,7 +4,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { appendSeal, verifyChain } from './HandoffSeal.mjs';
+import { appendSeal, sealDigest, validateControlPlaneRegistry, verifyChain } from './HandoffSeal.mjs';
 
 export const REQUIRED_RULES = [
   '.github/scripts/HandoffSeal.mjs',
@@ -17,7 +17,7 @@ export const REQUIRED_RULES = [
   '总指挥工作流/第二代总指挥的工作模式/10-自动状态索引规范.md',
   '总指挥工作流/第二代总指挥的工作模式/总指挥轻量交接启动配置.md'
 ];
-const CONFIG_KEYS = new Set(['seal_directory', 'source_root', 'draft_path', 'snapshot_template_path', 'final_output_path', 'receipt_output_path', 'rule_manifest_path', 'expected_previous_digest', 'transition_ticket']);
+const CONFIG_KEYS = new Set(['seal_directory', 'source_root', 'draft_path', 'snapshot_template_path', 'final_output_path', 'receipt_output_path', 'rule_manifest_path', 'expected_previous_digest', 'transition_ticket', 'project_key']);
 const sha256 = value => crypto.createHash('sha256').update(value).digest('hex');
 const resolveFrom = (base, value) => path.resolve(base, value);
 const isInside = (root, candidate) => {
@@ -51,6 +51,51 @@ function verifyCurrentDocument(file, label) {
   if (!content.slice(begin + markers[0].length, end).trim()) throw new Error(`${label}: CURRENT block is empty`);
   const gap = content.slice(end + markers[1].length, history).replace(/<!--[\s\S]*?-->/g, '').trim();
   if (gap) throw new Error(`${label}: body text exists outside CURRENT and before HISTORY`);
+}
+
+function currentBlock(file, label) {
+  const content = fs.readFileSync(file, 'utf8').replace(/^\uFEFF/, '');
+  verifyCurrentDocument(file, label);
+  const begin = content.indexOf('<!-- CURRENT:BEGIN -->') + '<!-- CURRENT:BEGIN -->'.length;
+  const end = content.indexOf('<!-- CURRENT:END -->');
+  return content.slice(begin, end);
+}
+
+function verifyProjectBinding(sourceRoot, statusIndexPath, draft, projectKey) {
+  const block = currentBlock(statusIndexPath, 'status_index');
+  if (!/^项目键：[^\r\n]+$/m.test(block)) throw new Error('status_index current block is missing a project key');
+  const statusProjectKey = block.match(/^项目键：([^\r\n]+)$/m)?.[1]?.trim();
+  if (!projectKey || statusProjectKey !== projectKey) throw new Error(`status_index project key does not match configuration: ${projectKey}`);
+  const remoteRef = draft.remote?.default_ref;
+  const remoteLine = block.split(/\r?\n/).find(line => line.startsWith('远端目标：'));
+  if (!remoteRef || !remoteLine || remoteLine.slice('远端目标：'.length).trim() !== remoteRef) {
+    throw new Error(`status_index current block does not bind the handoff to remote target: ${remoteRef}`);
+  }
+  if (!draft.workspace?.head || !block.includes(draft.workspace.head)) throw new Error('status_index current block does not contain the sealed workspace HEAD');
+  const topLevel = spawnSync('git', ['-C', sourceRoot, 'rev-parse', '--show-toplevel'], { encoding: 'utf8' });
+  if (topLevel.status !== 0 || fs.realpathSync(topLevel.stdout.trim()) !== fs.realpathSync(sourceRoot)) throw new Error('source_root is not the Git repository root used by the handoff');
+}
+
+function findActiveControlPlaneIndexes(sourceRoot, canonicalStatusIndex, registry = null) {
+  const historical = new Set((registry?.legacy_indexes ?? []).filter(item => item?.status === 'HISTORICAL_ONLY').map(item => item.path));
+  const found = [];
+  const walk = directory => {
+    for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
+      if (entry.name === '.git' || entry.name === 'node_modules') continue;
+      const absolute = path.join(directory, entry.name);
+      if (entry.isDirectory()) walk(absolute);
+      else if (entry.isFile() && entry.name === 'AI状态索引.md') {
+        const resolved = fs.realpathSync(absolute);
+        if (resolved !== canonicalStatusIndex) {
+          const content = fs.readFileSync(resolved, 'utf8');
+          const relative = path.relative(sourceRoot, resolved).replaceAll('\\', '/');
+          if (content.includes('<!-- CURRENT:BEGIN -->') && !historical.has(relative)) found.push(relative);
+        }
+      }
+    }
+  };
+  walk(sourceRoot);
+  return found;
 }
 
 function verifyRuleManifest(workflowRoot, manifestPath) {
@@ -104,7 +149,7 @@ export function prepareFormalHandoff(configPath) {
   const config = readJson(absoluteConfig);
   if (!config || typeof config !== 'object' || Array.isArray(config)) throw new Error('configuration must be an object');
   for (const key of Object.keys(config)) if (!CONFIG_KEYS.has(key)) throw new Error(`unknown configuration field: ${key}`);
-  for (const key of ['seal_directory', 'source_root', 'draft_path', 'snapshot_template_path', 'final_output_path', 'receipt_output_path', 'rule_manifest_path']) if (typeof config[key] !== 'string' || !config[key]) throw new Error(`missing configuration field: ${key}`);
+  for (const key of ['seal_directory', 'source_root', 'draft_path', 'snapshot_template_path', 'final_output_path', 'receipt_output_path', 'rule_manifest_path', 'project_key']) if (typeof config[key] !== 'string' || !config[key]) throw new Error(`missing configuration field: ${key}`);
 
   const scriptDir = path.dirname(fileURLToPath(import.meta.url));
   const workflowRoot = fs.realpathSync(path.resolve(scriptDir, '..', '..'));
@@ -144,18 +189,54 @@ export function prepareFormalHandoff(configPath) {
     if (!isInside(sourceRoot, sourcePath)) throw new Error(`canonical source escapes source root: ${name}`);
     verifyCurrentDocument(sourcePath, name);
   }
+  const canonicalStatusIndex = fs.realpathSync(path.resolve(sourceRoot, draft.sources.status_index.path_ref));
+  verifyProjectBinding(sourceRoot, canonicalStatusIndex, draft, config.project_key);
+  let registry = null;
+  const registryRef = draft.sources?.control_plane_registry?.path_ref;
+  if (registryRef) {
+    const registryPath = fs.realpathSync(path.resolve(sourceRoot, registryRef));
+    if (!isInside(sourceRoot, registryPath)) throw new Error('control-plane registry escapes source root');
+    registry = readJson(registryPath);
+    const registryErrors = validateControlPlaneRegistry(registry, sourceRoot, draft.sources.status_index.path_ref);
+    if (registryErrors.length) throw new Error(`control-plane registry invalid: ${registryErrors.join('; ')}`);
+  }
+  const duplicateIndexes = findActiveControlPlaneIndexes(sourceRoot, canonicalStatusIndex, registry);
+  if (duplicateIndexes.length) throw new Error(`DUPLICATE_CONTROL_PLANE: active AI status indexes outside canonical source: ${duplicateIndexes.join(', ')}`);
 
-  const seal = appendSeal(realSealDirectory, draft, {
-    expectedPreviousDigest: config.expected_previous_digest,
-    sourceRoot,
-    transitionTicket: config.transition_ticket ? resolveFrom(configDir, config.transition_ticket) : undefined
-  });
-  const verified = verifyChain(realSealDirectory, { sourceRoot });
-  if (verified.status !== 'PASS' || verified.latest?.seal_digest !== seal.seal_digest || verified.latest_source_status !== 'PASS') throw new Error(`new seal did not pass live verification: ${verified.errors.join('; ')}`);
-
+  // Validate and render the template before appending an immutable seal. A malformed
+  // delivery template must not advance the seal chain without producing an artifact.
   let rendered = fs.readFileSync(templatePath, 'utf8');
+  const snapshotId = path.basename(finalPath, '.md');
+  const templateTokens = ['{{SNAPSHOT_ID}}', '{{SEAL_DIGEST}}', '{{FACT_CUTOFF}}', '{{EVENT_ID}}'];
+  for (const token of templateTokens) if (!rendered.includes(token)) throw new Error(`snapshot template is missing placeholder: ${token}`);
+
+  // If a previous attempt appended the immutable seal but failed while writing
+  // the external artifact, reuse that exact seal. This makes preparation
+  // retryable without advancing the chain or inventing a second event.
+  const preAppend = verifyChain(realSealDirectory, { sourceRoot, verifyLatestSources: false });
+  let seal;
+  const reusable = preAppend.latest && preAppend.latest.event_id === draft.event_id
+    && preAppend.latest.generation === draft.generation
+    && preAppend.latest.writer_id === draft.writer_id
+    && preAppend.latest.handoff_phase === draft.handoff_phase
+    && preAppend.latest.seal_digest === (() => {
+      const candidate = { ...draft, seal_sequence: preAppend.latest.seal_sequence, previous_seal_digest: preAppend.latest.previous_seal_digest };
+      return sealDigest(candidate);
+    })();
+  if (reusable) {
+    seal = preAppend.latest;
+  } else {
+    seal = appendSeal(realSealDirectory, draft, {
+      expectedPreviousDigest: config.expected_previous_digest,
+      sourceRoot,
+      transitionTicket: config.transition_ticket ? resolveFrom(configDir, config.transition_ticket) : undefined
+    });
+  }
+  const verified = verifyChain(realSealDirectory, { sourceRoot });
+  if (verified.status !== 'PASS' || !verified.handoff_ready || verified.latest?.seal_digest !== seal.seal_digest || verified.latest_source_status !== 'PASS') throw new Error(`new seal did not pass live verification: ${verified.errors.join('; ')}`);
+
   const replacements = {
-    '{{SNAPSHOT_ID}}': path.basename(finalPath, '.md'),
+    '{{SNAPSHOT_ID}}': snapshotId,
     '{{SEAL_DIGEST}}': seal.seal_digest,
     '{{FACT_CUTOFF}}': seal.fact_cutoff,
     '{{EVENT_ID}}': seal.event_id
@@ -173,7 +254,7 @@ export function prepareFormalHandoff(configPath) {
     if (sha256(fs.readFileSync(manifestPath)) !== ruleManifestDigest) throw new Error('rule manifest drifted while preparing the attachment');
     verifyRuleManifest(workflowRoot, manifestPath);
     const finalVerification = verifyChain(realSealDirectory, { sourceRoot });
-    if (finalVerification.status !== 'PASS' || finalVerification.latest?.seal_digest !== seal.seal_digest || finalVerification.latest_source_status !== 'PASS') throw new Error(`facts drifted while rendering the attachment: ${finalVerification.errors.join('; ')}`);
+    if (finalVerification.status !== 'PASS' || !finalVerification.handoff_ready || finalVerification.latest?.seal_digest !== seal.seal_digest || finalVerification.latest_source_status !== 'PASS') throw new Error(`facts drifted while rendering the attachment: ${finalVerification.errors.join('; ')}`);
     const receipt = {
       schema_version: 1,
       artifact_status: 'GENERATED_NOT_DELIVERED',

@@ -2,6 +2,34 @@
 
 本文件记录 ChatGPT Workflows 的重要变更。
 
+## 未发布：操作手册场景模型起步建议
+
+- 已执行：为 1A–1J、2–2F、3A–3D、4A–4J、5A–5D、6A–6B、Gen1–Gen2 增加模型与推理强度的起步建议。
+- 已执行：采用“固定起步值 + 复杂度升级范围”：稳定的交接和常规场景给 Terra/Sol 的默认档位；链路排查、无上下文恢复、远端汇合和规则修复等变化场景写明升级条件，避免简单任务被强行交给高成本模型，也避免复杂任务被低档位误接。
+- 已执行：明确模型建议不是强制路由；实际任务必须记录所用模型、推理强度、升级原因和未验证项。未修改远端、未 Commit、未生成新的正式交接附件。
+- 未验证：不同模型在本项目真实交接中的效果仍需后续候选独立核验；本次只完成手册规则和记录更新。
+- English: Added model/reasoning starting recommendations to every current operator-manual scenario. Stable handoff and routine scenarios use fixed Terra/Sol starting points; variable diagnosis, recovery, remote convergence, and workflow-repair scenarios specify escalation conditions.
+- English: These are starting recommendations rather than mandatory routing. The actual model, reasoning level, escalation reason, and unverified items must be recorded. This update changes local documentation and handoff evidence only; it does not grant remote-write permission.
+
+## 未发布：交接有效期与规则升级复杂度门禁
+
+- 已执行：明确交接材料不按固定小时数自动过期；隔夜等待或不改变项目事实的文字聊天不会单独使材料失效，规则、中央状态、工作区、远端、授权、目标、断点或必要证据变化才会触发刷新。
+- 已执行：要求候选以当前实际来源优先于附件摘要，发现附件、封条、状态索引、当前视图或中央工作项冲突时直接 `BLOCKED`。
+- 已执行：增加规则升级门禁：只解决已复现问题，说明净收益和删减项，补最小验证，先验证旧流程兼容性再更新指纹，禁止半套新规则与旧封条混用。
+
+## 未发布：交接控制面双入口与封条误判修复
+
+- 已执行：为正式交接增加项目键精确绑定、显式 `handoff_ready` 门禁和历史控制面登记；未登记的第二个 `CURRENT`、登记内容漂移或项目键不匹配仍会阻断，不删除旧证据。
+- 已执行：补齐交接候选失效门禁：候选在正式切换前被归档、取消、替换或失联时，旧评分、封条和附件只能保留为历史，不能继续复用；交接状态同时展示 `chain_status`、`control_status` 与 `handoff_ready`，避免把结构链 PASS 误当作可切换。
+- 已执行：将 00/02/09/10 与轻量启动配置统一升版至 `2026-09-22.1`，让候选能区分本轮交接规则正文变化与旧指纹。
+- English: Added an invalidation gate for pre-takeover candidate archival, cancellation, replacement, or loss of verifiability. Old scores, seals, and attachments remain historical and cannot be reused; handoff reports must show `chain_status`, `control_status`, and `handoff_ready` together.
+- 已执行：允许同世代/同写者用 `CURRENT_ATTESTATION` 追加 `BLOCKED` 当前证明，保留低置信度事实截点并避免改写旧封条；`control_status=BLOCKED` 不会因结构链 `status=PASS` 被误判为可切换。
+- 已验证：准备器 12 项、封条 51 项定向测试通过；当前链最新来源回算通过，但 `handoff_ready=false`、`switch_status=BLOCKED`，未生成或发送正式候选附件；未 Commit、Push 或切换调度权。
+- 未验证：全仓库质量脚本当前退出 1，错误集中在既有故障案例 `Repair-CodexThreadArchive.ps1` 的 PowerShell 解析；本轮未修改该文件，也不把它写成交接控制面已修复。
+- English: Added exact project binding, an explicit `handoff_ready` gate, and a hashed registry for historical control planes. Unregistered duplicate `CURRENT` records, registry drift, and project-key mismatches remain blocking. Same-writer `CURRENT_ATTESTATION` may now preserve a blocked fact cutoff without rewriting old seals. Targeted preparation and seal tests pass; the current handoff remains blocked and no remote or authority-changing action was performed.
+- 已执行：准备器支持同一事件的失败重试；若封条已追加但外部附件尚未完整落盘，重试会校验并复用原封条，不重复推进序号或生成第二事件。
+- 已验证：新增“附件重试复用封条”回归测试通过；准备器 14 项、封条 51 项定向测试通过。
+
 ## 未发布：长任务批次化与低打断执行规则
 
 - 已执行：在 `02` 增加 `AUTO_BATCH / CHECKPOINT / HUMAN_GATE` 的最小判定和局部失败策略；同一契约、基线、授权和可机械验证链内连续执行，不因命令或微步骤逐次汇报。

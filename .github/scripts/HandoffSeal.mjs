@@ -30,7 +30,34 @@ function verifySourceFiles(seal, sourceRoot) {
       const resolved = fs.realpathSync(path.resolve(root, source.path_ref));
       if (resolved !== root && !resolved.startsWith(`${root}${path.sep}`)) throw new Error('source path escapes root');
       if (digest(fs.readFileSync(resolved)) !== source.digest) throw new Error('source digest mismatch');
+      if (name === 'control_plane_registry') {
+        const registry = JSON.parse(fs.readFileSync(resolved, 'utf8'));
+        const registryErrors = validateControlPlaneRegistry(registry, root, seal.sources?.status_index?.path_ref);
+        if (registryErrors.length) throw new Error(registryErrors.join('; '));
+      }
     } catch (error) { errors.push(`source verification failed: ${name}: ${error.message}`); }
+  }
+  return errors;
+}
+
+export function validateControlPlaneRegistry(registry, sourceRoot, canonicalStatusIndexRef) {
+  const errors = [];
+  if (!registry || typeof registry !== 'object' || Array.isArray(registry)) return ['registry must be an object'];
+  if (registry.schema_version !== 1) errors.push('registry schema_version must be 1');
+  if (registry.canonical_index !== canonicalStatusIndexRef) errors.push('registry canonical index mismatch');
+  if (!Array.isArray(registry.legacy_indexes)) errors.push('registry legacy_indexes must be an array');
+  const seen = new Set([canonicalStatusIndexRef]);
+  for (const item of registry.legacy_indexes ?? []) {
+    if (!item || typeof item.path !== 'string' || item.status !== 'HISTORICAL_ONLY' || !HEX.test(item.sha256 || '') || typeof item.reason !== 'string' || !item.reason) { errors.push('invalid historical control-plane entry'); continue; }
+    if (seen.has(item.path)) { errors.push(`duplicate control-plane path: ${item.path}`); continue; }
+    seen.add(item.path);
+    try {
+      const resolved = fs.realpathSync(path.resolve(sourceRoot, item.path));
+      if (resolved === sourceRoot || !resolved.startsWith(`${sourceRoot}${path.sep}`)) throw new Error('path escapes source root');
+      if (digest(fs.readFileSync(resolved)) !== item.sha256) throw new Error('digest mismatch');
+      const content = fs.readFileSync(resolved, 'utf8');
+      if (!content.includes('<!-- CURRENT:BEGIN -->')) throw new Error('historical entry is not a CURRENT control-plane record');
+    } catch (error) { errors.push(`historical control-plane verification failed: ${item.path}: ${error.message}`); }
   }
   return errors;
 }
@@ -74,7 +101,7 @@ export function validateSeal(seal, { checkDigest = true } = {}) {
       if (seal.switch_status !== 'COMPLETED' || seal.seal_sequence !== 1 || seal.previous_seal_digest !== null || seal.transition !== null) fail(errors, 'current migration must be the first completed seal without a transition');
       if (!exactKeys(seal.migration, ['legacy_latest_seal_digest', 'legacy_generation', 'legacy_writer_id', 'migrated_at', 'basis']) || !HEX.test(seal.migration?.legacy_latest_seal_digest || '') || !Number.isInteger(seal.migration?.legacy_generation) || seal.migration?.legacy_generation < 1 || !/^[A-Za-z0-9._-]+$/.test(seal.migration?.legacy_writer_id || '') || !iso(seal.migration?.migrated_at) || seal.migration?.basis !== 'CURRENT_ONLY_NO_RETROACTIVE_TRANSITION') fail(errors, 'invalid current migration evidence');
     } else if (seal.migration !== null) fail(errors, 'non-migration seal must not contain migration evidence');
-    if (seal.handoff_phase === 'CURRENT_ATTESTATION' && (seal.switch_status !== 'COMPLETED' || seal.transition !== null || seal.migration !== null)) fail(errors, 'current attestation must be completed without transition or migration evidence');
+    if (seal.handoff_phase === 'CURRENT_ATTESTATION' && (!['BLOCKED', 'COMPLETED'].includes(seal.switch_status) || seal.transition !== null || seal.migration !== null)) fail(errors, 'current attestation must be blocked or completed without transition or migration evidence');
   }
   for (const key of ['runtime_acceptance_status', 'professional_acceptance_status']) if (!['PASS', 'FAIL', 'NOT_RUN', 'UNKNOWN', 'NOT_APPLICABLE'].includes(seal[key])) fail(errors, `invalid ${key}`);
   if (!Array.isArray(seal.invalidation_conditions) || seal.invalidation_conditions.length === 0 || seal.invalidation_conditions.some(value => typeof value !== 'string')) fail(errors, 'invalidation_conditions must be a non-empty string array');
@@ -170,11 +197,14 @@ export function verifyChain(dir, options = {}) {
   const result = readChain(dir, options);
   const latest = result.records.at(-1) ?? null;
   if (!latest) result.errors.push('no immutable seal record');
-  const requiresLiveSources = options.verifyLatestSources !== false && latest && (latest.control_handoff_confidence === 'HIGH' || ['READY', 'READY_WITH_RESTRICTIONS', 'COMPLETED'].includes(latest.switch_status));
+  const requiresLiveSources = options.verifyLatestSources !== false && latest && latest.source_digest_status === 'PASS' && latest.sources;
   if (requiresLiveSources) verifySourceFiles(latest, options.sourceRoot).forEach(error => result.errors.push(error));
   if (latest && latest.switch_status === 'COMPLETED' && latest.control_handoff_confidence !== 'HIGH') result.errors.push('COMPLETED requires control_handoff_confidence HIGH');
   if (latest && latest.control_handoff_confidence === 'HIGH' && latest.remote.status === 'UNKNOWN') result.errors.push('HIGH control handoff cannot hide unknown remote baseline');
-  return { ...result, latest, latest_source_status: requiresLiveSources ? (result.errors.some(error => error.startsWith('source verification failed:')) ? 'FAIL' : 'PASS') : 'NOT_CHECKED', transition_status: result.pending_intents?.length ? 'PENDING' : 'SETTLED', status: result.errors.length ? 'BLOCKED' : 'PASS' };
+  const latestSourceStatus = requiresLiveSources ? (result.errors.some(error => error.startsWith('source verification failed:')) ? 'FAIL' : 'PASS') : 'NOT_CHECKED';
+  const controlStatus = result.errors.length || latest?.switch_status === 'BLOCKED' || latestSourceStatus !== 'PASS' ? 'BLOCKED' : 'READY';
+  const handoffReady = controlStatus === 'READY' && latest && ['READY', 'READY_WITH_RESTRICTIONS', 'COMPLETED'].includes(latest.switch_status);
+  return { ...result, latest, latest_source_status: latestSourceStatus, control_status: controlStatus, handoff_ready: Boolean(handoffReady), transition_status: result.pending_intents?.length ? 'PENDING' : 'SETTLED', status: result.errors.length ? 'BLOCKED' : 'PASS' };
 }
 
 function validateTransitionIntent(intent) {

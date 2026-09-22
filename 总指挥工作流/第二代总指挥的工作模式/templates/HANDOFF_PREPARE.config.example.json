@@ -6,5 +6,6 @@
   "final_output_path": "<EXTERNAL_OUTPUT_DIR>/sample-project-commander-handoff-20260921-final-1.md",
   "receipt_output_path": "<EXTERNAL_OUTPUT_DIR>/sample-project-commander-handoff-20260921-final-1.receipt.json",
   "rule_manifest_path": "<HANDOFF_WORK_DIR>/handoff-rule-manifest.json",
+  "project_key": "<PROJECT_KEY>",
   "expected_previous_digest": null
 }
