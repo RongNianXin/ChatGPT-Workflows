@@ -2,6 +2,11 @@
 
 本文件记录 ChatGPT Workflows 的重要变更。
 
+## 未发布：场景模型建议的目录显示优化
+
+- 已执行：将操作手册各场景标题后的模型建议改为标题下方的加粗正文，避免右侧目录重复显示推荐模型，同时保留场景内的可见提示。
+- English: Moved each scenario's model recommendation from the heading into a bold line below it, keeping the navigation outline clean while preserving visibility in the scenario body.
+
 ## 未发布：操作手册场景模型起步建议
 
 - 已执行：为 1A–1J、2–2F、3A–3D、4A–4J、5A–5D、6A–6B、Gen1–Gen2 增加模型与推理强度的起步建议。
