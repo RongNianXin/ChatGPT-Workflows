@@ -2,6 +2,28 @@
 
 本文件记录 ChatGPT Workflows 的重要变更。
 
+## 未发布：实战反馈触发工作流案例双轨反思
+
+- 已执行：将“外部 AI、专项任务或场景五配对反馈触发公共工作流案例反思”确立为总指挥工作流的全局规则，不把它做成 2E/2C 的业务入口或额外填写项。
+- 已执行：新增案例双轨要求，分别记录触发事实、提示词/分流/观测/授权/回执缺口、保留/删除/增加/改写建议、通用性证据、阻断和下一行动方；案例反馈不自动取得规则、代码、任务或远端写入授权。
+- 已执行：将该门禁写入 2E 操作者入口、02 核心规则、2C 链路诊断标准和 09 跨任务回执规则。当前改动仅为本地规则与履历更新，尚未 Commit 或远端发布。
+- English: Added a dual-track review requirement for Scenario 2E/2C feedback from specialist tasks, external AIs, or Scenario 5 pairings: close the current project issue and assess whether the real-world case exposes a reusable workflow defect. The case track records evidence, prompt/routing/observation/authorization/receipt gaps, keep/delete/add/rewrite proposals, generality evidence, blockers and owners. Case feedback grants no rule, code, task or remote-write authority. Local documentation only; not committed or published.
+
+## 未发布：人工反馈分流与链路诊断成本确认
+
+- 已执行：2E 由 AI 核对根因证据，完整 2C 启动前确认范围、成本与阶段停止点；明确未知反馈、累计尝试、额度中断和恢复边界，并纠正运行展示入口的旧编号。
+- 已执行：补充偶发故障证据和按风险选择回归覆盖；文档改动不证明实际算法已修复，也不保证平台额度可观测或精确截断。本批为本地未提交修改，验证与独立审查结果见本轮交付。
+- English: Added evidence-based routing from manual feedback to pipeline diagnosis, with scope, cost and stage confirmation before full diagnosis. Clarified unknown feedback, cumulative attempts, interruption recovery, intermittent failures and risk-based regression coverage, and corrected the run-preview scene reference. These local, uncommitted documentation changes do not establish algorithm correctness or guarantee quota visibility or exact enforcement; validation and independent review results are reported with this delivery.
+
+## 未发布：公共 worktree 规则边界补充
+
+- 已执行：明确 worktree 数量只能触发盘点，不能单独触发删除、归档、迁移或合并；活跃 worktree 数量仅作为可调整软目标。
+- 已执行：明确默认复用已登记主工作区或短期分支，创建新 worktree 必须有并行、隔离、未提交成果保护、并排运行/比较、长时间运行或操作者指定理由。
+- 已执行：将 Git 对象库垃圾对象、缺失索引/包文件警告与 worktree 生命周期分为独立事项，要求分别取证、制卡和授权。
+- English: Clarified that worktree counts trigger inventory only; they do not by themselves authorize deletion, archival, migration, or merging. Any active-worktree target is a tunable soft goal.
+- English: The default is to reuse the registered main workspace or a short-lived branch. A new worktree needs an explicit reason such as parallel work, isolation, protecting uncommitted results, side-by-side comparison, long-running execution, or user instruction.
+- English: Git object-database issues such as garbage objects or missing index/pack files are separate from worktree lifecycle and require separate evidence, work items, and authorization.
+
 ## 未发布：场景五审阅回执闭环
 
 - 已执行：明确标注“场景五”“场景 5A”或等价执行者—独立审查者请求时，接收窗口必须按场景五逐项审阅并发送正式回执；后续确认、质疑和补充证据继续归入同一事件轮次，直到明确收口或记录真实阻断，不能把工具完成标记或一次初始回执当作闭环。
