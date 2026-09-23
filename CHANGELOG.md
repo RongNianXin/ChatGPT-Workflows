@@ -9,6 +9,13 @@
 - 已执行：将该门禁写入 2E 操作者入口、02 核心规则、2C 链路诊断标准和 09 跨任务回执规则。当前改动仅为本地规则与履历更新，尚未 Commit 或远端发布。
 - English: Added a dual-track review requirement for Scenario 2E/2C feedback from specialist tasks, external AIs, or Scenario 5 pairings: close the current project issue and assess whether the real-world case exposes a reusable workflow defect. The case track records evidence, prompt/routing/observation/authorization/receipt gaps, keep/delete/add/rewrite proposals, generality evidence, blockers and owners. Case feedback grants no rule, code, task or remote-write authority. Local documentation only; not committed or published.
 
+## 未发布：GitStateCompass 迁移后的项目边界
+
+- 已执行：确认 GitStateCompass 已迁移到本仓库之外的独立项目；本仓库旧路径仅保留 README 指针和本地项目根标记，不再承载其代码、测试、夹具、网页原型或项目记录。
+- 已执行：更新总指挥工作流边界规则：ChatGPT Workflows 继续只使用 `legacy-origin`；`origin`、旧指针路径及独立项目内容不得进入本项目的暂存、Commit、Push、PR 或合并。新独立项目的 Git 初始化、远端绑定和发布另行核对授权。
+- English: Recorded that GitStateCompass has moved to an independent project outside this repository. The old path now keeps only a README pointer and a local project-root marker; it no longer carries the product code, tests, fixtures, web prototype, or project records.
+- English: Updated the commander workflow boundary: ChatGPT Workflows continues to use only `legacy-origin`; `origin`, the old pointer path, and the independent project contents must not enter this repository's staging, commits, pushes, pull requests, or merges. Git initialization, remote binding, and publishing for the independent project require separate checks and authorization.
+
 ## 未发布：人工反馈分流与链路诊断成本确认
 
 - 已执行：2E 由 AI 核对根因证据，完整 2C 启动前确认范围、成本与阶段停止点；明确未知反馈、累计尝试、额度中断和恢复边界，并纠正运行展示入口的旧编号。
