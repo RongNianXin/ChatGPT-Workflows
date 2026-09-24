@@ -73,9 +73,8 @@ function verifyProjectBinding(sourceRoot, statusIndexPath, draft, projectKey) {
     throw new Error(`status_index current block does not bind the handoff to remote target: ${remoteRef}`);
   }
   if (!draft.workspace?.head || !block.includes(draft.workspace.head)) throw new Error('status_index current block does not contain the sealed workspace HEAD');
-  const topLevel = spawnSync('git', ['-C', sourceRoot, 'rev-parse', '--show-toplevel'], { encoding: 'utf8' });
-  const canonicalPath = value => path.normalize(fs.realpathSync(value)).replace(/[\\/]+$/, '').toLowerCase();
-  if (topLevel.status !== 0 || canonicalPath(topLevel.stdout.trim()) !== canonicalPath(sourceRoot)) throw new Error('source_root is not the Git repository root used by the handoff');
+  const rootPrefix = spawnSync('git', ['-C', sourceRoot, 'rev-parse', '--show-prefix'], { encoding: 'utf8' });
+  if (rootPrefix.status !== 0 || rootPrefix.stdout.trim() !== '') throw new Error('source_root is not the Git repository root used by the handoff');
 }
 
 function verifyRuleManifestBinding(statusIndexPath, manifestDigest) {
