@@ -2,6 +2,13 @@
 
 本文件记录 ChatGPT Workflows 的重要变更。
 
+## 未发布：修复 GitStateCompass 英文 README 配对门禁
+
+- 已执行：为已迁移的 `实用小工具/GitStateCompass/README.md` 增加对应的 `README.en.md`，保留项目位置指针语义并加入中英文互链，修复远端仓库质量检查对公开目录 README 成对存在的要求。
+- 已执行：同步修正规则刷新 manifest 中 `00-第二代工作流总览.md` 的实际 SHA-256；这是 README 门禁修复后继续暴露的远端基线漂移，否则 GitHub Actions 仍会在下一项检查失败。
+- 已验证：修复只涉及该目录的英文说明和本变更记录；未修改 GitStateCompass 独立仓库、产品代码或远端对象。待本地提交并推送后由 GitHub Actions 重新运行远端检查。
+- English: Added the required paired `README.en.md` for the migrated `实用小工具/GitStateCompass/README.md`, preserving its project-location-pointer meaning and adding a language link. Also synchronized the rule-refresh manifest digest for `00-第二代工作流总览.md`, which was the next remote baseline drift exposed after the README gate. No independent Git State Compass repository, product code, or remote object was changed; GitHub Actions can rerun after the local change is committed and pushed.
+
 ## 未发布：长期人工规则刷新兜底
 
 - 已执行：操作手册登记一段固定的手动刷新提示词。只要规则路径保持不变且可访问，它可以跨后续工作流版本、总指挥世代以及已接入项目的窗口复用，不要求操作者填写版本、manifest 或接收者身份。
