@@ -41,7 +41,7 @@ function makeDraft(eventId) {
     sources: {
       central_work_items: writeCurrent('状态/中央 工作项.md', 'central'),
       current_view: writeCurrent('状态/当前视图-e\u0301.md', 'view'),
-      status_index: writeCurrent(LONG_STATUS_PATH, `项目键：synthetic\n远端目标：refs/heads/main\nHEAD=${'b'.repeat(40)}`)
+      status_index: writeCurrent(LONG_STATUS_PATH, `项目键：synthetic\n远端目标：refs/heads/main\nHEAD=${'b'.repeat(40)}\n规则清单摘要：${'0'.repeat(64)}`)
     },
     source_digest_status: 'PASS',
     objective: { summary: 'synthetic formal handoff', breakpoint: 'candidate verification' },
@@ -74,7 +74,15 @@ function prepareCase(number, eventId) {
   const configPath = path.join(caseRoot, 'config.json');
   const finalPath = path.join(outputRoot, `sample-project-commander-handoff-20260921-final-${number}.md`);
   const receiptPath = path.join(outputRoot, `receipt-${number}.json`);
-  writeJson(draftPath, makeDraft(eventId));
+  const draft = makeDraft(eventId);
+  const statusPath = path.resolve(sourceRoot, draft.sources.status_index.path_ref);
+  const manifestDigest = sha256(fs.readFileSync(path.join(temp, 'rule-manifest.json')));
+  const statusBody = fs.readFileSync(statusPath, 'utf8');
+  const updatedStatusBody = statusBody.replaceAll(`规则清单摘要：${'0'.repeat(64)}`, `规则清单摘要：${manifestDigest}`);
+  assert.notEqual(updatedStatusBody, statusBody, 'synthetic status fixture must include a zeroed rule manifest marker');
+  fs.writeFileSync(statusPath, updatedStatusBody, 'utf8');
+  draft.sources.status_index.digest = sha256(fs.readFileSync(statusPath));
+  writeJson(draftPath, draft);
   writeJson(configPath, {
     seal_directory: path.join(sourceRoot, '.handoff-private', `case-${number}`),
     source_root: sourceRoot,
@@ -112,6 +120,19 @@ try {
     assert.ok(LONG_STATUS_PATH.length > 150);
     assert.equal(sha256(fs.readFileSync(first.finalPath)), firstResult.receipt.snapshot_sha256);
     assert.doesNotMatch(fs.readFileSync(first.finalPath, 'utf8'), /{{[A-Z_]+}}/);
+  });
+
+  const preflight = prepareCase(2, 'preflight-event-2');
+  const preflightConfig = readJsonForTest(preflight.configPath);
+  preflightConfig.preflight_only = true;
+  writeJson(preflight.configPath, preflightConfig);
+  const preflightResult = prepareFormalHandoff(preflight.configPath);
+  check('preflight validates sources without creating a seal or formal artifact', () => {
+    assert.equal(preflightResult.status, 'READY');
+    assert.equal(preflightResult.mode, 'PREFLIGHT_ONLY');
+    assert.equal(preflightResult.workspace_protection.required_untracked_is_inventory, false);
+    assert.equal(fs.existsSync(preflight.finalPath), false);
+    assert.equal(fs.existsSync(path.join(sourceRoot, '.handoff-private', 'case-2')), false);
   });
 
   const badTemplate = prepareCase(11, 'formal-event-11');
@@ -182,6 +203,19 @@ try {
     assert.throws(() => prepareFormalHandoff(staleBinding.configPath), /project key|remote target|workspace HEAD/);
     assert.equal(fs.existsSync(staleBinding.finalPath), false);
     assert.equal(fs.existsSync(staleBinding.receiptPath), false);
+  });
+
+  const staleManifest = prepareCase(13, 'formal-event-13');
+  const staleManifestDraft = readJsonForTest(path.join(path.dirname(staleManifest.configPath), 'draft.json'));
+  const staleManifestIndex = path.join(sourceRoot, staleManifestDraft.sources.status_index.path_ref);
+  const staleManifestBody = fs.readFileSync(staleManifestIndex, 'utf8').replace(/(CURRENT:BEGIN -->[\s\S]*?规则清单摘要：)[0-9a-f]{64}/i, `$1${'0'.repeat(64)}`);
+  fs.writeFileSync(staleManifestIndex, staleManifestBody, 'utf8');
+  staleManifestDraft.sources.status_index.digest = sha256(fs.readFileSync(staleManifestIndex));
+  writeJson(path.join(path.dirname(staleManifest.configPath), 'draft.json'), staleManifestDraft);
+  check('stale rule manifest binding blocks formal output', () => {
+    assert.throws(() => prepareFormalHandoff(staleManifest.configPath), /rule manifest digest mismatch/);
+    assert.equal(fs.existsSync(staleManifest.finalPath), false);
+    assert.equal(fs.existsSync(staleManifest.receiptPath), false);
   });
 
   const duplicateBinding = prepareCase(7, 'formal-event-7');

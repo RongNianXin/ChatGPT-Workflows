@@ -9,6 +9,7 @@ import { appendSeal, sealDigest, validateControlPlaneRegistry, verifyChain } fro
 export const REQUIRED_RULES = [
   '.github/scripts/HandoffSeal.mjs',
   '.github/scripts/Prepare-Handoff.mjs',
+  '.github/scripts/Mark-Handoff-Delivered.mjs',
   '总指挥工作流/第二代总指挥的工作模式/templates/HANDOFF_STATE.schema.json',
   '总指挥工作流/第二代总指挥的工作模式/02-总指挥核心规则.md',
   '总指挥工作流/第二代总指挥的工作模式/04-状态、目标变更与交接规范.md',
@@ -17,7 +18,7 @@ export const REQUIRED_RULES = [
   '总指挥工作流/第二代总指挥的工作模式/10-自动状态索引规范.md',
   '总指挥工作流/第二代总指挥的工作模式/总指挥轻量交接启动配置.md'
 ];
-const CONFIG_KEYS = new Set(['seal_directory', 'source_root', 'draft_path', 'snapshot_template_path', 'final_output_path', 'receipt_output_path', 'rule_manifest_path', 'expected_previous_digest', 'transition_ticket', 'project_key']);
+const CONFIG_KEYS = new Set(['seal_directory', 'source_root', 'external_control_plane_root', 'draft_path', 'snapshot_template_path', 'final_output_path', 'receipt_output_path', 'rule_manifest_path', 'expected_previous_digest', 'transition_ticket', 'project_key', 'preflight_only']);
 const sha256 = value => crypto.createHash('sha256').update(value).digest('hex');
 const resolveFrom = (base, value) => path.resolve(base, value);
 const isInside = (root, candidate) => {
@@ -74,6 +75,13 @@ function verifyProjectBinding(sourceRoot, statusIndexPath, draft, projectKey) {
   if (!draft.workspace?.head || !block.includes(draft.workspace.head)) throw new Error('status_index current block does not contain the sealed workspace HEAD');
   const topLevel = spawnSync('git', ['-C', sourceRoot, 'rev-parse', '--show-toplevel'], { encoding: 'utf8' });
   if (topLevel.status !== 0 || fs.realpathSync(topLevel.stdout.trim()) !== fs.realpathSync(sourceRoot)) throw new Error('source_root is not the Git repository root used by the handoff');
+}
+
+function verifyRuleManifestBinding(statusIndexPath, manifestDigest) {
+  const block = currentBlock(statusIndexPath, 'status_index');
+  const match = block.match(/规则清单摘要：([0-9a-f]{64})/i);
+  if (!match) throw new Error('status_index current block is missing 规则清单摘要');
+  if (match[1].toLowerCase() !== manifestDigest.toLowerCase()) throw new Error(`status_index rule manifest digest mismatch: expected ${manifestDigest}, found ${match[1]}`);
 }
 
 function findActiveControlPlaneIndexes(sourceRoot, canonicalStatusIndex, registry = null) {
@@ -133,6 +141,21 @@ function unicodeInventory(sourceRoot, refs) {
   return { mode: 'GIT_NUL', count: paths.size };
 }
 
+function sourceRootFor(source, sourceRoot, externalControlPlaneRoot) {
+  if (source?.root_ref === 'external_control_plane') {
+    if (!externalControlPlaneRoot) throw new Error('external control-plane source requires external_control_plane_root');
+    return externalControlPlaneRoot;
+  }
+  return sourceRoot;
+}
+
+function resolveSource(source, sourceRoot, externalControlPlaneRoot, label) {
+  const root = sourceRootFor(source, sourceRoot, externalControlPlaneRoot);
+  const resolved = fs.realpathSync(path.resolve(root, source.path_ref));
+  if (!isInside(root, resolved)) throw new Error(`${label} escapes its declared source root`);
+  return resolved;
+}
+
 function atomicWriteExclusive(finalPath, bytes) {
   fs.mkdirSync(path.dirname(finalPath), { recursive: true });
   if (fs.existsSync(finalPath)) throw new Error(`refusing to overwrite existing output: ${finalPath}`);
@@ -150,11 +173,14 @@ export function prepareFormalHandoff(configPath) {
   if (!config || typeof config !== 'object' || Array.isArray(config)) throw new Error('configuration must be an object');
   for (const key of Object.keys(config)) if (!CONFIG_KEYS.has(key)) throw new Error(`unknown configuration field: ${key}`);
   for (const key of ['seal_directory', 'source_root', 'draft_path', 'snapshot_template_path', 'final_output_path', 'receipt_output_path', 'rule_manifest_path', 'project_key']) if (typeof config[key] !== 'string' || !config[key]) throw new Error(`missing configuration field: ${key}`);
+  if (config.preflight_only !== undefined && typeof config.preflight_only !== 'boolean') throw new Error('preflight_only must be boolean');
+  const preflightOnly = config.preflight_only === true;
 
   const scriptDir = path.dirname(fileURLToPath(import.meta.url));
   const workflowRoot = fs.realpathSync(path.resolve(scriptDir, '..', '..'));
   const sealDirectory = resolveFrom(configDir, config.seal_directory);
   const sourceRoot = fs.realpathSync(resolveFrom(configDir, config.source_root));
+  const externalControlPlaneRoot = config.external_control_plane_root ? fs.realpathSync(resolveFrom(configDir, config.external_control_plane_root)) : null;
   const draftPath = resolveFrom(configDir, config.draft_path);
   const templatePath = resolveFrom(configDir, config.snapshot_template_path);
   const finalPath = resolveFrom(configDir, config.final_output_path);
@@ -164,13 +190,13 @@ export function prepareFormalHandoff(configPath) {
   if (finalPath === receiptPath) throw new Error('formal output and receipt must use different paths');
   const physicalFinalPath = physicalTarget(finalPath);
   const physicalReceiptPath = physicalTarget(receiptPath);
-  if (isInside(workflowRoot, physicalFinalPath) || isInside(workflowRoot, physicalReceiptPath) || isInside(sourceRoot, physicalFinalPath) || isInside(sourceRoot, physicalReceiptPath)) throw new Error('formal output and receipt must be stored outside the workflow and source repositories');
+  if (isInside(workflowRoot, physicalFinalPath) || isInside(workflowRoot, physicalReceiptPath) || isInside(sourceRoot, physicalFinalPath) || isInside(sourceRoot, physicalReceiptPath) || (externalControlPlaneRoot && (isInside(externalControlPlaneRoot, physicalFinalPath) || isInside(externalControlPlaneRoot, physicalReceiptPath)))) throw new Error('formal output and receipt must be stored outside the workflow, source, and external control-plane repositories');
   if (fs.existsSync(finalPath) || fs.existsSync(receiptPath)) throw new Error('formal output or receipt already exists');
 
   const physicalSealDirectory = physicalTarget(sealDirectory);
   if (!isInside(sourceRoot, physicalSealDirectory)) throw new Error('seal directory must stay inside the source repository');
-  fs.mkdirSync(sealDirectory, { recursive: true });
-  const realSealDirectory = fs.realpathSync(sealDirectory);
+  if (!preflightOnly) fs.mkdirSync(sealDirectory, { recursive: true });
+  const realSealDirectory = preflightOnly ? physicalSealDirectory : fs.realpathSync(sealDirectory);
   if (!isInside(sourceRoot, realSealDirectory)) throw new Error('seal directory must stay inside the source repository');
   const sealRelative = path.relative(sourceRoot, realSealDirectory).replaceAll('\\', '/');
   const ignored = spawnSync('git', ['-C', sourceRoot, 'check-ignore', '-q', '--', sealRelative]);
@@ -179,25 +205,32 @@ export function prepareFormalHandoff(configPath) {
   const ruleManifestDigest = sha256(fs.readFileSync(manifestPath));
   verifyRuleManifest(workflowRoot, manifestPath);
   const draft = readJson(draftPath);
-  if (draft.schema_version !== 3 || draft.handoff_phase !== 'MATERIAL_PREPARED' || !['READY', 'READY_WITH_RESTRICTIONS'].includes(draft.switch_status)) throw new Error('formal handoff requires a schema v3 MATERIAL_PREPARED draft in READY or READY_WITH_RESTRICTIONS');
-  const sourceRefs = Object.values(draft.sources ?? {}).map(item => item.path_ref);
-  const inventory = unicodeInventory(sourceRoot, [...sourceRefs, ...(draft.workspace?.required_untracked ?? []).map(item => item.path_ref)]);
+  const existingSealState = verifyChain(realSealDirectory, { sourceRoot, externalControlPlaneRoot, verifyLatestSources: false });
+  const hasLegacySealRecords = existingSealState.records.some(record => record.schema_version < 3);
+  if (draft.handoff_phase === 'CURRENT_MIGRATION' && hasLegacySealRecords) {
+    throw new Error('LEGACY_MIGRATION_REQUIRES_EMPTY_V3_DIRECTORY: keep the v1/v2 seal directory read-only and configure a separate empty directory for the first v3 migration seal');
+  }
+  const allowedPreflightPhase = preflightOnly && draft.handoff_phase === 'CURRENT_MIGRATION';
+  if (draft.schema_version !== 3 || (!allowedPreflightPhase && draft.handoff_phase !== 'MATERIAL_PREPARED') || (!allowedPreflightPhase && !['READY', 'READY_WITH_RESTRICTIONS'].includes(draft.switch_status))) throw new Error('formal handoff requires a schema v3 MATERIAL_PREPARED draft in READY or READY_WITH_RESTRICTIONS');
+  const sourceRefs = Object.values(draft.sources ?? {}).filter(item => item.root_ref !== 'external_control_plane').map(item => item.path_ref);
+  // required_untracked is a protection summary, not a formal source inventory.
+  const inventory = unicodeInventory(sourceRoot, sourceRefs);
   for (const name of ['central_work_items', 'current_view', 'status_index']) {
-    const ref = draft.sources?.[name]?.path_ref;
-    if (!ref) throw new Error(`missing canonical source: ${name}`);
-    const sourcePath = fs.realpathSync(path.resolve(sourceRoot, ref));
-    if (!isInside(sourceRoot, sourcePath)) throw new Error(`canonical source escapes source root: ${name}`);
+    const source = draft.sources?.[name];
+    if (!source) throw new Error(`missing canonical source: ${name}`);
+    const sourcePath = resolveSource(source, sourceRoot, externalControlPlaneRoot, name);
     verifyCurrentDocument(sourcePath, name);
   }
-  const canonicalStatusIndex = fs.realpathSync(path.resolve(sourceRoot, draft.sources.status_index.path_ref));
+  const canonicalStatusIndex = resolveSource(draft.sources.status_index, sourceRoot, externalControlPlaneRoot, 'status_index');
   verifyProjectBinding(sourceRoot, canonicalStatusIndex, draft, config.project_key);
+  verifyRuleManifestBinding(canonicalStatusIndex, ruleManifestDigest);
   let registry = null;
   const registryRef = draft.sources?.control_plane_registry?.path_ref;
   if (registryRef) {
-    const registryPath = fs.realpathSync(path.resolve(sourceRoot, registryRef));
-    if (!isInside(sourceRoot, registryPath)) throw new Error('control-plane registry escapes source root');
+    const registryPath = resolveSource(draft.sources.control_plane_registry, sourceRoot, externalControlPlaneRoot, 'control_plane_registry');
     registry = readJson(registryPath);
-    const registryErrors = validateControlPlaneRegistry(registry, sourceRoot, draft.sources.status_index.path_ref);
+    const statusRoot = sourceRootFor(draft.sources.status_index, sourceRoot, externalControlPlaneRoot);
+    const registryErrors = validateControlPlaneRegistry(registry, statusRoot, draft.sources.status_index.path_ref);
     if (registryErrors.length) throw new Error(`control-plane registry invalid: ${registryErrors.join('; ')}`);
   }
   const duplicateIndexes = findActiveControlPlaneIndexes(sourceRoot, canonicalStatusIndex, registry);
@@ -210,10 +243,34 @@ export function prepareFormalHandoff(configPath) {
   const templateTokens = ['{{SNAPSHOT_ID}}', '{{SEAL_DIGEST}}', '{{FACT_CUTOFF}}', '{{EVENT_ID}}'];
   for (const token of templateTokens) if (!rendered.includes(token)) throw new Error(`snapshot template is missing placeholder: ${token}`);
 
+  const sourceDigestErrors = [];
+  for (const [name, source] of Object.entries(draft.sources ?? {})) {
+    const sourcePath = resolveSource(source, sourceRoot, externalControlPlaneRoot, name);
+    if (sha256(fs.readFileSync(sourcePath)) !== source.digest) sourceDigestErrors.push(`${name}: source digest mismatch`);
+    if (source.fact_cutoff !== draft.fact_cutoff) sourceDigestErrors.push(`${name}: source fact_cutoff mismatch`);
+  }
+  if (sourceDigestErrors.length) throw new Error(`preflight source verification failed: ${sourceDigestErrors.join('; ')}`);
+  if (preflightOnly) return {
+    status: 'READY',
+    mode: 'PREFLIGHT_ONLY',
+    project_key: config.project_key,
+    source_root: sourceRoot,
+    external_control_plane_root: externalControlPlaneRoot,
+    source_count: Object.keys(draft.sources ?? {}).length,
+    workspace_protection: {
+      staged_count: draft.workspace?.staged_count ?? null,
+      tracked_modified_count: draft.workspace?.tracked_modified_count ?? null,
+      untracked_count: draft.workspace?.untracked_count ?? null,
+      required_untracked_count: draft.workspace?.required_untracked?.length ?? 0,
+      required_untracked_is_inventory: false
+    },
+    legacy_migration: draft.handoff_phase === 'CURRENT_MIGRATION' ? 'BOUND_TO_LEGACY_SUMMARY' : 'NONE'
+  };
+
   // If a previous attempt appended the immutable seal but failed while writing
   // the external artifact, reuse that exact seal. This makes preparation
   // retryable without advancing the chain or inventing a second event.
-  const preAppend = verifyChain(realSealDirectory, { sourceRoot, verifyLatestSources: false });
+  const preAppend = verifyChain(realSealDirectory, { sourceRoot, externalControlPlaneRoot, verifyLatestSources: false });
   let seal;
   const reusable = preAppend.latest && preAppend.latest.event_id === draft.event_id
     && preAppend.latest.generation === draft.generation
@@ -229,10 +286,11 @@ export function prepareFormalHandoff(configPath) {
     seal = appendSeal(realSealDirectory, draft, {
       expectedPreviousDigest: config.expected_previous_digest,
       sourceRoot,
+      externalControlPlaneRoot,
       transitionTicket: config.transition_ticket ? resolveFrom(configDir, config.transition_ticket) : undefined
     });
   }
-  const verified = verifyChain(realSealDirectory, { sourceRoot });
+  const verified = verifyChain(realSealDirectory, { sourceRoot, externalControlPlaneRoot });
   if (verified.status !== 'PASS' || !verified.handoff_ready || verified.latest?.seal_digest !== seal.seal_digest || verified.latest_source_status !== 'PASS') throw new Error(`new seal did not pass live verification: ${verified.errors.join('; ')}`);
 
   const replacements = {
@@ -253,7 +311,7 @@ export function prepareFormalHandoff(configPath) {
   try {
     if (sha256(fs.readFileSync(manifestPath)) !== ruleManifestDigest) throw new Error('rule manifest drifted while preparing the attachment');
     verifyRuleManifest(workflowRoot, manifestPath);
-    const finalVerification = verifyChain(realSealDirectory, { sourceRoot });
+    const finalVerification = verifyChain(realSealDirectory, { sourceRoot, externalControlPlaneRoot });
     if (finalVerification.status !== 'PASS' || !finalVerification.handoff_ready || finalVerification.latest?.seal_digest !== seal.seal_digest || finalVerification.latest_source_status !== 'PASS') throw new Error(`facts drifted while rendering the attachment: ${finalVerification.errors.join('; ')}`);
     const receipt = {
       schema_version: 1,

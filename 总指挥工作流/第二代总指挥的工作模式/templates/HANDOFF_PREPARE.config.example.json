@@ -1,11 +1,13 @@
 {
   "seal_directory": "<PROJECT_ROOT>/.private/handoff-seals",
   "source_root": "<PROJECT_ROOT>",
+  "external_control_plane_root": null,
   "draft_path": "<HANDOFF_WORK_DIR>/handoff-draft-v3.json",
   "snapshot_template_path": "<HANDOFF_WORK_DIR>/handoff-snapshot-template.md",
   "final_output_path": "<EXTERNAL_OUTPUT_DIR>/sample-project-commander-handoff-20260921-final-1.md",
   "receipt_output_path": "<EXTERNAL_OUTPUT_DIR>/sample-project-commander-handoff-20260921-final-1.receipt.json",
   "rule_manifest_path": "<HANDOFF_WORK_DIR>/handoff-rule-manifest.json",
   "project_key": "<PROJECT_KEY>",
-  "expected_previous_digest": null
+  "expected_previous_digest": null,
+  "preflight_only": false
 }

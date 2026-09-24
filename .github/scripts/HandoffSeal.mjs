@@ -20,19 +20,26 @@ export const sealDigest = seal => digest(canonicalJson(Object.fromEntries(Object
 export const transitionDigest = intent => digest(canonicalJson(Object.fromEntries(Object.entries(intent).filter(([key]) => key !== 'transition_digest'))));
 
 const fail = (errors, message) => errors.push(message);
-function verifySourceFiles(seal, sourceRoot) {
+function verifySourceFiles(seal, sourceRoot, externalControlPlaneRoot) {
   if (!sourceRoot) return ['HIGH control handoff requires sourceRoot verification'];
-  let root;
-  try { root = fs.realpathSync(path.resolve(sourceRoot)); } catch (error) { return [`source root verification failed: ${error.message}`]; }
+  let internalRoot;
+  try { internalRoot = fs.realpathSync(path.resolve(sourceRoot)); } catch (error) { return [`source root verification failed: ${error.message}`]; }
+  let externalRoot = null;
+  if (externalControlPlaneRoot) {
+    try { externalRoot = fs.realpathSync(path.resolve(externalControlPlaneRoot)); } catch (error) { return [`external control-plane root verification failed: ${error.message}`]; }
+  }
   const errors = [];
   for (const [name, source] of Object.entries(seal.sources ?? {})) {
     try {
+      const root = source.root_ref === 'external_control_plane' ? externalRoot : internalRoot;
+      if (!root) throw new Error(`missing root for ${source.root_ref === 'external_control_plane' ? 'external_control_plane' : 'source_root'}`);
       const resolved = fs.realpathSync(path.resolve(root, source.path_ref));
       if (resolved !== root && !resolved.startsWith(`${root}${path.sep}`)) throw new Error('source path escapes root');
       if (digest(fs.readFileSync(resolved)) !== source.digest) throw new Error('source digest mismatch');
       if (name === 'control_plane_registry') {
         const registry = JSON.parse(fs.readFileSync(resolved, 'utf8'));
-        const registryErrors = validateControlPlaneRegistry(registry, root, seal.sources?.status_index?.path_ref);
+        const statusSource = seal.sources?.status_index;
+        const registryErrors = validateControlPlaneRegistry(registry, statusSource?.root_ref === 'external_control_plane' ? externalRoot : internalRoot, statusSource?.path_ref);
         if (registryErrors.length) throw new Error(registryErrors.join('; '));
       }
     } catch (error) { errors.push(`source verification failed: ${name}: ${error.message}`); }
@@ -77,8 +84,11 @@ export function validateSeal(seal, { checkDigest = true } = {}) {
   if (!/^[A-Za-z0-9._:-]+$/.test(seal.event_id || '')) fail(errors, 'event_id is not a portable logical id');
   if (!seal.sources || typeof seal.sources !== 'object' || Array.isArray(seal.sources) || !Object.keys(seal.sources).length) fail(errors, 'sources must be non-empty');
   else for (const [name, source] of Object.entries(seal.sources)) {
-    if (!exactKeys(source, ['owner', 'path_ref', 'digest', 'fact_cutoff']) || typeof source.owner !== 'string' || !source.owner || !relativeRef(source.path_ref) || !HEX.test(source.digest || '') || !iso(source.fact_cutoff)) fail(errors, `invalid source: ${name}`);
+    const sourceKeys = seal.schema_version >= 3 ? ['owner', 'path_ref', 'digest', 'fact_cutoff', 'root_ref'] : ['owner', 'path_ref', 'digest', 'fact_cutoff'];
+    if (!exactKeys(source, sourceKeys) || typeof source.owner !== 'string' || !source.owner || !relativeRef(source.path_ref) || !HEX.test(source.digest || '') || !iso(source.fact_cutoff)) fail(errors, `invalid source: ${name}`);
     if (!relativeRef(source.path_ref)) fail(errors, `unsafe source path: ${name}`);
+    if (seal.schema_version >= 3 && source.root_ref !== undefined && !['source_root', 'external_control_plane'].includes(source.root_ref)) fail(errors, `invalid source root_ref: ${name}`);
+    if (seal.schema_version >= 3 && source.root_ref === 'external_control_plane' && name !== 'control_plane_registry' && !['central_work_items', 'current_view', 'status_index'].includes(name)) fail(errors, `external root is only allowed for control-plane sources: ${name}`);
     if (source.fact_cutoff !== seal.fact_cutoff) fail(errors, `source fact_cutoff mismatch: ${name}`);
   }
   if (!['PASS', 'UNKNOWN', 'FAIL'].includes(seal.source_digest_status)) fail(errors, 'invalid source_digest_status');
@@ -198,7 +208,7 @@ export function verifyChain(dir, options = {}) {
   const latest = result.records.at(-1) ?? null;
   if (!latest) result.errors.push('no immutable seal record');
   const requiresLiveSources = options.verifyLatestSources !== false && latest && latest.source_digest_status === 'PASS' && latest.sources;
-  if (requiresLiveSources) verifySourceFiles(latest, options.sourceRoot).forEach(error => result.errors.push(error));
+  if (requiresLiveSources) verifySourceFiles(latest, options.sourceRoot, options.externalControlPlaneRoot).forEach(error => result.errors.push(error));
   if (latest && latest.switch_status === 'COMPLETED' && latest.control_handoff_confidence !== 'HIGH') result.errors.push('COMPLETED requires control_handoff_confidence HIGH');
   if (latest && latest.control_handoff_confidence === 'HIGH' && latest.remote.status === 'UNKNOWN') result.errors.push('HIGH control handoff cannot hide unknown remote baseline');
   const latestSourceStatus = requiresLiveSources ? (result.errors.some(error => error.startsWith('source verification failed:')) ? 'FAIL' : 'PASS') : 'NOT_CHECKED';
@@ -229,12 +239,12 @@ function readTransitionIntent(ticketPath) {
   return intent;
 }
 
-export function prepareTransition(dir, { sourceRoot, expectedPreviousDigest, nextGeneration, nextWriterId, eventId, preparedAt = new Date().toISOString() } = {}) {
+export function prepareTransition(dir, { sourceRoot, externalControlPlaneRoot, expectedPreviousDigest, nextGeneration, nextWriterId, eventId, preparedAt = new Date().toISOString() } = {}) {
   fs.mkdirSync(dir, { recursive: true });
   const lock = path.join(dir, '.handoff.lock');
   const fd = fs.openSync(lock, 'wx');
   try {
-    const current = verifyChain(dir, { ignoreOwnLock: true, sourceRoot });
+    const current = verifyChain(dir, { ignoreOwnLock: true, sourceRoot, externalControlPlaneRoot });
     if (current.status !== 'PASS') throw new Error(`current seal is not live-valid: ${current.errors.join('; ')}`);
     const previous = current.latest;
     if (expectedPreviousDigest !== undefined && expectedPreviousDigest !== previous.seal_digest) throw new Error('expected previous digest mismatch');
@@ -260,12 +270,12 @@ export function prepareTransition(dir, { sourceRoot, expectedPreviousDigest, nex
   } finally { fs.closeSync(fd); fs.unlinkSync(lock); }
 }
 
-export function appendSeal(dir, draft, { expectedPreviousDigest, sourceRoot, transitionTicket } = {}) {
+export function appendSeal(dir, draft, { expectedPreviousDigest, sourceRoot, externalControlPlaneRoot, transitionTicket } = {}) {
   fs.mkdirSync(dir, { recursive: true });
   const lock = path.join(dir, '.handoff.lock');
   const fd = fs.openSync(lock, 'wx');
   try {
-    const current = verifyChain(dir, { ignoreOwnLock: true, sourceRoot, verifyLatestSources: false });
+    const current = verifyChain(dir, { ignoreOwnLock: true, sourceRoot, externalControlPlaneRoot, verifyLatestSources: false });
     const emptyChainErrors = current.records.length === 0 && current.errors.every(error => error === 'no immutable seal record');
     if (current.errors.length && !emptyChainErrors) throw new Error(`existing chain invalid: ${current.errors.join('; ')}`);
     const previous = current.latest;
@@ -277,7 +287,7 @@ export function appendSeal(dir, draft, { expectedPreviousDigest, sourceRoot, tra
     if (previous && seal.generation < previous.generation) throw new Error('generation rollback');
     if (previous && seal.generation === previous.generation && seal.writer_id !== previous.writer_id) throw new Error('writer change without generation transition');
     if (previous && seal.generation > previous.generation && (seal.generation !== previous.generation + 1 || seal.writer_id === previous.writer_id || !['STOPPED_DISPATCH', 'ARCHIVED'].includes(seal.old_writer_status))) throw new Error('unsafe generation transition');
-    const previousSourceErrors = previous ? verifySourceFiles(previous, sourceRoot) : [];
+    const previousSourceErrors = previous ? verifySourceFiles(previous, sourceRoot, externalControlPlaneRoot) : [];
     let intent = null;
     if (transitionTicket) {
       const resolvedTicket = fs.realpathSync(path.resolve(transitionTicket));
@@ -305,7 +315,7 @@ export function appendSeal(dir, draft, { expectedPreviousDigest, sourceRoot, tra
     const errors = validateSeal(seal);
     if (errors.length) throw new Error(`draft invalid: ${errors.join('; ')}`);
     if (seal.control_handoff_confidence === 'HIGH' || ['READY', 'READY_WITH_RESTRICTIONS', 'COMPLETED'].includes(seal.switch_status)) {
-      const sourceErrors = verifySourceFiles(seal, sourceRoot);
+      const sourceErrors = verifySourceFiles(seal, sourceRoot, externalControlPlaneRoot);
       if (sourceErrors.length) throw new Error(sourceErrors.join('; '));
     }
     const finalName = `handoff-state.${seal.seal_sequence}.${seal.seal_digest}.json`;
@@ -321,8 +331,8 @@ export function appendSeal(dir, draft, { expectedPreviousDigest, sourceRoot, tra
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1])) {
   const [command, target, sourceRoot, ...rest] = process.argv.slice(2);
-  if (command === 'verify' && target) { const historicalOnly = rest.includes('--history-only'); const result = verifyChain(path.resolve(target), { sourceRoot, verifyLatestSources: !historicalOnly }); console.log(JSON.stringify(result, null, 2)); process.exitCode = result.status === 'PASS' ? 0 : 1; }
-  else if (command === 'prepare' && target && sourceRoot && rest.length === 3) { const [nextGeneration, nextWriterId, eventId] = rest; const result = prepareTransition(path.resolve(target), { sourceRoot, nextGeneration: Number(nextGeneration), nextWriterId, eventId }); console.log(JSON.stringify(result, null, 2)); }
-  else if (command === 'append' && target && sourceRoot && rest.length >= 1) { const [draftPath, transitionTicket] = rest; const draft = JSON.parse(fs.readFileSync(draftPath, 'utf8')); const result = appendSeal(path.resolve(target), draft, { sourceRoot, transitionTicket }); console.log(JSON.stringify(result, null, 2)); }
+  if (command === 'verify' && target) { const historicalOnly = rest.includes('--history-only'); const externalControlPlaneRoot = rest.find(value => value.startsWith('--external-control-plane-root='))?.slice('--external-control-plane-root='.length); const result = verifyChain(path.resolve(target), { sourceRoot, externalControlPlaneRoot, verifyLatestSources: !historicalOnly }); console.log(JSON.stringify(result, null, 2)); process.exitCode = result.status === 'PASS' ? 0 : 1; }
+  else if (command === 'prepare' && target && sourceRoot && rest.length >= 3) { const [nextGeneration, nextWriterId, eventId] = rest; const externalControlPlaneRoot = rest.find(value => value.startsWith('--external-control-plane-root='))?.slice('--external-control-plane-root='.length); const result = prepareTransition(path.resolve(target), { sourceRoot, externalControlPlaneRoot, nextGeneration: Number(nextGeneration), nextWriterId, eventId }); console.log(JSON.stringify(result, null, 2)); }
+  else if (command === 'append' && target && sourceRoot && rest.length >= 1) { const [draftPath, transitionTicket] = rest; const externalControlPlaneRoot = rest.find(value => value.startsWith('--external-control-plane-root='))?.slice('--external-control-plane-root='.length); const draft = JSON.parse(fs.readFileSync(draftPath, 'utf8')); const result = appendSeal(path.resolve(target), draft, { sourceRoot, externalControlPlaneRoot, transitionTicket }); console.log(JSON.stringify(result, null, 2)); }
   else { console.error('usage: node HandoffSeal.mjs verify <seal-directory> [source-root] [--history-only] | prepare <seal-directory> <source-root> <next-generation> <next-writer-id> <event-id> | append <seal-directory> <source-root> <draft-json> [transition-ticket]'); process.exitCode = 2; }
 }

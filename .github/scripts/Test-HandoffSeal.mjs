@@ -33,6 +33,8 @@ try {
 });
 const stamp = '2026-09-18T00:00:00.000Z';
 const source = (owner, revision = 'base') => { const relative = `state/${owner}.json`; const content = Buffer.from(`synthetic-${owner}-${revision}`); const absolute = path.join(sourceRoot, relative); fs.mkdirSync(path.dirname(absolute), { recursive: true }); fs.writeFileSync(absolute, content); return { owner, path_ref: relative, digest: crypto.createHash('sha256').update(content).digest('hex'), fact_cutoff: stamp }; };
+const externalRoot = path.join(temp, 'external-control-plane'); fs.mkdirSync(externalRoot, { recursive: true });
+const externalSource = (owner, revision = 'base') => { const relative = `control/${owner}.md`; const content = Buffer.from(`external-${owner}-${revision}`); const absolute = path.join(externalRoot, relative); fs.mkdirSync(path.dirname(absolute), { recursive: true }); fs.writeFileSync(absolute, content); return { owner, path_ref: relative, root_ref: 'external_control_plane', digest: crypto.createHash('sha256').update(content).digest('hex'), fact_cutoff: stamp }; };
 let draftEventSequence = 0;
 const draft = (generation = 1, writer_id = 'COMMANDER-GEN-1', revision = 'base') => ({
   schema_version: 3, record_type: 'handoff-seal', generation, writer_id, old_writer_status: 'STOPPED_DISPATCH',
@@ -56,6 +58,9 @@ try {
   check('chain cannot start from a non-one sequence', () => assert.equal(verifyChain(gapDir, { sourceRoot }).status, 'BLOCKED'));
   const first = appendSeal(sealDir, draft(), { sourceRoot });
   check('valid chain accepts runtime UNKNOWN with control HIGH', () => { const result = verifyChain(sealDir, { sourceRoot }); assert.equal(result.status, 'PASS'); assert.equal(result.latest.runtime_acceptance_status, 'UNKNOWN'); });
+  const externalDir = path.join(temp, 'external-seals'); const externalDraft = draft(); externalDraft.sources = { central_work_items: externalSource('central'), current_view: externalSource('view'), status_index: externalSource('index') };
+  const externalSeal = appendSeal(externalDir, externalDraft, { sourceRoot, externalControlPlaneRoot: externalRoot });
+  check('external control-plane sources require an explicit root and verify live bytes', () => { const result = verifyChain(externalDir, { sourceRoot, externalControlPlaneRoot: externalRoot }); assert.equal(result.status, 'PASS'); assert.equal(result.latest.seal_digest, externalSeal.seal_digest); });
   check('filename sequence and digest are bound to record fields', () => { const original = fs.readdirSync(sealDir).find(name => name.startsWith('handoff-state.')); const wrong = original.replace('handoff-state.1.', 'handoff-state.9.'); fs.renameSync(path.join(sealDir, original), path.join(sealDir, wrong)); assert.equal(verifyChain(sealDir, { sourceRoot }).status, 'BLOCKED'); fs.renameSync(path.join(sealDir, wrong), path.join(sealDir, original)); });
   check('digest tampering blocks the chain', () => { const file = fs.readdirSync(sealDir).find(name => name.startsWith('handoff-state.')); const value = JSON.parse(fs.readFileSync(path.join(sealDir, file))); value.objective.summary = 'tampered'; fs.writeFileSync(path.join(sealDir, file), JSON.stringify(value)); assert.equal(verifyChain(sealDir, { sourceRoot }).status, 'BLOCKED'); });
   fs.rmSync(sealDir, { recursive: true, force: true }); fs.mkdirSync(sealDir);

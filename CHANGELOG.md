@@ -2,6 +2,94 @@
 
 本文件记录 ChatGPT Workflows 的重要变更。
 
+## 未发布：长期人工规则刷新兜底
+
+- 已执行：操作手册登记一段固定的手动刷新提示词。只要规则路径保持不变且可访问，它可以跨后续工作流版本、总指挥世代以及已接入项目的窗口复用，不要求操作者填写版本、manifest 或接收者身份。
+- 已执行：明确该提示词只加载规则，不做项目体检、配置迁移或交接，也不授予总指挥身份和业务写权；自动广播异常时可直接使用，路径改变或未来更高优先级规则明确废止时才需更新。
+- 已验证：规则刷新契约 12/12、仓库质量检查和差异格式检查通过；`2026-09-24.5` 最终规则 manifest SHA-256 为 `E4996885A0FCDEDB2ABB73E657EE35C26A0E36F805D7A8AE398DAB553262B9D7`。
+- English: Added a stable manual rule-refresh fallback. While the rule path remains unchanged and accessible, the same prompt can be reused across later workflow versions, commander generations, and enrolled project windows without operator-supplied versions, manifest hashes, or recipient identity. It loads rules only and grants no project role or write authority.
+- English: Workflow refresh checks passed 12/12, together with the repository quality and diff-format checks. The final `2026-09-24.5` rule-manifest SHA-256 is `E4996885A0FCDEDB2ABB73E657EE35C26A0E36F805D7A8AE398DAB553262B9D7`.
+
+## 未发布：算法成果身份的存档、部署与 PR 绑定
+
+- 已执行：把“最新算法”收敛为当前目标下最后一个身份完整、状态明确的可靠候选；区分本地验收、共享候选测试和正式默认/发布/生产部署，候选部署不再冒充效果已验收。
+- 已执行：自然语言保存算法复用现有成果包契约，增加意图消歧、范围恢复、同内容幂等、稳定采集、原子确定、恢复回读和隐私排除；操作者只保留 AI 无法代签的评价、编辑器保存、产品取舍和授权事实。
+- 已执行：PR/CI 必须从实际 checkout 或合并候选重算源码/资产身份并核对默认选择，不能只信登记文件中的自报摘要；本地恢复包不入 Git 时，CI 仍须能独立证明干净环境可复现。
+- 已执行：算法族/组件版本、界面版本、联合恢复包身份分开维护；项目范围配置决定复制、仅留指纹或排除的实体。跨责任共享文件的归属或影响无法确认时，只阻断受影响的共享部署、PR Ready、合并和正式发布，不全局停工。
+- 已验证：规则刷新契约 12/12、仓库质量检查和差异格式检查通过；`2026-09-24.4` 最终规则 manifest SHA-256 为 `EADA8F58B00D41C22B9C100501041501620FC06620FE5BF0645DB8522D1AB706`。本批只验证通用工作流契约，没有在来源产品项目复算组件摘要、执行部署或验证算法效果。
+- English: Bound algorithm archives, deployments, and PR/CI checks to a reproducible candidate identity. “Latest” now means the latest reliable candidate for the active goal, not the last edit. Candidate deployments remain possible when clearly marked unaccepted; formal-default claims require evaluation and saved-buffer confirmation bound to the same digests. Natural-language archives are scoped, idempotent, stable, privacy-checked, and recoverable. PR/CI recomputes identity from the actual checkout or merge candidate instead of trusting self-reported registry values.
+- English: Algorithm-family or component versions, UI versions, and joint recovery-package identities are maintained separately. Project scope configuration decides whether an entity is copied, fingerprinted only, or excluded. Unresolved ownership or impact of cross-responsibility shared files blocks only the affected shared deployment, Ready transition, merge, or formal release.
+- English: Workflow refresh checks passed 12/12, together with the repository quality and diff-format checks. The final `2026-09-24.4` rule-manifest SHA-256 is `EADA8F58B00D41C22B9C100501041501620FC06620FE5BF0645DB8522D1AB706`. This batch validates the generic workflow contract only; it does not recompute product-component digests, deploy a product, or validate algorithm output quality.
+
+## 未发布：工作流复杂度预算
+
+- 已执行：工作流制定与修补默认不得增加复杂度；新增机制前先删除、替换或合并旧机制，只有安全/权限硬边界或可验证净收益才能例外增加。
+- 已执行：同类问题连续两次采用相近补丁仍未改善时，停止继续叠加，回到复现条件、根因和最小流程；本规则不新增操作者步骤、表单或状态。
+- 已验证：规则版本已统一为 `2026-09-24.3`；刷新契约 12/12 和全仓质量检查通过，最终 manifest 摘要为 `18F6A18701FEE5BFFCFA8F2F7D85E3A8B75CC3E7E0BD8F51C8E58FC6F9462850`。
+- English: Workflow design and repair now use a non-increasing complexity budget. Replace, remove, or merge existing mechanisms before adding new ones; additional complexity requires a hard safety/permission need or verified net benefit. Two ineffective similar patches trigger a return to reproduction evidence, root cause, and the minimum process rather than another layer of rules.
+
+## 未发布：首次规则刷新手动启动路径
+
+- 为尚未了解新广播协议的总指挥增加一次性手动启动提示词。
+- 明确该启动只要求读取、角色核对、项目配置盘点和结构化回执，不自动授予写入或启用权限。
+
+## 未发布：工作流结论本轮持久化与相关文档定位
+
+- 已执行：建立“相关文档定位索引”，把规则、复盘、变更履历、计划、故障、项目状态和交接材料分别绑定到唯一主记录入口；操作者只需用自然语言说明“相关文档”，总指挥负责按语义定位并回读实际路径。
+- 已执行：新增全局持久化门禁：涉及工作流但本轮不立即实施工作流修改时，必须在本轮结束前记录结论、待确认项、阻断、行动方、证据入口和失效条件；本轮立即实施修改时仍需按既有规则记录任务契约、改动和验证。
+- 已验证：已同步 AGENTS、00、06、10 和 CHANGELOG 的入口与引用；本轮未执行远端写入、Commit 或项目外状态修改。
+- English: Added a stable related-document locator and a global persistence gate. Workflow-related conclusions must be written to a single semantic primary record before the turn ends when no workflow change is implemented immediately; implemented changes still require the existing contract, change, and verification records. AGENTS, the overview, review rules, state index, and changelog now point to the same locator. No remote write or commit was performed.
+
+## 未发布：交接中央规则绑定与交付闭环修补
+
+- 已执行：正式交接准备器现在强制核对中央状态索引 CURRENT 区的 `规则清单摘要`，必须与本轮实际规则 manifest 的 SHA-256 完全一致；中央索引过期时在生成附件前阻断，避免出现“附件看似 READY、登记表仍是旧规则”的假收敛。
+- 已执行：新增 `.github/scripts/Mark-Handoff-Delivered.mjs`，把 `GENERATED_NOT_DELIVERED` 与实际交付后的独立 `DELIVERED` 回执分开，并回读附件文件、校验哈希、绑定接收对象和交付事件；新增 3 项交付闭环测试及仓库质量脚本入口。
+- 已验证：HandoffSeal 52/52、Prepare-Handoff 16/16、交付闭环 3/3；仓库质量脚本整体 PASS。未执行真实皮纹理项目交接、Commit 或远端写入。
+- English: Formal handoff preparation now requires the canonical status index CURRENT block to carry a `规则清单摘要` SHA-256 matching the current rule manifest; stale indexes are blocked before an apparently READY artifact can be produced. Added `.github/scripts/Mark-Handoff-Delivered.mjs` to separate `GENERATED_NOT_DELIVERED` from an independently verified `DELIVERED` receipt, including artifact hash, recipient and delivery event binding. HandoffSeal passed 52/52, Prepare-Handoff 16/16, delivery closure 3/3, and the repository quality suite passed. No real product-project handoff, commit, or remote write was performed.
+
+## 未发布：规则接入提示词简化与交接审计分流
+
+- 已执行：根据一次真实接入回执，将操作者可复制的规则接入提示词压缩为短版；明确这类消息只核对项目启用、当前角色和接收方门禁，不自动进入 HandoffSeal、外部控制面、产品代码或远端审计。
+- 已执行：保留安全阻断语义。项目启用声明、角色、规则入口或状态无法确认时仍必须报告 `UNKNOWN/BLOCKED`，但不得把无关的交接审计缺口混入普通接入确认。
+- 已验证：新短提示词已写入操作手册并回读；规则版本同步至 `2026-09-23.7`，未执行远端写入。
+- English: Simplified the reusable rule-onboarding prompt after a real receiver report. The short prompt limits onboarding to project enablement, current role, and the receiver-processing gate; it does not automatically enter HandoffSeal, external control-plane, product-code, or remote audits. Safety blocking remains for unverifiable project enablement, role, rule entry, or state, while unrelated handoff-audit gaps must not be mixed into ordinary onboarding. The prompt was written to the operator manual, workflow version synchronized to `2026-09-23.7`, and no remote write was performed.
+
+## 未发布：可复用操作写入操作手册
+
+- 已执行：确认项目接入的两段操作已写入 `01-操作者操作手册.md`，并新增“可复用操作留存原则”：已验证且可能重复使用的接入、广播、刷新、回执、交接和恢复动作不得只留在聊天口头说明中。
+- 已执行：将同一原则写入 `06-复盘与优化规则.md`，要求优先并入现有入口，保留适用条件、复制边界、预期结果、异常处理和权限限制，避免生成互相冲突的多个提示词。规则版本同步至 `2026-09-23.6`。
+- 已验证：操作手册中的两种项目接入路径和新增留存原则已回读；未执行远端写入。
+- English: Confirmed that the two project-onboarding procedures are already present in `01-操作者操作手册.md` and added a retention rule: verified reusable onboarding, broadcast, refresh, receipt, handoff, and recovery actions must not exist only as conversational explanations. The same rule is recorded in `06-复盘与优化规则.md`, requiring reuse of existing entries and preservation of scope, copy boundaries, expected results, failure handling, and permission limits. Workflow version synchronized to `2026-09-23.6`; no remote write was performed.
+
+## 未发布：操作者项目接入简化
+
+- 已执行：在操作者手册增加傻瓜式项目接入入口，将空白项目和已运行项目分别压缩为“先用 1A 建立总指挥”和“要求总指挥自动盘点并刷新现有窗口”两条路径；新专项任务只需在第一条消息使用一段最短接入句。
+- 已执行：明确接入结果只由实际读取、角色确认、处理和回执证明；总指挥建立不等于旧窗口自动同步，平台未注入规则时仍需新窗口执行最短接入句。同步版本至 `2026-09-23.5`。
+- 已验证：已回读新增操作说明与接收方门禁，确认不新增场景编号、不扩大权限、不要求操作者逐个维护任务清单；完整仓库质量检查待本轮完成后记录。
+- English: Added a simplified operator entry for project onboarding. A blank project now follows “establish the commander with 1A first”; an existing project uses one request for the commander to inventory and refresh visible windows; new specialist tasks use one short onboarding sentence. Actual reading, role confirmation, processing, and receipts remain the only evidence of onboarding. Commander creation does not retroactively synchronize old windows, and a short onboarding sentence is still required when the host does not inject project rules automatically. Version synchronized to `2026-09-23.5`.
+
+## 未发布：接收方强制处理门禁
+
+- 已执行：将“收到广播或定向消息后必须实际处理”提升为所有工作流事件的统一接收方门禁。接收方必须识别事件、核对自身角色、完整读取消息及必要引用、执行范围内处理，或返回带具体缺口和恢复条件的 `BLOCKED`；`RECEIVED`、解释性答复、平台完成标记和空输出均不能代替处理完成。
+- 已执行：明确已启用工作流的项目中，总指挥、普通任务和专项任务都继承收件、读取、处理、FIFO、回执和停止规则；专项任务不继承总指挥身份、中央调度权、中央写权或额外业务授权。同步更新总览、核心规则、自动化授权与风险分级、状态索引和轻量交接版本至 `2026-09-23.4`。
+- 已验证：已回读统一门禁与规则刷新协议，确认角色继承和权限继承分离；尚未进行真实跨窗口广播实测，宿主是否执行空闲回合仍需单独观察。
+- English: Added a universal receiver-side processing gate for workflow events. Receivers must identify the event, verify their role, fully read the message and required references, process the in-scope request, or return `BLOCKED` with a concrete gap and recovery condition. `RECEIVED`, explanatory text, platform completion markers, and empty output are not completion evidence. Enabled projects apply receipt, reading, processing, FIFO, receipt, and stop rules to commanders, ordinary tasks, and specialist tasks; specialists do not inherit commander identity, central dispatch/write authority, or extra business authorization. Updated the overview, core rules, automation/risk rules, state index, and lightweight handoff to `2026-09-23.4`. Static consistency was verified; real cross-window behavior remains untested.
+
+## 未发布：规则刷新广播自动续处理
+
+- 已执行：针对目标窗口把 `RECEIVED` 当作广播终点的问题，明确 `RECEIVED` 只是中间态；发送方必须在目标未返回合格 `COMPLETED` 时，自动发送一次绑定同一 `RULE_REFRESH_ID` 的续处理控制消息。
+- 已执行：续处理只引用原刷新事件，不重复业务正文、不创建任务、不扩大授权；发送后必须等待并回读目标状态；仍无合格结果时登记 `WARN / FAIL / 不可达` 并停止该通信路线。同步更新总览、操作者入口、核心规则、自动化授权与风险分级、状态索引和轻量交接版本至 `2026-09-23.3`。
+- 已验证：已回读六份规则文件，确认 `RECEIVED`、续处理、`COMPLETED` 和停止条件语义一致；未执行真实跨窗口自动续处理，宿主是否能自动触发下一回合仍需在下一次广播中实测。
+- English: Clarified that `RECEIVED` is only an intermediate state for cross-project rule refreshes. If a target does not return a valid `COMPLETED`, the sender must automatically issue one continuation control message bound to the same `RULE_REFRESH_ID`; the continuation cannot duplicate business payloads, create tasks, or expand authorization. After one unsuccessful continuation, record `WARN / FAIL / unreachable` and stop that route. Synchronized the overview, operator entry, core rules, automation/risk rules, state index, and lightweight handoff version to `2026-09-23.3`. Static consistency was verified; real cross-window automatic continuation remains untested.
+
+## 未发布：交接可行性预检与外部控制面边界修复
+
+- 已执行：为场景 1C 增加正式交接可行性预检，区分可带限制继续与必须阻断；未提交成果保护摘要不再等同于正式封条来源或 Git 全量盘点。
+- 已执行：允许中央控制面位于代码 `source_root` 外，以 `root_ref=external_control_plane` 和受控外部根目录绑定；仍要求路径边界、项目绑定、指纹和事实截点一致，且不授权修改外部项目源码。
+- 已执行：`Prepare-Handoff.mjs` 支持 `preflight_only` 只读模式，并同步更新 `HandoffSeal.mjs`、schema、模板和操作手册；旧 v1/v2 只读标记 `LEGACY_UNVERIFIED`，迁移候选绑定旧链最后摘要，不补造历史。
+- 已验证：封条 52 项、准备器 15 项、身份 16 项定向测试通过；未执行真实项目交接、Commit 或远端写入。全仓质量脚本是否仍受既有 PowerShell 解析故障影响，需在本轮综合验证中记录。
+- English: Added a Scenario 1C handoff feasibility preflight and separated uncommitted-workspace protection summaries from formal seal sources and Git inventory. External control planes may now be bound outside the code `source_root` through `root_ref=external_control_plane` and a controlled root, while path, project, digest, and fact-cutoff checks remain mandatory and external source code remains out of scope. `Prepare-Handoff.mjs` supports read-only `preflight_only`; `HandoffSeal.mjs`, the schema, templates, and operator guidance are aligned. v1/v2 history stays `LEGACY_UNVERIFIED`, with migration candidates bound to the last legacy summary and no fabricated history. Targeted tests pass; no real project handoff, commit, or remote write was performed.
+
 ## 未发布：实战反馈触发工作流案例双轨反思
 
 - 已执行：将“外部 AI、专项任务或场景五配对反馈触发公共工作流案例反思”确立为总指挥工作流的全局规则，不把它做成 2E/2C 的业务入口或额外填写项。
@@ -11,10 +99,17 @@
 
 ## 未发布：GitStateCompass 迁移后的项目边界
 
-- 已执行：确认 GitStateCompass 已迁移到本仓库之外的独立项目；本仓库旧路径仅保留 README 指针和本地项目根标记，不再承载其代码、测试、夹具、网页原型或项目记录。
-- 已执行：更新总指挥工作流边界规则：ChatGPT Workflows 继续只使用 `legacy-origin`；`origin`、旧指针路径及独立项目内容不得进入本项目的暂存、Commit、Push、PR 或合并。新独立项目的 Git 初始化、远端绑定和发布另行核对授权。
-- English: Recorded that GitStateCompass has moved to an independent project outside this repository. The old path now keeps only a README pointer and a local project-root marker; it no longer carries the product code, tests, fixtures, web prototype, or project records.
-- English: Updated the commander workflow boundary: ChatGPT Workflows continues to use only `legacy-origin`; `origin`, the old pointer path, and the independent project contents must not enter this repository's staging, commits, pushes, pull requests, or merges. Git initialization, remote binding, and publishing for the independent project require separate checks and authorization.
+- 已执行：确认 GitStateCompass 已迁移到本仓库之外的独立项目；本仓库旧路径仅保留 README 和远端仓库指针，不再承载其代码、测试、夹具、网页原型或项目记录。
+- 已执行：更新总指挥工作流边界规则：ChatGPT Workflows 继续只使用 `legacy-origin`；允许提交明确属于本仓库的两个迁移指针文件，`origin` 及独立项目源码、测试和输出不得进入本项目的暂存、Commit、Push、PR 或合并。独立项目的发布另行核对授权。
+- English: Recorded that GitStateCompass has moved to an independent project outside this repository. The old path now keeps only a README and remote-repository pointer; it no longer carries product code, tests, fixtures, web prototypes, or project records.
+- English: ChatGPT Workflows continues to use only `legacy-origin`. The two migration pointer files that belong to this repository may be committed here; `origin` and the independent project's source, tests, and outputs must not enter this repository's staging, commits, pushes, pull requests, or merges.
+
+## 未发布：红队复核与任务化交接命名
+
+- 已执行：明确红队复核是对抗式审查的一种反例驱动方法，不新增场景编号；公共规则、核心代码、权限、交接和不可逆动作优先使用执行者之外的独立 AI 复核，低风险任务不强制增加回合。
+- 已执行：正式交接快照统一要求稳定项目/任务 slug、日期、材料形态和递增编号；禁止使用孤立的 `handoff.md`、`snapshot.md`、`final.md` 等无法区分归属的默认名称，同时保留机器可验证封条的固定命名合同。
+- English: Clarified that red-team review is a counterexample-driven method within adversarial review, not a new scenario. Public rules, core code, permissions, handoff, and irreversible actions should prefer an independent AI reviewer outside the executor; low-risk tasks do not gain a mandatory extra round.
+- English: Formal handoff snapshots now require a stable project/task slug, date, material type, and incrementing number. Generic names such as `handoff.md`, `snapshot.md`, and `final.md` are forbidden, while machine-verifiable seal filenames keep their fixed contract.
 
 ## 未发布：人工反馈分流与链路诊断成本确认
 
@@ -79,8 +174,8 @@
 
 ## 未发布：明确 ChatGPT Workflows 与 GitStateCompass 的远端边界
 
-- 已执行：登记本项目只使用 `legacy-origin` 作为 ChatGPT Workflows 的远端候选；`origin` 与 `实用小工具/GitStateCompass/` 明确排除在本项目提交和远端发布范围外。
-- 已验证：本次仅修改边界声明和变更记录，未读取、修改、暂存或提交 GitStateCompass 内容；远端未写入。
+- 已执行：登记本项目只使用 `legacy-origin` 作为 ChatGPT Workflows 的远端候选；`origin` 和 GitStateCompass 独立项目内容明确排除在本项目提交和远端发布范围外，本仓库自己的迁移指针文件除外。
+- 已验证：边界声明只允许迁移指针，不授权读取、修改或提交 GitStateCompass 独立源码；当时未执行远端写入。
 
 ## 未发布：经验库索引闭环与按需加载收敛
 
@@ -214,6 +309,38 @@
 ## 未发布：跨项目规则刷新接纳协议
 
 - 已执行：操作者可用自然语言指定规则刷新目标与排除对象；发送方生成唯一 `RULE_REFRESH_ID`，把已发送、`RECEIVED`、实际重新加载、项目内耐久登记和合格 `COMPLETED` 分层核账。版本号与 SHA-256 只证明内容身份，不能代替语义接纳。
+
+## 未发布：首次手动刷新事件封套修正
+
+- 已执行：修正首次手动规则刷新提示词，要求发送前填写真实 `RULE_REFRESH_ID`、规则根、旧/新版本、manifest 摘要、变化范围、读取深度、允许写入范围、排除项和失效条件；仅读取测试可明确使用“允许写入范围：无”。
+- 已执行：明确静态广播包不能单独充当刷新事件；占位符未替换或来源无法核验时，接收方只能返回 `WARN/BLOCKED`，不得猜测或伪造登记。
+- 已验证：工作流刷新契约测试覆盖手动启动模板，避免说明包与可复制提示词再次脱节；未执行 Commit、Push 或其他远端写入。
+
+## 未发布：规则刷新 manifest 来源与人话回执
+
+- 已执行：新增可回读的 `规则刷新manifest.json`，事件封套同时携带 manifest 摘要和来源路径；接收方找不到 manifest 原文时必须返回 `WARN`，不能只凭哈希宣称一致。
+- 已执行：规则刷新回执改为“操作者摘要 + 机器核验详情”两层结构，先说明是否接纳、真实阻断和下一行动方，再保留审计字段。
+- 已验证：刷新契约测试 `9/9 PASS`，manifest 逐条规则摘要核验通过；未执行 Commit、Push 或远端写入。
+
+## 未发布：规则刷新状态与结果正交化
+
+- 已执行：明确 `RECEIVED/COMPLETED` 只描述处理进度，`PASS/WARN/FAIL` 描述处理结果；只读处理已结束但无耐久写入授权时必须返回 `COMPLETED + WARN`，不得退回 `RECEIVED`。
+- 已执行：机器核验详情默认不超过 12 条，正常文件只报告 manifest 匹配和数量，异常项才展开；操作者摘要同时区分“本次处理”和“耐久接纳”。
+- 已验证：刷新契约测试 `10/10 PASS`，新 manifest 逐条摘要核验通过；未执行 Commit、Push 或远端写入。
+
+## 未发布：规则版本与 manifest 同步门禁
+
+- 已执行：将规则版本提升为 `2026-09-24.1`，并在 `规则刷新manifest.json` 中登记同一 `rule_version`；内容变化后不再沿用旧版本号。
+- 已执行：版本一致性检查新增 `09`，刷新契约同时核对 00/02/09/10/轻量配置与 manifest 的版本一致性。
+- 已验证：规则版本、manifest 十项来源和总摘要一致；仓库质量检查通过。旧刷新事件及旧 manifest 摘要自动失效。
+
+## 未发布：规则广播简化为纯加载
+
+- 已执行：规则广播与项目接入、身份、CURRENT、唯一写者、配置迁移、耐久登记、交接和封条完全拆分。操作者只发送“规则更新指令 + 第二代规则路径”；项目历史问题不得让加载结果变成 `WARN/BLOCKED`。
+- 已执行：规则加载只返回 `PASS/FAIL`。规则根自洽即回复“已更新到 <版本>”；只有路径不可访问、必需文件缺失/哈希不一致、读取期间漂移或更高优先级冲突才失败。
+- 已执行：增加广播前冻结门禁；维护者完成修改、版本、manifest 和质量检查后才允许广播，广播期间不得继续修改来源。项目迁移清单改为另行授权后使用。
+- 已执行：刷新 manifest 与交接 manifest 解耦，覆盖 00—11、轻量配置、广播包和回执模板共 15 项核心工作流文件。
+- 已验证：规则刷新契约 `11/11 PASS`，完整刷新 manifest 逐项匹配；未执行 Commit、Push、远端写入或实际广播。
 - 已执行：目标总指挥按影响范围读取受影响标题，范围无法可靠限定时才全文回退；完成回执必须列出实际读取范围、项目化行为变化、冲突/缺口、受限动作、本地记录回读和失效条件。一次完成回执不产生业务恢复、远端授权、运行验收或未来必然遵从的保证。
 - 已验证：规则版本统一为 `2026-09-19.3`；仓库质量检查、40 项封条测试、Markdown/路径/隐私契约和 `git diff --check` 通过。本批未重新广播、未修改其他项目、未 Commit、未 Push。
 - English: Cross-project rule refreshes now separate delivery, receipt, actual reload, durable project-local recording, and accepted completion under one `RULE_REFRESH_ID`. Hashes prove content identity only. A valid completion must report what was read, project-specific behavioral impact, conflicts, restrictions, record readback, and invalidation conditions; it does not restore business work, grant remote authority, or guarantee future compliance.
@@ -959,3 +1086,16 @@ The roadmap items above are candidates only. Before every commit, update this ch
 
 - 初始化项目说明、维护规则、工作流概览、安全边界和规则变更事件模板。
 - 明确单窗口不可抢占前台任务、FIFO 事件队列、最终反馈完成边界与违规恢复规则。
+## 未发布：交接阶段矩阵与分阶段状态输出
+
+- 新增统一的交接阶段矩阵，区分材料准备、发送、接收核验和正式切换。
+- 明确旧总指挥尚未停止不阻断材料准备；候选任务 ID 在空白任务接收成功后才登记。
+- 统一要求分别输出候选材料状态、真实阻断、操作者下一步和正式切换状态。
+- 未执行 Commit 或远端写入。
+
+## 未发布：广播前对抗式修补
+
+- 独立红队审查发现并修复阶段命名、封条字段、交付状态和候选核验状态混用问题。
+- 广播包现在要求事件封套、版本、manifest 摘要、允许写入范围和按角色读取集合；空白项目不会因广播自动启用。
+- 接收回执补齐 `result`、规则刷新记录位置和 `RECEIVED` 中间态说明。
+- 统一 schema v3 的 `root_ref` 必填契约，并新增工作流刷新静态契约测试。
