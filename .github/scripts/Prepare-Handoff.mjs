@@ -74,7 +74,8 @@ function verifyProjectBinding(sourceRoot, statusIndexPath, draft, projectKey) {
   }
   if (!draft.workspace?.head || !block.includes(draft.workspace.head)) throw new Error('status_index current block does not contain the sealed workspace HEAD');
   const topLevel = spawnSync('git', ['-C', sourceRoot, 'rev-parse', '--show-toplevel'], { encoding: 'utf8' });
-  if (topLevel.status !== 0 || fs.realpathSync(topLevel.stdout.trim()) !== fs.realpathSync(sourceRoot)) throw new Error('source_root is not the Git repository root used by the handoff');
+  const canonicalPath = value => path.normalize(fs.realpathSync(value)).replace(/[\\/]+$/, '').toLowerCase();
+  if (topLevel.status !== 0 || canonicalPath(topLevel.stdout.trim()) !== canonicalPath(sourceRoot)) throw new Error('source_root is not the Git repository root used by the handoff');
 }
 
 function verifyRuleManifestBinding(statusIndexPath, manifestDigest) {

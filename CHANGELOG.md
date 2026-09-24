@@ -5,9 +5,11 @@
 ## 未发布：修复 GitStateCompass 英文 README 配对门禁
 
 - 已执行：为已迁移的 `实用小工具/GitStateCompass/README.md` 增加对应的 `README.en.md`，保留项目位置指针语义并加入中英文互链，修复远端仓库质量检查对公开目录 README 成对存在的要求。
-- 已执行：同步修正规则刷新 manifest 中 `00-第二代工作流总览.md` 的实际 SHA-256；这是 README 门禁修复后继续暴露的远端基线漂移，否则 GitHub Actions 仍会在下一项检查失败。
+- 已执行：同步修正规则刷新 manifest 中全部 14 个规则入口的实际 SHA-256；这是 README 门禁修复后继续暴露的远端基线漂移，否则 GitHub Actions 仍会在后续规则刷新检查失败。
+- 已执行：修复 Windows runner 上交接附件测试对 Git 根目录路径大小写/分隔符的脆弱字符串比较；仍要求 Git 返回根目录与声明的 `source_root` 指向同一真实目录，只规范化平台表示差异。
 - 已验证：修复只涉及该目录的英文说明和本变更记录；未修改 GitStateCompass 独立仓库、产品代码或远端对象。待本地提交并推送后由 GitHub Actions 重新运行远端检查。
-- English: Added the required paired `README.en.md` for the migrated `实用小工具/GitStateCompass/README.md`, preserving its project-location-pointer meaning and adding a language link. Also synchronized the rule-refresh manifest digest for `00-第二代工作流总览.md`, which was the next remote baseline drift exposed after the README gate. No independent Git State Compass repository, product code, or remote object was changed; GitHub Actions can rerun after the local change is committed and pushed.
+- English: Added the required paired `README.en.md` for the migrated `实用小工具/GitStateCompass/README.md`, preserving its project-location-pointer meaning and adding a language link. Also synchronized all 14 rule-entry digests in the rule-refresh manifest, which was the next remote baseline drift exposed after the README gate. No independent Git State Compass repository, product code, or remote object was changed; GitHub Actions can rerun after the local change is committed and pushed.
+- English: Fixed the Windows-runner handoff test’s brittle string comparison between Git’s repository-root output and Node’s real path. The check still requires both values to identify the same real directory; only platform-specific separators and case are normalized.
 
 ## 未发布：长期人工规则刷新兜底
 
