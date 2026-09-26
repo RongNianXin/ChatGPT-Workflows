@@ -2,6 +2,13 @@
 
 本文件记录 ChatGPT Workflows 的重要变更。
 
+## 未发布：跨平台规则指纹一致性
+
+- 已确认：`2026-09-27.1` 在本地检查通过、推送成功，但 GitHub Windows 检出将部分规则文件转为 CRLF，导致原始字节 SHA-256 与规则 manifest 不一致，远端 `Repository quality` 失败。
+- 已执行：为第二代规则根目录的 Markdown 与规则 manifest 固定 LF 检出换行，并重新生成逐文件指纹；规则版本更新为 `2026-09-27.2`。只约束规则来源文件，不改变其他目录的换行策略。
+- 待验证：修订后的本地全仓检查和远端 GitHub Actions；此前远端失败不能写成已通过。
+- English: The `2026-09-27.1` push passed locally but failed the Windows CI rule-manifest hash check because checkout changed line endings. The rule source files and manifest now use LF checkout bytes; version `2026-09-27.2` will be validated locally and in GitHub Actions.
+
 ## 未发布：GPT-6 Sol/Luna 的场景起步建议
 
 - 已执行（2026-09-27）：逐条审查 01 的 45 条场景模型建议，把每次出现的型号写为 GPT-6 Sol、GPT-6 Luna 或 GPT-6 Astra，避免只看单个场景时将 Sol 误解为 5.6；契约检查新增逐条版本标注门禁。规则版本升至 `2026-09-27.1`。
