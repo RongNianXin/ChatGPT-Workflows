@@ -439,6 +439,9 @@ function showEntryState(entry) {
   $('file-name').textContent = entry.name;
   $('source-state').textContent = statusLabel(entry) + (entry.readAt ? ' · ' + entry.readAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) + ' 读取' : '');
   $('refresh').disabled = false;
+  const refreshLabel = entry.handle ? '重新读取当前文件' : '重新选择当前文件';
+  $('refresh').title = refreshLabel;
+  $('refresh').setAttribute('aria-label', refreshLabel);
   $('set-remote').disabled = false;
   if (entry.error) note(entry.error + (entry.text ? '；当前显示上次成功读取的内容。' : ''), () => refreshCurrent(true), '重新授权 / 重试');
   else if (entry.kind === 'session') note('本次载入的文件副本；读取最新版本需重新选择文件。', () => chooseReplacement(entry.id), '重新选择');
@@ -461,6 +464,8 @@ function showEmpty() {
   $('find-bar').hidden = true;
   $('find-text').setAttribute('aria-expanded', 'false');
   $('find-text').disabled = $('refresh').disabled = $('set-remote').disabled = true;
+  $('refresh').title = '重新读取当前文件';
+  $('refresh').setAttribute('aria-label', '重新读取当前文件');
   $('empty-state').hidden = false;
   document.querySelector('.document-end').hidden = true;
   note(''); renderDocuments();
@@ -493,7 +498,13 @@ let refreshing = false;
 async function refreshCurrent(requestPermission = false) {
   const entry = documents.get(activeId);
   if (!entry || refreshing || importBusy || !contentReady) return;
-  if (!entry.handle) { if (requestPermission) chooseReplacement(entry.id); return; }
+  if (!entry.handle) {
+    if (requestPermission) {
+      notify('当前文档是本次载入副本，请选择修改后的同名原文件');
+      chooseReplacement(entry.id);
+    }
+    return;
+  }
   refreshing = true;
   const version = renderVersion;
   const previous = entry.text;
@@ -502,8 +513,8 @@ async function refreshCurrent(requestPermission = false) {
   finally { refreshing = false; }
   if (version !== renderVersion || activeId !== entry.id) return;
   showEntryState(entry); renderDocuments();
-  if (previous !== entry.text) { renderContent(entry); window.scrollTo(0, position); if (!entry.error) notify('已载入最新内容'); }
-  else if (requestPermission && !entry.error) notify('已重新读取，内容没有变化');
+  if (previous !== entry.text) { renderContent(entry); window.scrollTo(0, position); if (!entry.error) notify('已载入“' + entry.name + '”的最新内容'); }
+  else if (requestPermission && !entry.error) notify('已重新读取“' + entry.name + '”，内容没有变化');
 }
 async function addSessionFiles(files) {
   if (importBusy) return;

@@ -160,7 +160,7 @@ const remoteRequests = [];
       await page.locator('#open-files').click();
       await page.getByRole('heading', { name: '版本一', exact: true }).waitFor();
       await page.locator('#refresh').click();
-      await page.getByText('已重新读取，内容没有变化', { exact: true }).waitFor();
+      await page.getByText('已重新读取“sync-test.md”，内容没有变化', { exact: true }).waitFor();
       await page.evaluate(async () => {
         const writer = await window.testHandle.createWritable(); await writer.write('# 手动刷新版本\n\n## 手动新增标题'); await writer.close();
       });
@@ -250,7 +250,7 @@ const remoteRequests = [];
     await page.evaluate(() => { documents.get(activeId).remoteUrl = 'https://example.org/docs/current.md'; });
     const originalCount = await page.locator('.document-row').count();
     const chooser = page.waitForEvent('filechooser');
-    await page.getByRole('button', { name: '重新读取当前文件', exact: true }).click();
+    await page.getByRole('button', { name: '重新选择当前文件', exact: true }).click();
     await (await chooser).setFiles({ name: '同名.md', mimeType: 'text/markdown', buffer: Buffer.from('# 文档一更新\n\n## 目标') });
     await page.getByRole('heading', { name: '文档一更新', exact: true }).waitFor();
     assert.equal(await page.locator('.document-row').count(), originalCount, 'reload session replaces entry');

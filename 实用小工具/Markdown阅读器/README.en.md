@@ -1,5 +1,5 @@
 [中文](README.md)
-<!-- README-SOURCE-SHA256: b4f2fef0caf0a0c6a8d4912892b7e89b1f5ead11c06ffb7e9021818726fc70c2 -->
+<!-- README-SOURCE-SHA256: 32f291c23a0cd36ac0cd7fb140dfe6560b98e4ac52d846c7efcf12a37ce545d7 -->
 
 # Markdown Reader
 
@@ -31,21 +31,21 @@ Only explicitly selected files are accessed; the reader does not scan the comput
 
 **Selected Markdown is parsed when read; editing it does not require generating HTML.**
 
-First, save the Markdown in its original editor. You normally do not need to close or reopen the reader. Here, “refresh” means the circular-arrow button at the top right of the page, whose tooltip is “重新读取当前文件” (Reread current file). It does not mean the browser's Reload button or F5. Reloading the browser rebuilds the page; session imports are lost and must be selected again.
+First, save the Markdown in its original editor. You normally do not need to close or reopen the reader. Here, “refresh” means the circular-arrow button at the top right of the page, not the browser's Reload button or F5. An original file with reread access is labeled “重新读取当前文件” (Reread current file); a “本次载入” (Session import) is labeled “重新选择当前文件” (Select current file again) and requires choosing the updated same-name source. Reloading the browser rebuilds the page; session imports are lost and must be selected again.
 
 | Displayed state | Refresh behavior | After reopening |
 | --- | --- | --- |
 | Original file, remembered | Attempts to reread when selected, when returning to the reader's window or tab, or on refresh; requires valid read permission | Restores the saved library and the last successfully read content; attempts to read the last selected document if present, or the first entry otherwise. Other entries are read when selected |
 | Original file, current authorization | Can reread in the current page | Requires selecting again |
-| Session import | Refresh asks for the same-name original and updates the current entry. Check its directory: the tool cannot verify that a same-name file comes from the same location | Requires selecting the file again |
+| Session import | The button says “重新选择当前文件” (Select current file again). Choose the updated same-name source to update the current entry. Check its directory: the tool cannot verify that a same-name file comes from the same location | Requires selecting the file again |
 
 Persistence depends on the browser's file system access API. A saved handle is a reference the browser uses to access the source; it does not guarantee permanent permission. To avoid a blank page when permission is temporarily unavailable after reopening, the reader stores each original file's last successfully read content in the browser's local database. It does not upload, modify, or delete the source file. If permission is missing, the page still displays “重新授权 / 重试” (Authorize again / Retry), but shows the cached content when available and clearly states that it may not be current. Whether a reference remains valid after a file is moved depends on the browser and file system. The reader shows an empty document only when the source cannot be read and no cache exists.
 
-Select an original-file entry in the library and press refresh to reread the latest disk content through that reference, without entering a path again. Ordinary selection only provides a file snapshot for the current session, without reusable path access, so it still requires selecting the same-name source again. A library filename alone cannot locate a disk file. Refresh is disabled when no document is open or a document switch is still loading.
+Select an original-file entry in the library and press “重新读取当前文件” (Reread current file) to reread the latest disk content through that reference, without entering a path again. Ordinary selection only provides a file snapshot for the current session, without reusable path access, so the button says “重新选择当前文件” and asks for the same-name source again; it keeps the current entry instead of adding a duplicate. A library filename alone cannot locate a disk file. Refresh is disabled when no document is open or a document switch is still loading.
 
 This is not a background file watcher. When the reader stays in the foreground, press refresh after saving the original. The tool does not run while closed. It does not scan directories or discover new files automatically. New documents require explicit selection.
 
-Expected result: saved text changes appear, and new headings are added to the outline. If rereading succeeds but the content has not changed, the read time is still updated. A manual refresh displays “已重新读取，内容没有变化” (Reread complete; content unchanged); an automatic reread shows no notification. If the expected content is missing, first check that the Markdown was saved and that the selected entry is the original file from the correct directory. Then record the loading status, browser, and error text. A read failure does not prevent switching to another document.
+Expected result: saved text changes appear, and new headings are added to the outline; the notification includes the refreshed filename. If rereading succeeds but the content has not changed, the read time is still updated. A manual refresh displays “已重新读取〈文件名〉，内容没有变化” (Reread complete for the named file; content unchanged); an automatic reread shows no notification. If the expected content is missing, first check that the Markdown was saved and that the selected entry is the original file from the correct directory. Then record the loading status, browser, and error text. A read failure does not prevent switching to another document.
 
 Storage is isolated by browser, profile, and entry address. Changing browsers, moving the reader, or clearing browser data may require selecting again; clearing browser data also removes cached content. Modern browsers on Windows/macOS can display content; persistence depends on browser support and permission. Browsers lacking the API, including applicable Safari/Firefox versions, use ordinary selection and cannot be assumed to match Chromium behavior.
 
