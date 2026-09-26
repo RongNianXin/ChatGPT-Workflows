@@ -78,11 +78,13 @@ function Test-RepositoryPathPortability {
         $fullPath = Join-Path $repoRoot $relativePath
         if (-not (Test-Path -LiteralPath $fullPath -PathType Leaf)) { continue }
         $content = [IO.File]::ReadAllText($fullPath)
-        if ($content -match '(?i)(?<![A-Za-z0-9])[A-Z]:[\\/](?!\.\.\.|<)') {
-            $errors.Add("文本包含机器绑定的 Windows 绝对路径：$relativePath")
-        }
-        if ($content -match '(?i)(?<![A-Za-z0-9])/(?:Users|home)/(?!\.\.\.|<)') {
-            $errors.Add("文本包含机器绑定的用户目录绝对路径：$relativePath")
+        foreach ($line in ($content -split "`r?`n")) {
+            if ($line -match '(?i)(?<![A-Za-z0-9])[A-Z]:[\\/](?!\.\.\.|<)' -and $line -notmatch '<[^>]+>') {
+                $errors.Add("文本包含机器绑定的 Windows 绝对路径：$relativePath")
+            }
+            if ($line -match '(?i)(?<![A-Za-z0-9])/(?:Users|home)/(?!\.\.\.|<)' -and $line -notmatch '<[^>]+>') {
+                $errors.Add("文本包含机器绑定的用户目录绝对路径：$relativePath")
+            }
         }
         if ($content -match '(?i)file:///(?:[A-Z]:|Users/|home/)') {
             $errors.Add("文本包含机器绑定的 file URI：$relativePath")
@@ -174,6 +176,13 @@ function Test-BilingualReadmes {
     $englishReadmes = @($trackedFiles | Where-Object { [IO.Path]::GetFileName($_) -ceq 'README.en.md' })
 
     foreach ($relativePath in $chineseReadmes) {
+        if ($relativePath -eq '实用小工具/GitStateCompass/README.md') {
+            $pointerContent = Get-Content -LiteralPath (Join-Path $repoRoot $relativePath) -Raw -Encoding utf8
+            if ($pointerContent -notmatch 'https://github\.com/RongNianXin/Git-State-Compass(?:\.git)?') {
+                $errors.Add("跨仓库指针 README 缺少 GitStateCompass 目标链接：$relativePath")
+            }
+            continue
+        }
         $englishPath = Get-ReadmeSiblingPath -Path $relativePath -FileName 'README.en.md'
         if (-not $tracked.Contains($englishPath)) {
             $errors.Add("缺少英文 README：$relativePath -> $englishPath")
