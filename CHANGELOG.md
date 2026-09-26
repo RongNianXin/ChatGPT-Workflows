@@ -2,6 +2,30 @@
 
 本文件记录 ChatGPT Workflows 的重要变更。
 
+## 未发布：GPT-6 Sol/Luna 的场景起步建议
+
+- 已执行（2026-09-27）：逐条审查 01 的 45 条场景模型建议，把每次出现的型号写为 GPT-6 Sol、GPT-6 Luna 或 GPT-6 Astra，避免只看单个场景时将 Sol 误解为 5.6；契约检查新增逐条版本标注门禁。规则版本升至 `2026-09-27.1`。
+- 已执行：按 2026-09-26 官方模型与 Codex 定价资料，更新 05 的起步候选和 01 的场景示例；复杂工程优先比较 GPT-6 Sol，边界清楚且可直接验收的重复工作可比较 GPT-6 Luna。现有稳定配置仍可继续，不自动切换当前任务或其他窗口。
+- 已执行：06 补入“先独立判断、再核对外部 AI 报告”的交叉审查条件；外部材料只作为候选证据。未把第三方榜单数字或 API 缓存机制写成当前桌面端已实测效果。
+- 独立审查后修订：Luna 不固定使用高推理档；场景 5C 的纯反馈归类与实际返工分开，返工按原任务风险和验收选择配置。
+- 已验证：规则刷新契约 14 项、manifest 15 项来源指纹和仓库质量检查通过；独立审查复核本批差异。静态检查与文档审查不证明未来模型行为。
+- 待验证：当前账号和客户端的实际型号/推理强度可用性、同等验收下每项成功任务的 Token、耗时、返工与信用点消耗。无产品修改、模型切换、广播、Commit 或远端写入。
+- English: Updated model starting examples for GPT-6 Sol and Luna using official model and Codex pricing as of 2026-09-26. On 2026-09-27, spelled out GPT-6 in all 45 scenario recommendations and added a contract check against ambiguous model names. Existing working configurations remain valid; model availability and task-level savings need real usage evidence. Added conditional independent-first review of external AI reports. No product, broadcast, commit, or remote changes.
+
+## 未发布：自然语言确认绑定最近唯一方案
+
+- 已执行：操作者对最近唯一、范围明确的执行方案回复“同意、确认、授权你去做、开始执行”等肯定语时，直接视为该方案明示范围内的执行授权，不要求固定口令或逐项重复确认。
+- 已执行：多个方案、只同意判断、引用/假设/否定、方案后实质变化和方案外新增动作继续按最小缺口澄清；局部门禁不再暂停其他独立且已授权事项。
+- 已执行：一次最终确认型门禁在方案已经列清精确对象、动作和影响时可由该肯定回复满足；分次/双重确认和最终载荷另行确认仍按原门禁执行。
+- 已验证：刷新契约 14 项、manifest 15 项逐文件指纹和全仓质量检查通过；真实跨窗口模型行为仍待后续实际任务观察，本轮未执行广播、Commit 或远端写入。
+
+## 未发布：按条件选用 Skill，保留基础流程
+
+- 已执行：操作手册明确操作者只需描述目标；AI 按实际可用性、任务和权限选用 Skill，缺失时继续基础流程，不自动安装。
+- 已执行：核心规则为代码诊断、测试先行、接口边界和 AI 规则文档维护设置按需触发条件；场景 2E 不因反馈故障自动升级为实现任务。
+- 已执行：重大规则调整增加有限合成案例验证及证据边界，不把静态检查等同于真实模型行为或质量收益。
+- 待验证：真实项目中的选用准确率、质量和 Token 净收益；本轮无远端写入或广播。
+
 ## 未发布：明确场景 1B 是可选换窗分流入口
 
 - 已执行：将场景 1B 改名为“不确定如何换窗或归档时的通用分流”，并同步目录和场景总表；明确正式更换总指挥时直接使用 1C，无需先执行 1B。
@@ -31,6 +55,8 @@
 
 ## 未发布：GitStateCompass 目录收敛为单文件迁移指针
 
+- 已执行（2026-09-27）：单文件指针迁至 `实用小工具/Git仓库状态罗盘/README.md`；质量脚本的例外同步到新路径，并检查该目录只有这一份 README。暂存后重跑全仓检查，以覆盖实际提交内容。
+- English: Moved the single-file repository pointer to `实用小工具/Git仓库状态罗盘/README.md` and updated the quality-check exception to require that directory to contain only this README. The full repository check is rerun against the staged content.
 - 已执行：将 `实用小工具/GitStateCompass/` 收敛为唯一的 `README.md`，README 直接指向独立的 Git 仓库状态罗盘仓库。
 - 已执行：移除旧 `.project-root` 和 `README.en.md` 指针文件；本仓库不再承载 GitStateCompass 的源码、测试、夹具、网页原型或项目记录。
 - 已执行：为单文件跨仓库指针目录增加质量检查例外，要求 README 包含明确目标仓库链接，避免被通用双语 README 门禁误判为项目内容缺失。
