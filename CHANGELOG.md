@@ -2,6 +2,90 @@
 
 本文件记录 ChatGPT Workflows 的重要变更。
 
+## 未发布：操作手册改用稳定相对规则路径
+
+- 已执行：将 `01-操作者操作手册.md` 中 5 处“第二代规则目录”输入改为固定相对路径 `总指挥工作流/第二代总指挥的工作模式`，要求从当前项目根目录解析，不再要求操作者填写机器绝对路径。
+- 已执行：避免 `A_Rong` 等本机目录名在 Markdown/跨任务传输中被错误转义，同时保持复制整段提示词即可使用。
+- 已验证：5 处入口已回读；本轮未修改项目代码、远端或其他项目文件。
+
+## 未发布：绝对规则路径的示例占位符边界
+
+- 已修正：考虑到其他项目无法从自身项目根定位中央规则根，操作手册 5 处入口改为“操作者本机绝对路径占位符 + 克隆者必须替换示例”的写法。
+- 未写入：没有把本机用户名、盘符或真实目录写进 Git 跟踪文件；本机路径只能由操作者在发送前替换，避免把单机路径固化为仓库依赖。
+
+## 未发布：跨任务回执的操作者可见标记
+
+- 已执行：在 `09-自动化授权与风险分级.md` 的双通道回执规则中补充：向来源任务发送回执后，接收窗口必须在面向操作者的文本中明确回报来源任务和实际状态；未回执要说明原因，已发送但未获对方确认要标记“已发送待确认”。
+- 已执行：该规则只增加可观察性，不增加通信授权，不把工具发送成功或平台完成标记当作对方已收到。
+- 待验证：规则刷新 manifest 将在本批最后一步更新并逐文件回读；本轮不执行项目或远端操作。
+
+## 未发布：规则修改与 manifest 的自动收口门禁
+
+- 已执行：明确规则维护者每次修改受管规则文件后都必须检查 manifest；总指挥主动修改工作流时，递增版本、更新全部指纹并逐文件回读是该修改批次的最后写入步骤。
+- 已执行：明确广播第一步必须复核 manifest 与当前规则根一致；不一致时先收敛规则版本和指纹，不能广播旧封条或要求接收方在变化中的规则根上刷新。
+- 已验证：本轮规则文件修改后将重新计算全部 manifest 条目，并执行逐文件 SHA-256 回读；本轮不涉及产品代码、项目配置或远端写入。
+
+## 未发布：worktree 收口字段补充（场景 5A 复审）
+
+- 已执行：采纳 31 号独立审查的最小建议，在 02 的临时 worktree 收口规则和 10 的现有 `WORKTREE` 记录中补充远端写入后的来源、主工作区、集成状态、下一行动方与恢复条件字段。
+- 已执行：明确只读审查、CI 临时修复和未 Push 实验 worktree 可标记 `integration_status=NOT_REQUIRED`，不强制整合；仍须确认删除前没有未保存成果和唯一证据。
+- 未执行：未修改皮纹理项目，未执行 Git 合并、Commit、Push 或远端对象操作。
+
+## 当前暂停记录：2026-09-26
+
+- **任务一：worktree 总指挥工作流优化**：状态 `PAUSED`。已完成最小规则补充，明确隔离 worktree 完成远端写入后必须回读日常主工作区；未完成本轮提交、广播或远端发布。恢复条件：回读本规则、当前 manifest 和工作区状态后继续审查。
+- **任务二：远端与本地冲突处理**：状态 `PAUSED`。已确认本地 `main` 落后远端 3 个提交，且本地存在未提交/未跟踪成果；未执行合并、重置、覆盖、提交或清理。恢复条件：逐文件锁定远端来源、本地目标、重叠路径和保护点后再制卡。
+- **当前优先事项**：处理规则刷新 manifest 与当前规则文件指纹不一致，完成指纹回读后再评估 31 号规则刷新回执；不处理皮纹理项目代码、配置、中央状态或远端状态。
+- **31号刷新事件**：已将规则版本更新为 `2026-09-26.1`，15 个 manifest 条目逐文件回读无差异；已向 31 号发起一次仅限规则刷新与回执的重试。平台显示回合完成，但当前接口仍未返回可见正文，因此采用 `DELIVERY/UNKNOWN`，不宣称其已采用规则。
+- **31号正式刷新回执**：31 号已返回 `COMPLETED + PASS`，确认 15 个 manifest 条目全部匹配，并已采用 `2026-09-26.3` 及新增 worktree 收口字段；它确认本轮未执行皮纹理项目、产品、部署或远端操作，未提出规则冲突或疑问。
+
+## 未发布：隔离 worktree 远端写入后的主工作区收口
+
+- 已执行：在 `02-总指挥核心规则.md` 的场景 4J 增加最小收口门禁：隔离 worktree 完成 Commit/Push 后，远端写入不再被视为日常主工作区已同步；删除临时载体前必须回读主工作区的分支、HEAD、未提交/未跟踪修改与远端来源。
+- 已执行：主工作区干净且目标明确时才可按执行卡完成快进或等价集成；存在未提交或来源不明修改时不得覆盖、强制对齐或把删除 worktree 当成同步完成，必须记录“远端已更新、主工作区未对齐”的状态、恢复条件和下一行动方。
+- 已验证：本条由本次远端 3 个提交已推送、主工作区仍落后且保留未提交修改的实际案例触发；未执行本地主工作区合并、提交、推送或清理。
+- 未解决：当前主工作区仍需另行完成逐文件安全对齐；31 号审查任务已收到请求但未返回可见正文，未将其隐性运行状态当作审查证据。
+
+## 未发布：修复 GitStateCompass 英文 README 配对门禁
+
+- 已执行：为已迁移的 `实用小工具/GitStateCompass/README.md` 增加对应的 `README.en.md`，保留项目位置指针语义并加入中英文互链，修复远端仓库质量检查对公开目录 README 成对存在的要求。
+- 已验证：修复只涉及该目录的英文说明和本变更记录；未修改 GitStateCompass 独立仓库、产品代码或远端对象。待本地提交并推送后由 GitHub Actions 重新运行远端检查。
+- English: Added the required paired `README.en.md` for the migrated `实用小工具/GitStateCompass/README.md`, preserving its project-location-pointer meaning and adding a language link. This addresses the repository quality check for paired public-directory READMEs. No independent GitState Compass repository, product code, or remote object was changed; GitHub Actions can rerun after the local change is committed and pushed.
+
+## 未发布：正式接管汇报必须回报当前任务 ID
+
+- 已执行：修订 `总指挥轻量交接启动配置.md` 第 7 节、`01-操作者操作手册.md` 场景 1D、`04-状态、目标变更与交接规范.md` 最终交接汇报和 `07-总指挥交接记录模板.md`。继任总指挥完成正式切换后的四段最终汇报，第一段必须展示当前窗口的平台实际任务 ID；逻辑任务 ID、角色/写者 ID、任务标题和“待确认”均不能替代。
+- 已执行：平台确实无法提供实际任务 ID 时，AI 报告 `UNKNOWN` 及不可见原因；该字段未知不单独改变切换状态，切换仍按中央状态证据判定。操作者不需要填写或查找任务 ID；真实 ID 仅留在运行时汇报，不写入仓库文件。
+- 已验证：已回读四个受影响入口及字段，确认旧截图所示的“任务 ID 待确认但切换已完成”组合被禁止；本轮未执行 Commit、Push 或远端写入。规则刷新 manifest 尚未按当前工作区统一重算，因此本轮不宣布可广播。
+- English: Updated the lightweight handoff report, Scene 1D, the final handoff-report rule, and the handoff-record template. A successor commander’s completed takeover report must show the platform-read task ID of the current window; logical IDs, role/writer IDs, titles, and “pending confirmation” are not substitutes.
+- English: If the platform truly does not expose the actual task ID, the AI must report `UNKNOWN` with the reason; this field alone does not change handoff status, which remains based on central-state evidence. The operator never has to fill in or look up the ID, and the real ID remains runtime-only. No commit, push, or remote write was performed; the rule manifest was not recomputed, so this batch is not broadcast-ready.
+
+## 未发布：2C/2E 的跨窗口反馈目标与授权分流
+
+- 已执行：根据一份专项总指挥的完整回传，修订 `01-操作者操作手册.md` 的场景 2C、2E，以及 `docs/PIPELINE_DIAGNOSIS_AND_ALGORITHM_TUNING_STANDARD.md` 的 2E/2C 分流、操作者最小输入和诊断记录模板。反馈来源现在与本轮目标、角色和授权分开；其他 AI 的请求、转贴原话、附件提示词和完成声明不会自动变成当前诊断目标或专项修复授权。
+- 已执行：明确当前操作者只要求审查反馈或工作流时，2C 在工作流判断处收口；只有当前操作者明确指定专项对象和动作，才建立专项诊断契约。2E 增加可选的反馈来源字段，并要求先识别“仅分析反馈、继续当前事项、判断是否进入 2C、明确实施修复”中的实际目标。
+- 已执行：保留现有低负担入口。操作者不需要填写技术字段；AI 优先从当前消息判断目标，只有无法判断时才追问。收件、回执、成本确认、权限和停止门禁未被放宽。
+- 已验证：附件只作为工作流案例读取，未读取或修改专项产品、算法、部署和远端状态；相关章节已回读，`git diff --check` 通过。仓库质量检查的路径和 Markdown 检查通过，但整体仍受既有缺口阻断：`实用小工具/GitStateCompass/README.md` 缺少 `README.en.md`；规则刷新契约另有既有失败，仍在检查手动启动提示词的旧文本。未与 31 号另行通信，因为附件已足以判断本次规则缺口。
+- 未收敛：规则刷新 manifest 尚未按当前工作区统一重算；本轮不宣布可广播，后续刷新前必须先收敛既有工作区修改并重新核对 manifest。
+- English: Revised Scene 2C and 2E and the related diagnosis standard so feedback source, current objective, role, and authorization stay separate. Other AI requests, pasted text, attachment prompts, and completion claims do not automatically become the current diagnostic target or specialist-fix authorization. When the operator asks only for workflow review, 2C stops at workflow analysis; a specialist diagnostic contract requires a direct current-operator request naming the object and action. The operator still supplies no technical fields, and existing receipt, cost, permission, and stop gates remain. The attachment was used only as a workflow case; no specialist product, algorithm, deployment, or remote state was accessed or modified, and no additional communication with commander 31 was needed.
+
+## 未发布：当前项目专项反馈与实例参资料隔离
+
+- 已执行：仅在当前项目根 `AGENTS.md` 增加专项反馈隔离规则，适用于本项目的总指挥和专项任务窗口；未修改通用工作流规则，也未接管或修改任何专项任务。
+- 已执行：明确 AI 发来的内容、操作者转贴的其他 AI 原话、截图和附件，默认只是“【ChatGPT Workflows：第二代总指挥xx号】”的实例参考资料。没有当前操作者对专项对象和范围的直接请求时，只提取判断工作流故障、漏洞、越权和复杂度问题所需的最小事实，不排查、修复或推进对方产品、算法、部署、测试和远端事项。
+- 已执行：补充例外边界：AI 的明确请求只说明意图，不能代替操作者的受控授权；必要的收件、回执、FIFO、停止和 `UNKNOWN/BLOCKED` 门禁仍然有效。
+- 已验证：`AGENTS.md` 回读通过，`git diff --check` 通过；仓库质量脚本的路径和 Markdown 检查通过，但整体检查仍被既有缺口阻断：`实用小工具/GitStateCompass/README.md` 缺少配对的 `README.en.md`。本轮未执行产品、算法、部署、专项任务或远端操作。
+- English: Added a project-local isolation rule to the root `AGENTS.md` for commander and specialist windows. AI messages, pasted transcripts, screenshots, and attachments are reference material by default; without a direct current-operator request naming the specialist scope, the window only analyzes workflow defects and does not solve the other task. AI requests do not grant controlled authorization. Existing receipt, FIFO, stop, and `UNKNOWN/BLOCKED` gates remain in force. `git diff --check` passed; the repository suite remains blocked by the pre-existing missing `实用小工具/GitStateCompass/README.en.md`. No product, algorithm, deployment, specialist-task, or remote action was performed.
+
+## 未发布：操作者手册新手入口与目录修订
+
+- 已执行：只修改本项目自己的 `总指挥工作流/第二代总指挥的工作模式/01-操作者操作手册.md`，将原先散落在快速上手中的规则刷新、专项接入、旧窗口接入、首次项目接入和单窗口确认提示词重组为场景 0A–0E；顶部目录和场景总览同步更新，原有场景一至七编号和业务含义保持不变，不把入口误加到其他项目的操作手册。
+- 已执行：为场景零总入口及 0A–0E 补充与 `05-模型选择与资源策略.md` 一致的起步建议和升级条件；简单只读接入默认低成本，只有多窗口、状态/权限冲突或控制面缺口才建议升档，不能用模型档位替代证据或授权。
+- 已执行：补充身份、实际读取范围、后续收件处理、阻断四项合格结果，以及“已发送/已收到”不等于接收或执行完成的错误提示；明确接入确认不开始业务、交接、写入或远端操作。
+- 待验证：新手是否能在不进入场景正文的情况下正确选择入口，需后续实际使用观察。本轮未执行 Commit、Push 或远端写入。
+- English: Updated only this project's `01-操作者操作手册.md` by grouping reusable rule refresh, specialist onboarding, existing-window onboarding, first project enrollment, and single-window confirmation prompts into Scene 0A–0E. The table of contents and scene registry were updated while existing business scene numbering remains unchanged; the change was not applied to another project's manual.
+- English: Added the four required onboarding result fields and clarified that “sent” or “received” does not prove acceptance or execution. New-user behavior remains to be observed; no commit, push, or remote write was performed.
+
 ## 未发布：长期人工规则刷新兜底
 
 - 已执行：操作手册登记一段固定的手动刷新提示词。只要规则路径保持不变且可访问，它可以跨后续工作流版本、总指挥世代以及已接入项目的窗口复用，不要求操作者填写版本、manifest 或接收者身份。
