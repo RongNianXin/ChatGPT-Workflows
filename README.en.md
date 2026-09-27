@@ -80,7 +80,7 @@ Specific model names, prices, and reasoning levels are not permanent prerequisit
 | Troubleshoot Codex or CC Switch | [Troubleshooting notes](故障排查与解决经验/) |
 | Reuse a focused prompt | [Prompt collection](其他%20Codex%20技巧性提示词/) |
 | Try a local helper | [Local utilities](实用小工具/) |
-| Save tasks and query Codex session snapshots (Windows dev.9) | [Session handoff assessment](实用小工具/Codex会话交接评估/README.en.md) |
+| Save tasks and query Codex session snapshots (Windows dev.10) | [Session handoff assessment](实用小工具/Codex会话交接评估/README.en.md) |
 | See real-world results | [Showcase](SHOWCASE.md) |
 
 The detailed manuals are currently written in Chinese. This page is an evaluation and navigation guide for English-speaking visitors.
@@ -162,4 +162,4 @@ Released under the [MIT License](LICENSE).
 
 This project acknowledges the [LINUX DO](https://linux.do/) community and supports sincere, friendly knowledge sharing and exchange.
 
-<!-- README-SOURCE-SHA256: 7c4186b4a0f5064e9d260abc2734eaed431e052b3c707ae705b2013614ad02a1 -->
+<!-- README-SOURCE-SHA256: 6412540de2ab3a84a8883c5bb9c62216beb21b8a4de397a9aafcddf36c183aa0 -->
