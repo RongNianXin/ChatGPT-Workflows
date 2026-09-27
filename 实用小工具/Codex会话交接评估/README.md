@@ -2,11 +2,11 @@
 
 [English](README.en.md)
 
-保存常用任务 ID，一键查看本机 Codex 会话的回合、文件大小、上下文压缩及交接参考信息。**当前推荐下载版本：Windows 工作台 0.2.0-dev.9；仓库内待发布源码为 0.2.0-dev.10。** 无需输入命令；源会话只读，数据不上传。
+保存常用任务 ID，一键查看本机 Codex 会话的回合、文件大小、上下文压缩及交接参考信息。**当前推荐下载版本：Windows 工作台 0.2.0-dev.10。** 无需输入命令；源会话只读，数据不上传。
 
 ## 下载与启动
 
-1. [下载 Windows 独立工具 ZIP](https://github.com/RongNianXin/ChatGPT-Workflows/releases/download/windows-sessiondesk-v0.2.0-dev.9/Windows-SessionDesk-0.2.0-dev.9.zip)，完整解压，双击根目录 `Start-SessionDesk.cmd`。无需克隆整个仓库；不要单独打开 HTML。
+1. [下载 Windows 独立工具 ZIP](https://github.com/RongNianXin/ChatGPT-Workflows/releases/download/windows-sessiondesk-v0.2.0-dev.10/Windows-SessionDesk-0.2.0-dev.10.zip)，完整解压，双击根目录 `Start-SessionDesk.cmd`。无需克隆整个仓库；不要单独打开 HTML。
 2. 已克隆仓库的用户，双击 [Start-SessionDesk.cmd](Start-SessionDesk.cmd)。仓库源码可能先于下载包，实际版本以页面顶部显示为准。
 3. 保存任务 ID，单项“查询/刷新”只更新该任务；“一键刷新”更新完整列表。名称与本地项目自动读取。右侧基本报告与详细报告分区显示，可切换简体中文或 English。
 

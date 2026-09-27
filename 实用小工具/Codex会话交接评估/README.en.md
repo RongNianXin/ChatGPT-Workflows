@@ -2,11 +2,11 @@
 
 [简体中文](README.md)
 
-Save frequently used task IDs and query local Codex turns, file size, compaction and handoff guidance with one click. **Recommended download: Windows desk 0.2.0-dev.9; the repository contains the unreleased 0.2.0-dev.10 source candidate.** No commands are required for everyday use. Source sessions are read-only; data is not uploaded.
+Save frequently used task IDs and query local Codex turns, file size, compaction and handoff guidance with one click. **Recommended download: Windows desk 0.2.0-dev.10.** No commands are required for everyday use. Source sessions are read-only; data is not uploaded.
 
 ## Download and start
 
-1. [Download the standalone Windows ZIP](https://github.com/RongNianXin/ChatGPT-Workflows/releases/download/windows-sessiondesk-v0.2.0-dev.9/Windows-SessionDesk-0.2.0-dev.9.zip), extract it completely, and double-click the root `Start-SessionDesk.cmd`. You do not need to clone the repository. Do not open the HTML by itself.
+1. [Download the standalone Windows ZIP](https://github.com/RongNianXin/ChatGPT-Workflows/releases/download/windows-sessiondesk-v0.2.0-dev.10/Windows-SessionDesk-0.2.0-dev.10.zip), extract it completely, and double-click the root `Start-SessionDesk.cmd`. You do not need to clone the repository. Do not open the HTML by itself.
 2. If you cloned the repository, double-click [Start-SessionDesk.cmd](Start-SessionDesk.cmd). Repository source may be newer than the download; use the version displayed at the top of the page.
 3. Save a task ID. Query / Refresh updates that task, while Refresh all updates the complete list. The conversation name and local project are detected automatically. Basic and detailed reports have separate areas, with Simplified Chinese and English available.
 
@@ -48,4 +48,4 @@ Results are engineering guidance, not official thresholds or live status. Segmen
 
 Detailed reports and history can contain complete user input and local paths. They remain in `.local` and must not be published without review. ZIP files exclude private state. The service listens only on loopback and validates a random connection token. Exit does not stop other programs or Codex tasks. Preserve the analyzer’s integrity warnings; missing Token counts must not be treated as zero.
 
-<!-- README-SOURCE-SHA256: a4caa8c6315cc467e21a96fe33d7eaa58589dcb1c1795ea0006bc4287b0aaf24 -->
+<!-- README-SOURCE-SHA256: a5274b732310428b1c10dd1add699caa5e97edfdfb1b69ba400f7cb749bb99d8 -->
