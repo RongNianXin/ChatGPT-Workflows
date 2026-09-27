@@ -1264,3 +1264,9 @@ The roadmap items above are candidates only. Before every commit, update this ch
 - 广播包现在要求事件封套、版本、manifest 摘要、允许写入范围和按角色读取集合；空白项目不会因广播自动启用。
 - 接收回执补齐 `result`、规则刷新记录位置和 `RECEIVED` 中间态说明。
 - 统一 schema v3 的 `root_ref` 必填契约，并新增工作流刷新静态契约测试。
+
+## 2026-09-27：修复 ChatGPT 网页侧栏拖动
+
+- 已执行：侧栏脚本更新至 2.1，拖动时同步调整侧栏外框与标题区域，手柄跟随实际边界。
+- 已验证：JavaScript 语法检查与差异空白检查通过；真实 ChatGPT 页面效果仍待人工验收。
+- English: Updated the sidebar userscript to 2.1 so its handle follows the actual edge while resizing the sidebar frame and title area. Syntax and diff checks passed; live-site behavior still needs manual validation.

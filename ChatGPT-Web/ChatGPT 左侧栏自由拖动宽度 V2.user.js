@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ChatGPT 左侧栏自由拖动宽度 V2
 // @namespace    chatgpt-sidebar-resizer
-// @version      2.0
+// @version      2.1
 // @description  自动识别 ChatGPT 左侧栏边缘，拖动改变宽度并自动保存
 // @license      MIT
 // @homepageURL  https://github.com/RongNianXin/ChatGPT-Workflows/tree/main/ChatGPT-Web
@@ -24,6 +24,7 @@
     let dragging = false;
     let handle = null;
     let sidebar = null;
+    let widthTargets = [];
 
     let savedWidth = parseInt(
         localStorage.getItem(STORAGE_KEY),
@@ -59,7 +60,7 @@
 
                 if (
                     rect.width >= 180 &&
-                    rect.width <= 650 &&
+                    rect.width <= 700 &&
                     rect.height >= window.innerHeight * 0.6 &&
                     rect.left <= 10
                 ) {
@@ -84,11 +85,11 @@
 
             if (
                 rect.width < 180 ||
-                rect.width > 650 ||
+                rect.width > 700 ||
                 rect.height < window.innerHeight * 0.65 ||
                 rect.left > 8 ||
                 rect.right < 180 ||
-                rect.right > 650
+                rect.right > 700
             ) {
                 continue;
             }
@@ -127,6 +128,35 @@
         return best;
     }
 
+    function findWidthTargets() {
+        const leaf = findSidebar();
+        if (!leaf) return [];
+
+        const targets = [];
+        for (let el = leaf; el && el !== document.body; el = el.parentElement) {
+            const rect = el.getBoundingClientRect();
+            if (rect.left > 12 || rect.width < 180 || rect.width > 700) break;
+            targets.push(el);
+        }
+        const outer = targets[targets.length - 1];
+        const outerRect = outer.getBoundingClientRect();
+        for (const el of outer.querySelectorAll('*')) {
+            const rect = el.getBoundingClientRect();
+            if (
+                rect.left <= 12 &&
+                rect.width >= 180 &&
+                rect.width <= outerRect.width + 1 &&
+                rect.height >= window.innerHeight * 0.6 &&
+                !targets.includes(el)
+            ) {
+                targets.push(el);
+            }
+        }
+        targets.splice(targets.indexOf(outer), 1);
+        targets.unshift(outer);
+        return targets;
+    }
+
 
     // ---------------------------------------------------------
     // 2. 设置侧栏宽度
@@ -139,9 +169,8 @@
             Math.min(MAX_WIDTH, width)
         );
 
-        if (!sidebar || !document.contains(sidebar)) {
-            sidebar = findSidebar();
-        }
+        widthTargets = findWidthTargets();
+        sidebar = widthTargets.length ? widthTargets[0] : null;
 
         // 尽可能覆盖新版/旧版 ChatGPT 的 CSS 变量
         document.documentElement.style.setProperty(
@@ -159,60 +188,16 @@
         }
 
 
-        if (sidebar) {
-
-            sidebar.style.setProperty(
-                '--sidebar-width',
-                width + 'px',
-                'important'
-            );
-
-            sidebar.style.setProperty(
-                'width',
-                width + 'px',
-                'important'
-            );
-
-            sidebar.style.setProperty(
-                'min-width',
-                width + 'px',
-                'important'
-            );
-
-            sidebar.style.setProperty(
-                'max-width',
-                width + 'px',
-                'important'
-            );
-
-
-            // 某些版本真正控制宽度的是父容器
-            let parent = sidebar.parentElement;
-
-            for (let i = 0; i < 3 && parent; i++) {
-
-                const rect = parent.getBoundingClientRect();
-
-                if (
-                    rect.left <= 10 &&
-                    rect.width >= 180 &&
-                    rect.width <= 700
-                ) {
-
-                    parent.style.setProperty(
-                        '--sidebar-width',
-                        width + 'px',
-                        'important'
-                    );
-                }
-
-                parent = parent.parentElement;
-            }
+        for (const target of widthTargets) {
+            target.style.setProperty('--sidebar-width', width + 'px', 'important');
+            target.style.setProperty('width', width + 'px', 'important');
+            target.style.setProperty('min-width', width + 'px', 'important');
+            target.style.setProperty('max-width', width + 'px', 'important');
+            target.style.setProperty('flex-basis', width + 'px', 'important');
         }
 
-
-        if (handle) {
-            handle.style.left = (width - 4) + 'px';
+        if (handle && sidebar) {
+            handle.style.left = (sidebar.getBoundingClientRect().right - 4) + 'px';
         }
     }
 
@@ -225,7 +210,8 @@
 
         if (dragging) return;
 
-        sidebar = findSidebar();
+        widthTargets = findWidthTargets();
+        sidebar = widthTargets.length ? widthTargets[0] : null;
 
         if (!sidebar) {
             if (handle) {
@@ -247,15 +233,8 @@
         handle.style.display = 'block';
 
         // 如果用户以前保存过宽度，第一次找到侧栏时应用
-        if (savedWidth !== null) {
-
-            setSidebarWidth(savedWidth);
-
-        } else {
-
-            // 没保存过，就直接贴在现在真实的侧栏边缘
-            handle.style.left = (rect.right - 4) + 'px';
-        }
+        if (savedWidth !== null) setSidebarWidth(savedWidth);
+        handle.style.left = (sidebar.getBoundingClientRect().right - 4) + 'px';
     }
 
 
