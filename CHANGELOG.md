@@ -2,6 +2,13 @@
 
 本文件记录 ChatGPT Workflows 的重要变更。
 
+## 未发布：4A/4K 的范围与项目规则分流
+
+- 已执行：4A 明确由 AI 根据团队和项目准则、改动依赖、审查责任与验证证据提出 PR 范围，操作者无需预划验收边界；多个功能不自动合成一个 PR。
+- 已执行：4K 明确个人项目可在允许直推时建议直接 Push，团队项目遵守团队贡献、保护、Review 和 CI 规则；多功能成果先分组，隐私、验证和远端最终确认仍适用。
+- 已验证：规则 manifest 15 项指纹、仓库质量检查和 4A/4K 防回退检查通过；真实任务中的路由表现仍待观察。本批仅本地修改，未 Push、创建 PR、Release 或部署。
+- English: Scenario 4A now asks AI to propose a coherent PR scope from project rules, dependencies, ownership, and evidence. Scenario 4K separates optional direct pushes in personal projects from team contribution requirements and groups unrelated features before publication. Local change only; live routing remains unverified.
+
 ## 未发布：场景 4K 本地成果同步入口
 
 - 已执行：新增与 4J 方向相反的 4K，操作者不知道文件清单时由 AI 盘点、筛选并准备本地可发布成果；4A 保留为明确需要 PR 的路径。第一代停用目录按精确路径排除，避免被“全部同步”误纳入。
