@@ -2,6 +2,18 @@
 
 本文件记录 ChatGPT Workflows 的重要变更。
 
+## 未发布：交接触发与当前轮指令优先修正
+
+- 已执行：明确每轮以当前操作者消息决定目标、时序和授权；上一轮“下一轮再交接”等内容只作背景，不能自动生成快照或继承权限。自然语言“准备交接/收口后交接”仅路由到场景 1C，必须完整执行预检、结束覆盖核账、成果回读、封条和交付门禁；仓库不存在独立的“场景 EC”，明确指向该目的时按 1C 处理。
+- 已执行：定义“收口”为安全停止原子步骤并登记状态、责任、断点、下一行动和恢复/失效条件；普通未完成项可进入快照非终态队列，结果未知的高风险动作或缺少稳定断点时才阻断。新增契约断言并升级规则版本到 `2026-09-28.1`。
+- English: Each turn now derives its action, timing, and authorization from the current operator message. Earlier “handoff next turn” wording is background only and cannot generate a snapshot or inherit permissions. Natural-language handoff requests route to scenario 1C but do not bypass its preflight, closeout coverage, readback, seal, and delivery gates. “EC” is not a separate scenario and maps to 1C only when the intent is explicit. Closeout means safely stopping at an atomic boundary and recording status, owner, checkpoint, next action, and recovery/expiry conditions; ordinary pending work may remain in the snapshot queue, while unknown high-risk work or missing checkpoints blocks readiness.
+
+## 未发布：跨任务工作流审查与来源业务分流修正
+
+- 已修正：明确请求审查公共工作流的 AI 来信按 `WORKFLOW_FEEDBACK` 处理，按 FIFO 在取得时隙后完成最小只读核对；来源项目的产品、算法、测试、部署、远端动作和业务交接仍需专项授权。混合消息拆分处理，避免把隔离边界扩大成跳过工作流审查。
+- 已验证：新增契约检查覆盖公共工作流审查、来源业务阻断和混合消息分流；静态检查不能证明未来宿主一定自动正确路由。
+- English: AI messages that explicitly request review of the public workflow now route to `WORKFLOW_FEEDBACK` and receive minimal read-only handling after FIFO scheduling. Source-project product, algorithm, test, deployment, remote, and business-handoff actions still require scoped authorization. Mixed messages are split so isolation cannot suppress workflow review. A regression contract covers the three routes; static checks cannot prove future host behavior.
+
 ## 已发布：Windows SessionDesk 0.2.0-dev.10
 
 - 已执行：按当前源码重新制作独立的 10 文件 ZIP，保留旧包；当前候选 SHA-256 为 `3161D998B2F6032ED5F74CA2B6B8BD13E26B3F49273D6665CBE6F114269FE91A`。更新测试清单以绑定这份精确候选。
