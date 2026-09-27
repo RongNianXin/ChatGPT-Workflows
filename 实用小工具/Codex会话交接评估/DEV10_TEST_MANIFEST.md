@@ -7,9 +7,9 @@ This file defines the single automated-simulation test count for the Windows Ses
 ## 证据边界 / Evidence boundary
 
 - 候选证据基线：`a99a6c8`；产品文件锁修复位于其父提交 `172dc4c`。
-- 候选 ZIP SHA-256：`8C4D2E1C68A68C7B37A0F3977431704D99BA86A7A65AF5A018117D8EFC8BE0CC`，归档内有 10 个发布文件。
+- 当前发布候选 ZIP SHA-256：`3161D998B2F6032ED5F74CA2B6B8BD13E26B3F49273D6665CBE6F114269FE91A`，归档内有 10 个发布文件；旧候选 `8C4D2E1C68A68C7B37A0F3977431704D99BA86A7A65AF5A018117D8EFC8BE0CC` 的历史结果不用于当前包验收。
 - 执行脚本：`.github/scripts/Test-WindowsSessionDesk.cjs`。脚本使用隔离虚构数据、无头 Edge 和 PowerShell 5.1；不读取真实会话，不安装产品依赖。
-- 本轮结果：47/47 通过，`errors=[]`、`external=0`。另以非合成模式启动 ZIP，API 返回版本 `0.2.0-dev.10`、模式 `local-readonly`，并完成受控退出。
+- 当前候选结果：从上述精确 ZIP 全新解压，47/47 通过，`errors=[]`、`external=0`；使用隔离空 `CODEX_HOME` 以非合成模式启动，API 返回版本 `0.2.0-dev.10`、模式 `local-readonly`，并完成受控退出。测试环境为 Windows PowerShell 5.1、Edge 149、Playwright 1.63.0；真实用户会话与跨设备人工表现未验收。
 - 这些检查不代表所有电脑、系统环境、同步软件或真实会话均已测试。
 
 The test harness uses isolated synthetic data, headless Edge, and PowerShell 5.1. It does not read real sessions or install product dependencies. The result above does not establish coverage for every machine, system environment, sync client, or real session.

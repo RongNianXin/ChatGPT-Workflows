@@ -2,6 +2,12 @@
 
 本文件记录 ChatGPT Workflows 的重要变更。
 
+## 未发布：Windows SessionDesk 0.2.0-dev.10 发布候选复测
+
+- 已执行：按当前源码重新制作独立的 10 文件 ZIP，保留旧包；当前候选 SHA-256 为 `3161D998B2F6032ED5F74CA2B6B8BD13E26B3F49273D6665CBE6F114269FE91A`。更新测试清单以绑定这份精确候选。
+- 已验证：全新解压后 47/47 项合成回归通过，页面错误为空、外部请求为 0；隔离空 `CODEX_HOME` 的非合成启动返回 `0.2.0-dev.10 / local-readonly`，并受控退出。真实用户会话、其他设备及专业表现未验收；Tag、Release、附件与下载入口仍须分别核对远端状态。
+- English: Rebuilt the 10-file Windows SessionDesk 0.2.0-dev.10 candidate and bound its exact SHA-256 in the test manifest. All 47 synthetic checks passed after fresh extraction, with no page errors or external requests. An isolated non-synthetic startup reported the expected version and mode, then exited cleanly. Real user sessions and other devices remain unverified; remote release state is separate.
+
 ## 未发布：场景 2G 有界自动测试入口
 
 - 已执行：把独立自动化负反馈闭环测试提示词的当前用法迁入场景 2G，操作者只填停止条件、质量标准、真实数据与可选真值；2E 保留人工反馈，2C 保留原因不明时的逐节点诊断。旧版“2G 代码精简”按内容和规则版本映射现行 2B，独立提示词原件保留。
