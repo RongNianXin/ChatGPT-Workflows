@@ -6,7 +6,7 @@
 
 - 已执行：新增与 4J 方向相反的 4K，操作者不知道文件清单时由 AI 盘点、筛选并准备本地可发布成果；4A 保留为明确需要 PR 的路径。第一代停用目录按精确路径排除，避免被“全部同步”误纳入。
 - 已确认：Windows SessionDesk 的 `dev.10` 源码候选已在仓库，Release 列表仍以 `dev.9` 为最新；源码 Push 与 Tag、Release、下载包发布是独立动作。
-- 已验证：全仓质量检查、规则 manifest 15 项指纹和第一代目录忽略规则通过；静态检查不证明未来 AI 行为。远端同步待本次精确确认；`dev.10` 发布候选的完整复测和人工发布决定仍独立处理。
+- 已验证：全仓质量检查、规则 manifest 15 项指纹和第一代目录忽略规则通过；本批 13 个路径已推送到 `origin/main`，GitHub Repository quality 对该批首次提交通过。静态检查不证明未来 AI 行为；`dev.10` 发布候选的完整复测和人工发布决定仍独立处理。
 - English: Added scenario 4K for inventorying and preparing publishable local changes without requiring the operator to know file names or choose a PR. Scenario 4A remains the explicit PR route, and historical first-generation files stay local. The dev.10 source candidate is present, but no dev.10 Release has been published; validation and release remain separate.
 
 ## 未发布：反馈自动分流与连续算法效果诊断
