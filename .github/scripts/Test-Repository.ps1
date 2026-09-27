@@ -941,16 +941,16 @@ function Test-TextFlowchartTemplateContract {
         },
         @{
             Path = '总指挥工作流/第二代总指挥的工作模式/00-第二代工作流总览.md'
-            Required = @('核心设计目标与新功能审查基线', '协作净收益', '不在总指挥启动时预加载')
+            Required = @('核心设计目标与新功能审查基线', '协作净收益', '先读 `docs/PIPELINE_DIAGNOSIS_AND_ALGORITHM_TUNING_STANDARD.md` 的 2.1 做最小分流', '只有执行到等宽文本图生成步骤时')
         },
         @{
             Path = '总指挥工作流/第二代总指挥的工作模式/01-操作者操作手册.md'
-            # The operator entry routes to the detailed contract; do not duplicate its interface constants.
-            Required = @('首次完整读取对应专项手册', '指定文字版流程图模板并核对接口', '模板不可用时明确报告', '只暂停图及其直接依赖交付')
+            # The operator entry keeps diagnosis concise and delegates optional rendering details.
+            Required = @('最小定点核对后仍无法定位', '等宽文本图', '不把这一选择设为继续排查的前提', '只诊断不自动授权修产品')
         },
         @{
             Path = '总指挥工作流/第二代总指挥的工作模式/02-总指挥核心规则.md'
-            Required = @($templatePath, 'template_id: text-flowchart-renderer', 'interface_version: 1', '不得静默使用另一套画法冒充同等结果')
+            Required = @($templatePath, '先读取 `docs/PIPELINE_DIAGNOSIS_AND_ALGORITHM_TUNING_STANDARD.md` 的 2.1 并完成最小定点核对', '只有进入等宽文本图生成步骤时')
         },
         @{
             Path = '总指挥工作流/第二代总指挥的工作模式/docs/PIPELINE_DIAGNOSIS_AND_ALGORITHM_TUNING_STANDARD.md'

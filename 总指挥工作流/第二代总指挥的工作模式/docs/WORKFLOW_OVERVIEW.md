@@ -19,8 +19,9 @@
 ## 辅助工具
 
 - [自动化测试经验与可信结果门禁](AUTOMATED_TESTING_LESSONS.md)：浏览器、真实媒体、模型、跨版本对照或人工结果冲突时按需完整读取；它不产生测试、产品修改或远端写入授权。
+- 有界自动测试、授权内修复与复测从 [01 场景 2G](../01-操作者操作手册.md#场景-2g用真实数据做有界自动测试修复和复测) 启动；本页不另设测试模板。
 - [Pull Request 提交、更新与审查协作标准](PR_SUBMISSION_AND_REVIEW_STANDARD.md)：创建或更新 PR、请求审查、回复阻断意见和判断可合并状态时完整读取；它不产生远端写入、Approve 或 Merge 授权。
-- [输入到输出链路排查与算法调优标准](PIPELINE_DIAGNOSIS_AND_ALGORITHM_TUNING_STANDARD.md)：输出异常、跨环境不一致或根因不明时完整读取；默认使用紧凑文本执行图，必要时再生成矢量图或分步 HTML。
+- [输入到输出链路排查与算法调优标准](PIPELINE_DIAGNOSIS_AND_ALGORITHM_TUNING_STANDARD.md)：2E 失败反馈先按 2.1 最小分流，确需完整 2C 时全文读取；内部逐节点核验，默认先报告原因证据、修复和验证，文本图或分步 HTML 按需展示。
 - [链路分步演示 HTML 模板](../templates/PIPELINE_STEP_DECK_TEMPLATE.html)：用于把同一组稳定节点编号和实际证据做成可翻页说明；模板本身不生成中间证据，也不改变权限或验收状态。
 - [链路分步演示增强器](../tools/pipeline-step-deck/PIPELINE_STEP_DECK_ENHANCEMENTS.js)：由构建脚本按需注入本地演示页，提供同源结构化复制、精确视觉折叠和带路径选择的完整长图导出；操作者仍只从 `01` 启动，不需要单独调用。
 - [Codex 会话交接评估](../../../实用小工具/Codex会话交接评估/README.md)：只读检查本地会话文件容量、自动压缩次数和最近输入占窗口比例，辅助判断是否准备交接。

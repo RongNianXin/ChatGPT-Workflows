@@ -2,6 +2,32 @@
 
 本文件记录 ChatGPT Workflows 的重要变更。
 
+## 未发布：场景 2G 有界自动测试入口
+
+- 已执行：把独立自动化负反馈闭环测试提示词的当前用法迁入场景 2G，操作者只填停止条件、质量标准、真实数据与可选真值；2E 保留人工反馈，2C 保留原因不明时的逐节点诊断。旧版“2G 代码精简”按内容和规则版本映射现行 2B，独立提示词原件保留。
+- 待验证：真实产品入口、算法效果、硬时限执行和专业验收均未运行；本批仅涉及工作流规则与静态检查，不含产品修改或广播。Commit 与远端状态以 Git 记录为准。
+- English: Added scenario 2G for bounded testing with real data, authorized local repair, and retesting. Existing 2E feedback and 2C diagnosis keep their roles; the legacy 2G refactoring alias maps to 2B. The standalone source prompt remains. Live product behavior is unverified, and this change is local only.
+
+## 未发布：自动化负反馈测试入口定位
+
+- 已核验：限轮次或时长的自动测试、局部修复与复测提示词仍在 `其他 Codex 技巧性提示词/`，属于独立提示词；Git 历史显示其新增晚于一次操作手册精简，未发现被该次重排删除。当前编号场景中没有对应的显眼入口；本批只记录定位结论，未改测试流程或执行测试。
+- 后续处理：相关手册现已增加场景 2G 入口；真实自动测试与算法效果未验证。Commit 与远端状态以 Git 记录为准。
+- English: Confirmed the bounded automated feedback test prompt still exists as a standalone prompt and was added after the operator manual was condensed. This records a possible navigation gap; no test behavior changed or test run was performed.
+
+## 未发布：GitHub 与算法工作流定点修正
+
+- 已执行：`02` 的输出异常入口先读诊断标准 2.1，只有按证据进入完整 2C 才全文加载和逐节点盘查；双边有效成果的当前路由及关联引用改为 `4I`，保留旧编号兼容。规则版本更新为 `2026-09-27.8`，契约检查增加加载、盘查范围和错号路由的反例门禁。
+- 已审查：另一 Agent 定点复核确认两处冲突及修法；直接 Push 全文加载 PR 标准、`4J` 干净快进固定确认属于待评估成本，本批保留现有保护。
+- 待验证：真实 AI 路由、算法根因定位与修复效果、GitHub 协作耗时和 Token 收益。Commit 与远端状态以 Git 记录为准。
+- English: Fixed the 2E/2C loading conflict and routed bilateral Git integration to 4I while retaining the legacy alias. Added regression checks; direct-push reading cost and 4J confirmation remain under evaluation. Local change only; live Agent and algorithm outcomes remain unverified.
+
+## 未发布：2E 反馈到 2C 查因与修复的默认路径
+
+- 已执行：2E 失败反馈先由 AI 做最小定点核对；原因与边界清楚时局部修复，仍不明、证据冲突或涉及跨层链路时才进入完整 2C。2C 内部保留完整节点拆解、逐层观测和因果验证，默认先报告根因证据、具体修复计划、授权内修复及回归。流程图和逐节点讲解改为按需展示，不再作为修复前置交付。
+- 已执行：修复缺授权时先完成独立诊断，再一次列出拟改范围、影响和验证请求差额；仅分析、转贴材料、专业效果及远端门禁不变。同步修正诊断标准的分流章节锚点，规则版本更新为 `2026-09-27.6`。
+- 已验证：规则来源指纹、全仓质量检查及合成分流案例通过；真实项目中的根因定位质量、修复效果和对话轮次尚无证据。本批未处理来源项目；Commit 与远端状态以 Git 记录为准。
+- English: Scenario 2E first triages failed feedback with a focused check. Clear causes get a local fix; unresolved or cross-stage faults enter full 2C diagnosis. Full node-level evidence and causal checks remain, while the default report leads with findings, a fix plan, authorized changes, and regression results. Diagrams remain available when needed. Missing repair permission still requires one scoped request; real-world behavior remains unverified.
+
 ## 未发布：4A/4K 的范围与项目规则分流
 
 - 已执行：4A 明确由 AI 根据团队和项目准则、改动依赖、审查责任与验证证据提出 PR 范围，操作者无需预划验收边界；多个功能不自动合成一个 PR。

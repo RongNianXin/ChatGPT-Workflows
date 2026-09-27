@@ -32,6 +32,11 @@ const checks = [
 ];
 checks.push(['local-to-remote route keeps release separate', `${read('01-操作者操作手册.md')}\n${read('02-总指挥核心规则.md')}`, ['场景 4K：将本地最新成果同步到远端', '不必先决定是否提 PR', '同步源码不会自动生成下载页中的新 Release', '精确纳入/排除范围']]);
 checks.push(['PR scope and local sync follow project rules', `${read('01-操作者操作手册.md')}\n${read('02-总指挥核心规则.md')}`, ['操作者不必先划定可验收范围', '个人项目可以建议直接 Push', '团队项目必须先遵守团队规则', '多个功能不自动合成一个 PR', '不能绕过隐私、验证和远端最终确认']]);
+checks.push(['feedback triages before costly 2C and repairs within scope', `${read('01-操作者操作手册.md')}\n${read('docs/PIPELINE_DIAGNOSIS_AND_ALGORITHM_TUNING_STANDARD.md')}`, ['先描述现象；AI 定点核对后决定是否进入 2C', '最小定点核对后仍无法定位', '原因及修复边界已有可靠证据的，在现有授权内局部修复与回归', '已有同一问题的修复授权时直接修复与回归', '仅报结果且没有开放目标', '一次列明拟改范围、影响和验证以请求差额授权']]);
+checks.push(['workflow entry points load triage before full diagnosis', `${read('00-第二代工作流总览.md')}\n${read('02-总指挥核心规则.md')}\n${read('docs/WORKFLOW_OVERVIEW.md')}`, ['先读 `docs/PIPELINE_DIAGNOSIS_AND_ALGORITHM_TUNING_STANDARD.md` 的 2.1 做最小分流', '先读取 `docs/PIPELINE_DIAGNOSIS_AND_ALGORITHM_TUNING_STANDARD.md` 的 2.1 并完成最小定点核对', '2E 失败反馈先按 2.1 最小分流']]);
+checks.push(['diagnosis keeps node-level evidence while reporting results first', `${read('00-第二代工作流总览.md')}\n${read('01-操作者操作手册.md')}\n${read('docs/PIPELINE_DIAGNOSIS_AND_ALGORITHM_TUNING_STANDARD.md')}`, ['逐项核对输入、处理、输出、不变量、观测证据和失败信号', '可证伪对照验证根因', '默认先报告复现和版本', '完整节点和证据留在工作项中供回查', '复杂分叉、证据争议']]);
+checks.push(['diagnosis references resolve to the current section', `${read('02-总指挥核心规则.md')}\n${read('06-复盘与优化规则.md')}\n${read('docs/PIPELINE_DIAGNOSIS_AND_ALGORITHM_TUNING_STANDARD.md')}`, ['#21-2e-分流与-2c-连续执行', '<a id="21-2e-分流与-2c-连续执行"></a>']]);
+checks.push(['bounded test scenario is distinct from feedback, diagnosis and legacy 2G', `${read('00-第二代工作流总览.md')}\n${read('01-操作者操作手册.md')}\n${read('02-总指挥核心规则.md')}`, ['场景 2G：用真实数据做有界自动测试、修复和复测', '旧版精简提示词的“2G”按内容和规则版本映射到当前 2B', '2E 用于反馈你已经观察到的结果；2C 是原因不明时的逐节点查因方法', '收到当前版 2G 的真实数据有界测试请求时走 2G', '可终止本轮进程及其子进程', '不因重试、换卡或切换窗口重置', '质量标准无法直接核验、又无可靠真值或必要人工确认时']]);
 let failed = 0;
 for (const [name, text, needles] of checks) {
   const missing = needles.filter(needle => !text.includes(needle));
@@ -39,6 +44,37 @@ for (const [name, text, needles] of checks) {
   else console.log(`PASS: ${name}`);
 }
 if (failed) process.exit(1);
+const diagnosticDocs = `${read('00-第二代工作流总览.md')}\n${read('01-操作者操作手册.md')}\n${read('02-总指挥核心规则.md')}\n${read('docs/PIPELINE_DIAGNOSIS_AND_ALGORITHM_TUNING_STANDARD.md')}`;
+if (diagnosticDocs.includes('默认交付紧凑文本执行图') || diagnosticDocs.includes('排查的基础交付必须先确认实际运行身份，再给')) {
+  console.error('FAIL: diagnosis still requires a diagram before the finding or repair');
+  process.exit(1);
+}
+console.log('PASS: diagnosis does not require a diagram before findings or repair');
+const coreRules = read('02-总指挥核心规则.md');
+const diagnosisEntry = coreRules.match(/^9\. 命中“输出异常的链路排查触发门禁”时，(.+)$/m)?.[1];
+const diagnosisMethod = coreRules.match(/^1\. 输出质量不符合预期时，(.+)$/m)?.[1];
+const diagnosisCollaboration = coreRules.match(/^5\. 操作者可以只用日常语言描述现象或“不确定”。(.+)$/m)?.[1];
+const diagnosisGraph = coreRules.match(/^7\. 排查时先确认实际运行身份；(.+)$/m)?.[1];
+if (!diagnosisEntry?.includes('先读取 `docs/PIPELINE_DIAGNOSIS_AND_ALGORITHM_TUNING_STANDARD.md` 的 2.1') ||
+    !diagnosisEntry.includes('进入完整 2C 时再完整读取该标准') ||
+    diagnosisEntry.startsWith('完整读取') ||
+    !diagnosisMethod?.includes('以下第 2-4 条仅在进入完整 2C 后适用') ||
+    !diagnosisCollaboration?.includes('进入完整 2C 时逐节点补齐') ||
+    !diagnosisGraph?.includes('2E 定点路径记录与异常有关的节点和证据，进入完整 2C 后再建立')) {
+  console.error('FAIL: output anomalies must triage through 2.1 before full 2C loading');
+  process.exit(1);
+}
+console.log('PASS: output anomalies do not force full 2C loading');
+const bilateralRoute = coreRules.match(/^\| 双方有尚未相互包含且需保留的有效成果，当前确需汇合 \| (.+) \|$/m)?.[1];
+if (!bilateralRoute?.startsWith('进入 4I 方案') ||
+    !coreRules.includes('不调用 4I') ||
+    !coreRules.includes('评估是否调用 4I') ||
+    !coreRules.includes('旧 2D 汇合归入 4I') ||
+    !coreRules.includes('按证据进入完整 2C 时再完整读取该标准')) {
+  console.error('FAIL: bilateral integration must route to 4I while legacy aliases and full 2C remain available');
+  process.exit(1);
+}
+console.log('PASS: bilateral integration routes to 4I with legacy compatibility');
 const modelSuggestions = read('01-操作者操作手册.md').split(/\r?\n/).filter(line => line.includes('**模型建议：**'));
 const unversionedSuggestions = modelSuggestions.filter(line => /\b(?:Sol|Luna|Astra|Terra)\b/.test(line.replace(/GPT-\d+(?:\.\d+)? (?:Sol|Luna|Astra|Terra)\b/g, '')));
 if (modelSuggestions.length < 40 || unversionedSuggestions.length) {
