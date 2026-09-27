@@ -42,6 +42,7 @@ coverage/
 **/全局提示词（严禁AI自动修改）/
 /Codex提示词优化工程_阿荣/
 /总指挥工作流/第一代 重总指挥模式（非常消耗token）/
+/总指挥工作流/第一代 重总指挥模式（非常消耗token已停用）/
 
 # Local workflow history: useful locally, not part of the public package
 /总指挥工作流/第二代总指挥的工作模式/task_plan.md

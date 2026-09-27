@@ -2,6 +2,21 @@
 
 本文件记录 ChatGPT Workflows 的重要变更。
 
+## 未发布：场景 4K 本地成果同步入口
+
+- 已执行：新增与 4J 方向相反的 4K，操作者不知道文件清单时由 AI 盘点、筛选并准备本地可发布成果；4A 保留为明确需要 PR 的路径。第一代停用目录按精确路径排除，避免被“全部同步”误纳入。
+- 已确认：Windows SessionDesk 的 `dev.10` 源码候选已在仓库，Release 列表仍以 `dev.9` 为最新；源码 Push 与 Tag、Release、下载包发布是独立动作。
+- 已验证：全仓质量检查、规则 manifest 15 项指纹和第一代目录忽略规则通过；静态检查不证明未来 AI 行为。远端同步待本次精确确认；`dev.10` 发布候选的完整复测和人工发布决定仍独立处理。
+- English: Added scenario 4K for inventorying and preparing publishable local changes without requiring the operator to know file names or choose a PR. Scenario 4A remains the explicit PR route, and historical first-generation files stay local. The dev.10 source candidate is present, but no dev.10 Release has been published; validation and release remain separate.
+
+## 未发布：反馈自动分流与连续算法效果诊断
+
+- 已执行：2E 明确为人工反馈入口，2C 为系统诊断方法；操作手册补入选择示例，由 AI 按证据分流，取消同一授权目标内的重复阶段启动确认。内部步骤保留，总资源上限、关键人工输入及受控操作仍是局部停止边界。
+- 已执行：诊断标准补入期望可观察化、错误分组、算法适用假设、节点替换/消融和有依据的行为关系测试；允许结论为方法能力限制或多因素作用，不强迫每次找出单个代码缺陷。第三方方法仅作研究输入，未安装新依赖或调用产品算法。
+- 已执行：联动 01、02、06、版本入口及 manifest，版本 `2026-09-27.3`；现有文档回归门禁补入旧阶段审批措辞的防回退检查。旧章节锚点兼容保留。
+- 已验证：全仓质量检查、独立审查定点复核与六类分流/停点静态走读通过；复核指出的一处旧阶段边界措辞已统一并回读。静态规则不能证明真实模型遵循率、算法效果或 Token 收益。本批仅本地修改，未 Commit、广播或远端写入。
+- English: Clarified 2E as the feedback entry and 2C as the diagnosis method. AI routes by evidence and continues within the same authorized objective without repeated phase approvals, while retaining resource and permission limits. Added task-specific error grouping, algorithm-assumption checks, controlled ablations, and behavioral relations without promising a unique root cause. Version `2026-09-27.3`; repository checks, independent review and six routing/stop-condition walkthroughs passed. One remaining phase-boundary phrase was corrected and reread. Local changes only; no live behavior or product-effect validation and no remote publication.
+
 ## 未发布：跨平台规则指纹一致性
 
 - 已确认：`2026-09-27.1` 在本地检查通过、推送成功，但 GitHub Windows 检出将部分规则文件转为 CRLF，导致原始字节 SHA-256 与规则 manifest 不一致，远端 `Repository quality` 失败。
