@@ -2,6 +2,19 @@
 
 本文件记录 ChatGPT Workflows 的重要变更。
 
+## 未发布：远端同步自然语言入口统一路由到 4K
+
+- 已执行：将“更新一下远端仓库”“把本地的最新成果同步到远端”及同义表达明确路由到场景 4K 的本地成果盘点与候选准备阶段；这些表达不直接授予 Push，也不跳过归属、隐私、验证、团队协作和远端最终确认门禁。
+- 已验证：规则总览、操作者手册和总指挥核心规则的路由说明保持一致；`Test-WorkflowRefreshContract.mjs`（28 项）、`Test-Repository.ps1`、`Test-HandoffSeal.mjs`（54 项）、`Test-Prepare-Handoff.mjs`（19 项）和 `git diff --check` 均通过。
+- English: The natural-language requests “update the remote repository” and “sync the latest local work to the remote repository,” including equivalent wording, now route to Scenario 4K for local-result inventory and candidate preparation. They do not directly authorize Push or bypass ownership, privacy, verification, team-collaboration, or final remote-confirmation gates. `Test-WorkflowRefreshContract.mjs` (28 cases), `Test-Repository.ps1`, `Test-HandoffSeal.mjs` (54 cases), `Test-Prepare-Handoff.mjs` (19 cases), and `git diff --check` all pass.
+
+## 未发布：交接读取链减负与规范快照收敛
+
+- 已执行：对抗式复核总指挥交接的必要步骤，保留安全收口、独立候选核验、操作者停止确认、原子登记唯一写者和中央回读；将旧总指挥与新候选的提示词改为“一份规范机器记录 + 短摘要”，候选默认只读取聚合状态和必要未提交成果。
+- 已执行：规则指纹一致时不全文读取 02/04/07/09/10；中央工作项先读计数、优先级摘要和当前活跃项；远端、运行和专业验收按当前项目及下一步依赖条件展开。规则或工作区漂移时废弃候选并递增重生成，保留独立 `DELIVERED` 回执和规则冻结。
+- 已验证：本批只修改工作流文档和规则版本，未执行真实跨窗口交接、产品修改、远端写入或部署；本轮质量脚本、封条、交接准备、契约检查和 `git diff --check` 已复跑并通过。
+- English: Adversarial review retained the safety gates for closeout, independent candidate verification, operator stop confirmation, atomic single-writer registration, and central readback. Scenario 1C/1D now use one canonical machine record plus a short summary; candidates read aggregates and necessary uncommitted artifacts by default. Rule drift or workspace drift supersedes the candidate and requires a new generation. Real cross-window handoff and remote operations remain unverified.
+
 ## 未发布：交接流程减负与验证器根因修复
 
 - 已执行：根据两份真实交接复盘，拆开“不可变交接证明”“持续变化的中央状态”和“候选规则基线”。候选生成到正式切换期间冻结规则版本与 manifest；普通中央进度更新不再强制追加 `CURRENT_ATTESTATION`，已完成接管不因普通进度变化自动失效。版本更新为 `2026-09-28.4`。
