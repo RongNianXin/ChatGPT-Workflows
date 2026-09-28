@@ -2,6 +2,12 @@
 
 本文件记录 ChatGPT Workflows 的重要变更。
 
+## 未发布：修复规则 manifest 的跨平台换行指纹
+
+- 已发现：本地四份规则文件仍含 CRLF/混合换行，manifest 绑定了本地字节；GitHub 按 `.gitattributes` 检出 LF 后，远端 `Repository quality` 在提交 `256e2ec` 发现 `00-第二代工作流总览.md` 指纹不一致。
+- 已修复：将 `00/02/09/10` 规范化为 LF，并按规范化后的实际文件重新计算 manifest；未改变规则语义。该修复只处理跨平台字节一致性，不放宽规则内容校验。
+- English: Four rule files still contained CRLF or mixed line endings while the manifest recorded local bytes. GitHub checked out LF per `.gitattributes`, and the `Repository quality` run for commit `256e2ec` reported a digest mismatch beginning with `00-第二代工作流总览.md`. The files are now normalized to LF and the manifest is recalculated from those canonical bytes; rule semantics are unchanged.
+
 ## 未发布：远端同步自然语言入口统一路由到 4K
 
 - 已执行：将“更新一下远端仓库”“把本地的最新成果同步到远端”及同义表达明确路由到场景 4K 的本地成果盘点与候选准备阶段；这些表达不直接授予 Push，也不跳过归属、隐私、验证、团队协作和远端最终确认门禁。
