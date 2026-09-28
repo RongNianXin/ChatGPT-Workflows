@@ -316,8 +316,11 @@ export function prepareFormalHandoff(configPath) {
   if (registryRef) {
     const registryPath = resolveSource(draft.sources.control_plane_registry, sourceRoot, externalControlPlaneRoot, 'control_plane_registry');
     registry = readJson(registryPath);
-    const statusRoot = sourceRootFor(draft.sources.status_index, sourceRoot, externalControlPlaneRoot);
-    const registryErrors = validateControlPlaneRegistry(registry, statusRoot, draft.sources.status_index.path_ref);
+    // A registry is owned by its declared source root. The canonical status
+    // index may live in an external control plane, but legacy indexes listed
+    // by the registry live alongside the registry in the code source root.
+    const registryRoot = sourceRootFor(draft.sources.control_plane_registry, sourceRoot, externalControlPlaneRoot);
+    const registryErrors = validateControlPlaneRegistry(registry, registryRoot, draft.sources.status_index.path_ref);
     if (registryErrors.length) throw new Error(`control-plane registry invalid: ${registryErrors.join('; ')}`);
   }
   const duplicateIndexes = findActiveControlPlaneIndexes(sourceRoot, canonicalStatusIndex, registry);

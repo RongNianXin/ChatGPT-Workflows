@@ -6,11 +6,11 @@
   "rules": [
     {
       "path_ref": ".github/scripts/HandoffSeal.mjs",
-      "sha256": "B67E98F38899C5656E1306273C2CE60FE33675BC6601E1C9FC49906A1E2334D6"
+      "sha256": "E6FE288AF4FE0CA368AFDA6B488787F23372A54321D87F10C91B29BCDF9E7131"
     },
     {
       "path_ref": ".github/scripts/Prepare-Handoff.mjs",
-      "sha256": "186C2D3144A5E99189447022931360C507F811475A97C13228DAA2190736477B"
+      "sha256": "C2199EF5994E3566BDB51B0A11647A18ABF2E801B15D2B4B092787CA0B0FFDC0"
     },
     {
       "path_ref": ".github/scripts/Mark-Handoff-Delivered.mjs",

@@ -1,4 +1,11 @@
 # 变更日志
+## 2026-09-28：修正交接来源根路径校验
+
+- 已执行：封条验证和交接预处理现在按各来源自身声明的根目录核对控制面 registry，并使用路径关系判断避免符号链接或相邻前缀绕过边界。
+- 已验证：HandoffSeal 54/54、Prepare-Handoff 20/20、WorkflowRefreshContract 30/30 通过；本批修复已与 manifest 指纹同步。
+- English: Handoff seal verification and preparation now validate the control-plane registry against its declared source root and use path relationships that resist symlink or adjacent-prefix boundary bypasses.
+- English: HandoffSeal 54/54, Prepare-Handoff 20/20, and WorkflowRefreshContract 30/30 passed; the manifest fingerprints were refreshed for these fixes.
+
 ## 2026-09-28：明确 Windows 工作台版本与远端下载核对
 
 - 已执行：在 Windows 工作台中说明 `0.2.0-dev.10` 已有 GitHub 下载但仍是开发预览，并补充本地包、远端 Release、SHA-256 和预发布状态的核对方法。

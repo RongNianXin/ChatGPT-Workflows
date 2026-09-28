@@ -10,6 +10,10 @@ const exactKeys = (value, allowed) => value && typeof value === 'object' && !Arr
 const relativeRef = value => typeof value === 'string' && value.length > 0 && !path.isAbsolute(value) && !path.win32.isAbsolute(value) && !value.split(/[\\/]+/).includes('..');
 const iso = value => typeof value === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/.test(value) && !Number.isNaN(Date.parse(value));
 const digest = value => crypto.createHash('sha256').update(value).digest('hex');
+const insideRoot = (root, candidate) => {
+  const relative = path.relative(path.resolve(root), path.resolve(candidate));
+  return relative === '' || (!relative.startsWith(`..${path.sep}`) && relative !== '..' && !path.isAbsolute(relative));
+};
 const sorted = value => {
   if (Array.isArray(value)) return value.map(sorted);
   if (value && typeof value === 'object') return Object.fromEntries(Object.keys(value).sort().map(key => [key, sorted(value[key])]));
@@ -34,12 +38,14 @@ function verifySourceFiles(seal, sourceRoot, externalControlPlaneRoot) {
       const root = source.root_ref === 'external_control_plane' ? externalRoot : internalRoot;
       if (!root) throw new Error(`INPUT_REQUIRED: missing ${source.root_ref === 'external_control_plane' ? 'external control-plane root; rerun with --external-control-plane-root=<root>' : 'source root'}`);
       const resolved = fs.realpathSync(path.resolve(root, source.path_ref));
-      if (resolved !== root && !resolved.startsWith(`${root}${path.sep}`)) throw new Error('source path escapes root');
+      if (!insideRoot(root, resolved)) throw new Error('source path escapes root');
       if (digest(fs.readFileSync(resolved)) !== source.digest) throw new Error('source digest mismatch');
       if (name === 'control_plane_registry') {
         const registry = JSON.parse(fs.readFileSync(resolved, 'utf8'));
         const statusSource = seal.sources?.status_index;
-        const registryErrors = validateControlPlaneRegistry(registry, statusSource?.root_ref === 'external_control_plane' ? externalRoot : internalRoot, statusSource?.path_ref);
+        const registrySource = seal.sources?.control_plane_registry;
+        const registryRoot = registrySource?.root_ref === 'external_control_plane' ? externalRoot : internalRoot;
+        const registryErrors = validateControlPlaneRegistry(registry, registryRoot, statusSource?.path_ref);
         if (registryErrors.length) throw new Error(registryErrors.join('; '));
       }
     } catch (error) { errors.push(`source verification failed: ${name}: ${error.message}`); }
@@ -60,7 +66,7 @@ export function validateControlPlaneRegistry(registry, sourceRoot, canonicalStat
     seen.add(item.path);
     try {
       const resolved = fs.realpathSync(path.resolve(sourceRoot, item.path));
-      if (resolved === sourceRoot || !resolved.startsWith(`${sourceRoot}${path.sep}`)) throw new Error('path escapes source root');
+      if (!insideRoot(sourceRoot, resolved) || resolved === fs.realpathSync(path.resolve(sourceRoot))) throw new Error('path escapes source root');
       if (digest(fs.readFileSync(resolved)) !== item.sha256) throw new Error('digest mismatch');
       const content = fs.readFileSync(resolved, 'utf8');
       if (!content.includes('<!-- CURRENT:BEGIN -->')) throw new Error('historical entry is not a CURRENT control-plane record');
