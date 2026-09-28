@@ -2,6 +2,12 @@
 
 本文件记录 ChatGPT Workflows 的重要变更。
 
+## 未发布：将“当前轮指令优先”提升为全局规则
+
+- 已执行：把“当前提示词决定本轮行动、历史时序约定只作背景、冲突时按当前消息重建任务契约，同时保留系统/团队/安全/权限/验证门禁”写入总览与核心规则；场景 1C 仅保留交接专属动作，不再独占这条原则。
+- 已验证：规则版本升至 `2026-09-28.7`，manifest 已按实际文件重新计算；待本批本地检查完成后再决定是否同步远端。
+- English: The “current-turn instruction takes precedence” rule is now global: historical timing plans are background only, conflicts rebuild the current task contract, and system, team, safety, permission, and verification gates remain in force. Scenario 1C now contains only handoff-specific actions. Rule version `2026-09-28.7` and the manifest have been refreshed; remote synchronization remains separate.
+
 ## 未发布：修复规则 manifest 的跨平台换行指纹
 
 - 已发现：本地四份规则文件仍含 CRLF/混合换行，manifest 绑定了本地字节；GitHub 按 `.gitattributes` 检出 LF 后，远端 `Repository quality` 在提交 `256e2ec` 发现 `00-第二代工作流总览.md` 指纹不一致。
