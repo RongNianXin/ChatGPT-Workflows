@@ -2,6 +2,15 @@
 
 本文件记录 ChatGPT Workflows 的重要变更。
 
+## 未发布：交接流程减负与验证器根因修复
+
+- 已执行：根据两份真实交接复盘，拆开“不可变交接证明”“持续变化的中央状态”和“候选规则基线”。候选生成到正式切换期间冻结规则版本与 manifest；普通中央进度更新不再强制追加 `CURRENT_ATTESTATION`，已完成接管不因普通进度变化自动失效。版本更新为 `2026-09-28.4`。
+- 已修复：封条验证缺少 external control-plane root 时改报 `INPUT_REQUIRED` 并把 `latest_source_status` 标为 `NOT_CHECKED`；回执加入可直接执行的完整验证命令和预期结果；封条、来源和远端允许记录真实的更早观察时间，只拒绝晚于事实截点的时间。
+- 已修复：正式交接准备现在回读 live Git 的 HEAD、tree、分支和工作区计数，不能靠中央状态正文残留的旧 HEAD 通过；封条新增 `rule_baseline`，把规则版本和 manifest 摘要纳入封条摘要，新增 `worktree_fingerprint`，绑定 tracked diff 与未跟踪内容摘要，同计数替换也会被阻断。
+- 已验证：封条链、正式附件、时间边界、缺参分类、实时 Git 漂移和工作流契约回归通过；真实跨窗口交接仍需下一次自然任务验证。未执行产品修改、远端写入、部署或正式总指挥切换。
+- English: Based on two real handoff postmortems, the workflow now separates immutable handoff evidence, live central state, and the candidate rule baseline. The rule version and manifest are frozen from candidate preparation through takeover; ordinary central progress updates do not require a new `CURRENT_ATTESTATION`, and a completed takeover is not invalidated by ordinary progress. Version `2026-09-28.4`.
+- English: The seal verifier now reports `INPUT_REQUIRED` and `latest_source_status=NOT_CHECKED` when the external control-plane root is missing. The seal now binds the rule baseline and a worktree content fingerprint, so same-count replacements are detected. Receipts include a copyable verification command and expected results. Real earlier observation times are accepted, while observations after the fact cutoff are rejected. Formal preparation now compares live Git HEAD, tree, branch, and workspace counts with the draft. Contract tests pass; a real cross-window handoff remains to be observed.
+
 ## 未发布：交接快照内容一致性门禁
 
 - 已修复：交接工具此前能验证封条和来源哈希，却不会自动发现快照正文残留旧世代、旧断点、旧工作区计数或过期交付状态。1C/04 现在要求在封存前把快照正文逐项与中央 CURRENT、状态索引、Git/远端和独立交付回执核对；无法核对的字段必须标记待确认。

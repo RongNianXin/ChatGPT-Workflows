@@ -39,10 +39,10 @@ let draftEventSequence = 0;
 const draft = (generation = 1, writer_id = 'COMMANDER-GEN-1', revision = 'base') => ({
   schema_version: 3, record_type: 'handoff-seal', generation, writer_id, old_writer_status: 'STOPPED_DISPATCH',
   fact_cutoff: stamp, sealed_at: stamp, event_id: `evt-${generation}-${revision}-${++draftEventSequence}`,
-  sources: { central_work_items: source('central', revision), current_view: source('view', revision), status_index: source('index', revision) }, source_digest_status: 'PASS',
+  sources: { central_work_items: source('central', revision), current_view: source('view', revision), status_index: source('index', revision) }, source_digest_status: 'PASS', rule_baseline: { rule_version: '2026-09-28.4', manifest_sha256: 'e'.repeat(64) },
   objective: { summary: 'synthetic handoff', breakpoint: 'read-only verification' }, prohibitions: ['remote-write'],
   communications: { status: 'NONE' },
-  workspace: { root_ref: '<PROJECT_ROOT>', branch: 'main', head: 'b'.repeat(40), tree: 'c'.repeat(40), staged_count: 0, tracked_modified_count: 0, untracked_count: 0, required_untracked: [] },
+  workspace: { root_ref: '<PROJECT_ROOT>', branch: 'main', head: 'b'.repeat(40), tree: 'c'.repeat(40), staged_count: 0, tracked_modified_count: 0, untracked_count: 0, required_untracked: [], worktree_fingerprint: { algorithm: 'git-diff-binary+untracked-content-sha256-v1', tracked_diff_sha256: 'f'.repeat(64), untracked_digest: 'a'.repeat(64) } },
   remote: { status: 'PASS', default_ref: 'refs/heads/main', head: 'd'.repeat(40), observed_at: stamp },
   control_handoff_confidence: 'HIGH', candidate_verification_status: 'PASS', switch_status: 'READY', handoff_phase: 'MATERIAL_PREPARED', runtime_acceptance_status: 'UNKNOWN', professional_acceptance_status: 'NOT_RUN', transition: null, migration: null,
   invalidation_conditions: ['source digest drift', 'post-seal writer event'], seal_digest: ''
@@ -61,6 +61,7 @@ try {
   const externalDir = path.join(temp, 'external-seals'); const externalDraft = draft(); externalDraft.sources = { central_work_items: externalSource('central'), current_view: externalSource('view'), status_index: externalSource('index') };
   const externalSeal = appendSeal(externalDir, externalDraft, { sourceRoot, externalControlPlaneRoot: externalRoot });
   check('external control-plane sources require an explicit root and verify live bytes', () => { const result = verifyChain(externalDir, { sourceRoot, externalControlPlaneRoot: externalRoot }); assert.equal(result.status, 'PASS'); assert.equal(result.latest.seal_digest, externalSeal.seal_digest); });
+  check('missing external control-plane root is an input gap, not source corruption', () => { const result = verifyChain(externalDir, { sourceRoot }); assert.equal(result.status, 'BLOCKED'); assert.equal(result.latest_source_status, 'NOT_CHECKED'); assert.ok(result.errors.some(error => error.includes('INPUT_REQUIRED'))); });
   check('filename sequence and digest are bound to record fields', () => { const original = fs.readdirSync(sealDir).find(name => name.startsWith('handoff-state.')); const wrong = original.replace('handoff-state.1.', 'handoff-state.9.'); fs.renameSync(path.join(sealDir, original), path.join(sealDir, wrong)); assert.equal(verifyChain(sealDir, { sourceRoot }).status, 'BLOCKED'); fs.renameSync(path.join(sealDir, wrong), path.join(sealDir, original)); });
   check('digest tampering blocks the chain', () => { const file = fs.readdirSync(sealDir).find(name => name.startsWith('handoff-state.')); const value = JSON.parse(fs.readFileSync(path.join(sealDir, file))); value.objective.summary = 'tampered'; fs.writeFileSync(path.join(sealDir, file), JSON.stringify(value)); assert.equal(verifyChain(sealDir, { sourceRoot }).status, 'BLOCKED'); });
   fs.rmSync(sealDir, { recursive: true, force: true }); fs.mkdirSync(sealDir);
@@ -74,14 +75,16 @@ try {
   fs.rmSync(sealDir, { recursive: true, force: true }); fs.mkdirSync(sealDir);
   const invalid = draft(); invalid.sources.central_work_items.path_ref = String.fromCharCode(67) + ':/secret.json'; invalid.seal_digest = sealDigest(invalid);
   check('unsafe source paths are rejected', () => assert.ok(validateSeal(invalid).some(error => error.includes('unsafe source path'))));
-  const cutoffMismatch = draft(); cutoffMismatch.sources.current_view.fact_cutoff = '2026-09-18T00:00:01.000Z'; cutoffMismatch.seal_digest = sealDigest(cutoffMismatch);
-  check('source cutoff drift is rejected', () => assert.ok(validateSeal(cutoffMismatch).some(error => error.includes('source fact_cutoff mismatch'))));
+  const cutoffMismatch = draft(); cutoffMismatch.sources.current_view.fact_cutoff = '2026-09-22T00:00:01.000Z'; cutoffMismatch.seal_digest = sealDigest(cutoffMismatch);
+  check('source cutoff after the seal is rejected', () => assert.ok(validateSeal(cutoffMismatch).some(error => error.includes('source fact_cutoff is after seal fact_cutoff'))));
   const remoteFail = draft(); remoteFail.remote.status = 'FAIL'; remoteFail.seal_digest = sealDigest(remoteFail);
   check('remote failure cannot be hidden by HIGH', () => assert.ok(validateSeal(remoteFail).some(error => error.includes('remote PASS'))));
   const missingSource = draft(); delete missingSource.sources.status_index; missingSource.seal_digest = sealDigest(missingSource);
   check('canonical control sources are required', () => assert.ok(validateSeal(missingSource).some(error => error.includes('canonical sources'))));
-  const staleRemote = draft(); staleRemote.remote.observed_at = '2026-09-18T00:00:01.000Z'; staleRemote.seal_digest = sealDigest(staleRemote);
-  check('remote observation must share the fact cutoff', () => assert.ok(validateSeal(staleRemote).some(error => error.includes('fact_cutoff'))));
+  const staleRemote = draft(); staleRemote.remote.observed_at = '2026-09-22T00:00:01.000Z'; staleRemote.seal_digest = sealDigest(staleRemote);
+  check('remote observation after the fact cutoff is rejected', () => assert.ok(validateSeal(staleRemote).some(error => error.includes('must not be after fact_cutoff'))));
+  const earlierObservation = draft(); earlierObservation.sources.current_view.fact_cutoff = '2026-09-17T23:59:00.000Z'; earlierObservation.remote.observed_at = '2026-09-17T23:59:30.000Z'; earlierObservation.seal_digest = sealDigest(earlierObservation);
+  check('real earlier observation times remain valid', () => assert.equal(validateSeal(earlierObservation).filter(error => error.includes('fact_cutoff') || error.includes('observed_at')).length, 0));
   const sourceUnknownReady = draft(); sourceUnknownReady.control_handoff_confidence = 'LOW'; sourceUnknownReady.source_digest_status = 'UNKNOWN'; sourceUnknownReady.switch_status = 'READY'; sourceUnknownReady.seal_digest = sealDigest(sourceUnknownReady);
   check('unverified sources cannot be READY', () => assert.ok(validateSeal(sourceUnknownReady).some(error => error.includes('READY status'))));
   const restrictedUnknownWriter = draft(); restrictedUnknownWriter.control_handoff_confidence = 'MEDIUM'; restrictedUnknownWriter.switch_status = 'READY_WITH_RESTRICTIONS'; restrictedUnknownWriter.old_writer_status = 'UNKNOWN'; restrictedUnknownWriter.seal_digest = sealDigest(restrictedUnknownWriter);

@@ -121,6 +121,56 @@ function verifyRuleManifest(workflowRoot, manifestPath) {
     const tracked = spawnSync('git', ['-C', workflowRoot, 'ls-files', '--error-unmatch', '--', tool], { encoding: 'utf8' });
     if (tracked.status !== 0) throw new Error(`handoff tool is not tracked in the verified workflow repository: ${tool}`);
   }
+  return manifest;
+}
+
+function readGitWorkspaceBaseline(sourceRoot, requiredRefs = []) {
+  const run = args => spawnSync('git', ['-C', sourceRoot, ...args], { encoding: 'utf8' });
+  const head = run(['rev-parse', 'HEAD']);
+  if (head.status !== 0) return null;
+  const branch = run(['symbolic-ref', '--short', '-q', 'HEAD']);
+  const tree = run(['rev-parse', 'HEAD^{tree}']);
+  const status = run(['status', '--porcelain=v1', '-z']);
+  const diff = spawnSync('git', ['-C', sourceRoot, 'diff', '--binary', 'HEAD', '--'], { encoding: 'buffer', maxBuffer: 64 * 1024 * 1024 });
+  const untracked = spawnSync('git', ['-C', sourceRoot, 'ls-files', '-z', '--others', '--exclude-standard'], { encoding: 'buffer', maxBuffer: 16 * 1024 * 1024 });
+  if ([head, tree, status, diff, untracked].some(result => result.status !== 0)) throw new Error('cannot read live Git workspace baseline');
+  const tokens = status.stdout.split('\0').filter(Boolean);
+  const entries = [];
+  for (let index = 0; index < tokens.length; index += 1) {
+    const entry = tokens[index];
+    if (!/^[ MARCUDT?!]{2}/.test(entry)) continue;
+    entries.push(entry);
+    if (entry[0] === 'R' || entry[0] === 'C' || entry[1] === 'R' || entry[1] === 'C') index += 1;
+  }
+  const staged = entries.filter(entry => entry[0] !== ' ' && entry.slice(0, 2) !== '??').length;
+  const trackedModified = entries.filter(entry => entry[1] !== ' ' && entry.slice(0, 2) !== '??').length;
+  const untrackedCount = entries.filter(entry => entry.slice(0, 2) === '??').length;
+  const refs = new Set(untracked.stdout.toString('utf8').split('\0').filter(Boolean).map(value => value.replaceAll('\\', '/')));
+  for (const ref of requiredRefs) refs.add(ref.replaceAll('\\', '/'));
+  const untrackedFiles = [...refs].sort().map(ref => {
+    const absolute = path.resolve(sourceRoot, ref);
+    if (!isInside(sourceRoot, absolute) || !fs.existsSync(absolute) || !fs.statSync(absolute).isFile()) throw new Error(`cannot fingerprint untracked path: ${ref}`);
+    return { path_ref: ref, sha256: sha256(fs.readFileSync(absolute)) };
+  });
+  const untrackedDigest = sha256(Buffer.from(JSON.stringify(untrackedFiles), 'utf8'));
+  return { head: head.stdout.trim(), branch: branch.stdout.trim() || 'HEAD', tree: tree.stdout.trim(), staged_count: staged, tracked_modified_count: trackedModified, untracked_count: untrackedCount, worktree_fingerprint: { algorithm: 'git-diff-binary+untracked-content-sha256-v1', tracked_diff_sha256: sha256(diff.stdout), untracked_digest: untrackedDigest } };
+}
+
+export { readGitWorkspaceBaseline };
+
+export function verifyWorkspaceBaseline(sourceRoot, workspace) {
+  const live = readGitWorkspaceBaseline(sourceRoot, workspace?.required_untracked?.map(item => item.path_ref) ?? []);
+  if (!live) return [];
+  if (!workspace) return ['workspace baseline is missing'];
+  if (!/^[0-9a-f]{40,64}$/i.test(workspace.head || '') || !workspace.worktree_fingerprint) return ['workspace baseline fingerprint is missing or invalid'];
+  const errors = [];
+  for (const key of ['head', 'tree', 'branch', 'staged_count', 'tracked_modified_count', 'untracked_count']) {
+    if (String(live[key]) !== String(workspace[key])) errors.push(`workspace baseline drift: ${key} expected ${workspace[key]}, found ${live[key]}`);
+  }
+  for (const key of ['algorithm', 'tracked_diff_sha256', 'untracked_digest']) {
+    if (String(live.worktree_fingerprint[key]) !== String(workspace.worktree_fingerprint[key])) errors.push(`workspace baseline drift: worktree_fingerprint.${key}`);
+  }
+  return errors;
 }
 
 export function detectUnicodeCollisions(items) {
@@ -203,8 +253,9 @@ export function prepareFormalHandoff(configPath) {
   if (ignored.status !== 0) throw new Error('seal directory must be excluded by the source repository .gitignore');
 
   const ruleManifestDigest = sha256(fs.readFileSync(manifestPath));
-  verifyRuleManifest(workflowRoot, manifestPath);
+  const ruleManifest = verifyRuleManifest(workflowRoot, manifestPath);
   const draft = readJson(draftPath);
+  if (draft.rule_baseline?.manifest_sha256?.toLowerCase() !== ruleManifestDigest.toLowerCase() || draft.rule_baseline?.rule_version !== ruleManifest.rule_version) throw new Error('rule baseline is stale: candidate was prepared under a different rule manifest');
   const existingSealState = verifyChain(realSealDirectory, { sourceRoot, externalControlPlaneRoot, verifyLatestSources: false });
   const hasLegacySealRecords = existingSealState.records.some(record => record.schema_version < 3);
   if (draft.handoff_phase === 'CURRENT_MIGRATION' && hasLegacySealRecords) {
@@ -247,9 +298,11 @@ export function prepareFormalHandoff(configPath) {
   for (const [name, source] of Object.entries(draft.sources ?? {})) {
     const sourcePath = resolveSource(source, sourceRoot, externalControlPlaneRoot, name);
     if (sha256(fs.readFileSync(sourcePath)) !== source.digest) sourceDigestErrors.push(`${name}: source digest mismatch`);
-    if (source.fact_cutoff !== draft.fact_cutoff) sourceDigestErrors.push(`${name}: source fact_cutoff mismatch`);
+    if (Date.parse(source.fact_cutoff) > Date.parse(draft.fact_cutoff)) sourceDigestErrors.push(`${name}: source fact_cutoff is after draft fact_cutoff`);
   }
   if (sourceDigestErrors.length) throw new Error(`preflight source verification failed: ${sourceDigestErrors.join('; ')}`);
+  const workspaceErrors = verifyWorkspaceBaseline(sourceRoot, draft.workspace);
+  if (workspaceErrors.length) throw new Error(`preflight workspace verification failed: ${workspaceErrors.join('; ')}`);
   if (preflightOnly) return {
     status: 'READY',
     mode: 'PREFLIGHT_ONLY',
@@ -323,7 +376,14 @@ export function prepareFormalHandoff(configPath) {
       fact_cutoff: seal.fact_cutoff,
       event_id: seal.event_id,
       rule_manifest_sha256: ruleManifestDigest,
-      unicode_inventory: inventory
+      unicode_inventory: inventory,
+      verification: {
+        tool: 'HandoffSeal.mjs',
+        command: `node "${path.join(scriptDir, 'HandoffSeal.mjs')}" verify "${realSealDirectory}" "${sourceRoot}"${externalControlPlaneRoot ? ` "--external-control-plane-root=${externalControlPlaneRoot}"` : ''}`,
+        source_root: sourceRoot,
+        external_control_plane_root: externalControlPlaneRoot,
+        expected: { status: 'PASS', latest_source_status: 'PASS', handoff_ready: true }
+      }
     };
     if (physicalTarget(finalPath) !== physicalFinalPath || physicalTarget(receiptPath) !== physicalReceiptPath) throw new Error('output path resolution drifted while preparing the attachment');
     atomicWriteExclusive(receiptPath, Buffer.from(`${JSON.stringify(receipt, null, 2)}\n`, 'utf8'));

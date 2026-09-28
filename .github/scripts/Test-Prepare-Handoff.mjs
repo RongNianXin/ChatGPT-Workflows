@@ -6,7 +6,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { detectUnicodeCollisions, prepareFormalHandoff, REQUIRED_RULES } from './Prepare-Handoff.mjs';
+import { detectUnicodeCollisions, prepareFormalHandoff, readGitWorkspaceBaseline, REQUIRED_RULES, verifyWorkspaceBaseline } from './Prepare-Handoff.mjs';
 
 const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'prepare-handoff-'));
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
@@ -44,10 +44,11 @@ function makeDraft(eventId) {
       status_index: writeCurrent(LONG_STATUS_PATH, `项目键：synthetic\n远端目标：refs/heads/main\nHEAD=${'b'.repeat(40)}\n规则清单摘要：${'0'.repeat(64)}`)
     },
     source_digest_status: 'PASS',
+    rule_baseline: { rule_version: '2026-09-28.4', manifest_sha256: 'e'.repeat(64) },
     objective: { summary: 'synthetic formal handoff', breakpoint: 'candidate verification' },
     prohibitions: ['remote-write'],
     communications: { status: 'NONE' },
-    workspace: { root_ref: '<PROJECT_ROOT>', branch: 'main', head: 'b'.repeat(40), tree: 'c'.repeat(40), staged_count: 0, tracked_modified_count: 0, untracked_count: 0, required_untracked: [] },
+    workspace: { root_ref: '<PROJECT_ROOT>', branch: 'main', head: 'b'.repeat(40), tree: 'c'.repeat(40), staged_count: 0, tracked_modified_count: 0, untracked_count: 0, required_untracked: [], worktree_fingerprint: { algorithm: 'git-diff-binary+untracked-content-sha256-v1', tracked_diff_sha256: 'f'.repeat(64), untracked_digest: 'a'.repeat(64) } },
     remote: { status: 'PASS', default_ref: 'refs/heads/main', head: 'd'.repeat(40), observed_at: stamp },
     control_handoff_confidence: 'HIGH',
     candidate_verification_status: 'PASS',
@@ -77,6 +78,7 @@ function prepareCase(number, eventId) {
   const draft = makeDraft(eventId);
   const statusPath = path.resolve(sourceRoot, draft.sources.status_index.path_ref);
   const manifestDigest = sha256(fs.readFileSync(path.join(temp, 'rule-manifest.json')));
+  draft.rule_baseline = { rule_version: '2026-09-28.4', manifest_sha256: manifestDigest };
   const statusBody = fs.readFileSync(statusPath, 'utf8');
   const updatedStatusBody = statusBody.replaceAll(`规则清单摘要：${'0'.repeat(64)}`, `规则清单摘要：${manifestDigest}`);
   assert.notEqual(updatedStatusBody, statusBody, 'synthetic status fixture must include a zeroed rule manifest marker');
@@ -102,7 +104,7 @@ try {
   spawnSync('git', ['init', '--quiet', sourceRoot], { stdio: 'inherit' });
   fs.writeFileSync(path.join(sourceRoot, '.gitignore'), '.handoff-private/\n', 'utf8');
   fs.writeFileSync(path.join(temp, 'snapshot-template.md'), '# {{SNAPSHOT_ID}}\nseal={{SEAL_DIGEST}}\ncutoff={{FACT_CUTOFF}}\nevent={{EVENT_ID}}\n', 'utf8');
-  writeJson(path.join(temp, 'rule-manifest.json'), { schema_version: 1, rules: REQUIRED_RULES.map(path_ref => ({ path_ref, sha256: sha256(fs.readFileSync(path.join(workflowRoot, path_ref))) })) });
+  writeJson(path.join(temp, 'rule-manifest.json'), { schema_version: 1, rule_version: '2026-09-28.4', rules: REQUIRED_RULES.map(path_ref => ({ path_ref, sha256: sha256(fs.readFileSync(path.join(workflowRoot, path_ref))) })) });
 
   check('Unicode NFC/NFD collisions are rejected without renaming', () => assert.throws(() => detectUnicodeCollisions(['资料/é.md', '资料/e\u0301.md']), /Unicode normalization collision/));
   const cli = spawnSync(process.execPath, ['./Prepare-Handoff.mjs'], { cwd: scriptDir, encoding: 'utf8' });
@@ -117,6 +119,8 @@ try {
     assert.ok(fs.existsSync(first.receiptPath));
     assert.equal(firstResult.receipt.artifact_status, 'GENERATED_NOT_DELIVERED');
     assert.equal(firstResult.receipt.unicode_inventory.mode, 'GIT_NUL');
+    assert.equal(firstResult.receipt.verification.expected.handoff_ready, true);
+    assert.match(firstResult.receipt.verification.command, /HandoffSeal\.mjs/);
     assert.ok(LONG_STATUS_PATH.length > 150);
     assert.equal(sha256(fs.readFileSync(first.finalPath)), firstResult.receipt.snapshot_sha256);
     assert.doesNotMatch(fs.readFileSync(first.finalPath, 'utf8'), /{{[A-Z_]+}}/);
@@ -218,6 +222,16 @@ try {
     assert.equal(fs.existsSync(staleManifest.receiptPath), false);
   });
 
+  const staleRules = prepareCase(14, 'formal-event-14');
+  const sharedManifest = path.join(temp, 'rule-manifest.json');
+  const sharedManifestBytes = fs.readFileSync(sharedManifest);
+  fs.writeFileSync(sharedManifest, Buffer.concat([sharedManifestBytes, Buffer.from('\n')]));
+  check('rule baseline drift supersedes a candidate', () => {
+    assert.throws(() => prepareFormalHandoff(staleRules.configPath), /rule baseline is stale/);
+    assert.equal(fs.existsSync(staleRules.finalPath), false);
+  });
+  fs.writeFileSync(sharedManifest, sharedManifestBytes);
+
   const duplicateBinding = prepareCase(7, 'formal-event-7');
   const duplicateIndex = path.join(sourceRoot, '历史', 'AI状态索引.md');
   fs.mkdirSync(path.dirname(duplicateIndex), { recursive: true });
@@ -257,6 +271,24 @@ try {
     assert.throws(() => prepareFormalHandoff(wrongProject.configPath), /project key/);
     assert.equal(fs.existsSync(wrongProject.finalPath), false);
     assert.equal(fs.existsSync(wrongProject.receiptPath), false);
+  });
+  const workspaceProbe = path.join(temp, 'workspace-probe');
+  fs.mkdirSync(workspaceProbe, { recursive: true });
+  spawnSync('git', ['init', '--quiet', workspaceProbe], { stdio: 'inherit' });
+  fs.writeFileSync(path.join(workspaceProbe, 'probe.txt'), 'base\n', 'utf8');
+  spawnSync('git', ['-C', workspaceProbe, '-c', 'user.name=Test', '-c', 'user.email=test@example.invalid', 'add', '--', 'probe.txt'], { stdio: 'inherit' });
+  spawnSync('git', ['-C', workspaceProbe, '-c', 'user.name=Test', '-c', 'user.email=test@example.invalid', 'commit', '--quiet', '-m', 'probe'], { stdio: 'inherit' });
+  const probeBaseline = readGitWorkspaceBaseline(workspaceProbe);
+  check('live Git baseline drift is detected instead of trusting a stale draft', () => {
+    fs.writeFileSync(path.join(workspaceProbe, 'probe.txt'), 'changed\n', 'utf8');
+    assert.ok(verifyWorkspaceBaseline(workspaceProbe, probeBaseline).some(error => error.includes('tracked_modified_count')));
+  });
+  check('same-count untracked replacement is detected by content fingerprint', () => {
+    fs.writeFileSync(path.join(workspaceProbe, 'probe.txt'), 'base\n', 'utf8');
+    fs.writeFileSync(path.join(workspaceProbe, 'untracked.txt'), 'one\n', 'utf8');
+    const sameCountBaseline = readGitWorkspaceBaseline(workspaceProbe);
+    fs.writeFileSync(path.join(workspaceProbe, 'untracked.txt'), 'two\n', 'utf8');
+    assert.ok(verifyWorkspaceBaseline(workspaceProbe, sameCountBaseline).some(error => error.includes('worktree_fingerprint.untracked_digest')));
   });
   console.log(`Prepare handoff: PASS (${passed} cases)`);
 } finally {

@@ -5,7 +5,7 @@ import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 
 const HEX = /^[0-9a-f]{64}$/;
-const TOP_LEVEL_KEYS = new Set(['schema_version', 'record_type', 'generation', 'writer_id', 'old_writer_status', 'seal_sequence', 'previous_seal_digest', 'fact_cutoff', 'sealed_at', 'event_id', 'sources', 'source_digest_status', 'objective', 'prohibitions', 'communications', 'workspace', 'remote', 'control_handoff_confidence', 'candidate_verification_status', 'switch_status', 'handoff_phase', 'runtime_acceptance_status', 'professional_acceptance_status', 'transition', 'migration', 'invalidation_conditions', 'seal_digest']);
+const TOP_LEVEL_KEYS = new Set(['schema_version', 'record_type', 'generation', 'writer_id', 'old_writer_status', 'seal_sequence', 'previous_seal_digest', 'fact_cutoff', 'sealed_at', 'event_id', 'sources', 'source_digest_status', 'rule_baseline', 'objective', 'prohibitions', 'communications', 'workspace', 'remote', 'control_handoff_confidence', 'candidate_verification_status', 'switch_status', 'handoff_phase', 'runtime_acceptance_status', 'professional_acceptance_status', 'transition', 'migration', 'invalidation_conditions', 'seal_digest']);
 const exactKeys = (value, allowed) => value && typeof value === 'object' && !Array.isArray(value) && Object.keys(value).every(key => allowed.includes(key));
 const relativeRef = value => typeof value === 'string' && value.length > 0 && !path.isAbsolute(value) && !path.win32.isAbsolute(value) && !value.split(/[\\/]+/).includes('..');
 const iso = value => typeof value === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/.test(value) && !Number.isNaN(Date.parse(value));
@@ -21,7 +21,7 @@ export const transitionDigest = intent => digest(canonicalJson(Object.fromEntrie
 
 const fail = (errors, message) => errors.push(message);
 function verifySourceFiles(seal, sourceRoot, externalControlPlaneRoot) {
-  if (!sourceRoot) return ['HIGH control handoff requires sourceRoot verification'];
+  if (!sourceRoot) return ['INPUT_REQUIRED: provide <source-root> to verify the code source'];
   let internalRoot;
   try { internalRoot = fs.realpathSync(path.resolve(sourceRoot)); } catch (error) { return [`source root verification failed: ${error.message}`]; }
   let externalRoot = null;
@@ -32,7 +32,7 @@ function verifySourceFiles(seal, sourceRoot, externalControlPlaneRoot) {
   for (const [name, source] of Object.entries(seal.sources ?? {})) {
     try {
       const root = source.root_ref === 'external_control_plane' ? externalRoot : internalRoot;
-      if (!root) throw new Error(`missing root for ${source.root_ref === 'external_control_plane' ? 'external_control_plane' : 'source_root'}`);
+      if (!root) throw new Error(`INPUT_REQUIRED: missing ${source.root_ref === 'external_control_plane' ? 'external control-plane root; rerun with --external-control-plane-root=<root>' : 'source root'}`);
       const resolved = fs.realpathSync(path.resolve(root, source.path_ref));
       if (resolved !== root && !resolved.startsWith(`${root}${path.sep}`)) throw new Error('source path escapes root');
       if (digest(fs.readFileSync(resolved)) !== source.digest) throw new Error('source digest mismatch');
@@ -68,7 +68,7 @@ export function validateControlPlaneRegistry(registry, sourceRoot, canonicalStat
   }
   return errors;
 }
-export function validateSeal(seal, { checkDigest = true } = {}) {
+export function validateSeal(seal, { checkDigest = true, requireExtensions = false } = {}) {
   const errors = [];
   if (!seal || typeof seal !== 'object' || Array.isArray(seal)) return ['seal must be an object'];
   for (const key of Object.keys(seal)) if (!TOP_LEVEL_KEYS.has(key)) fail(errors, `unknown top-level field: ${key}`);
@@ -89,14 +89,20 @@ export function validateSeal(seal, { checkDigest = true } = {}) {
     if (!relativeRef(source.path_ref)) fail(errors, `unsafe source path: ${name}`);
     if (seal.schema_version >= 3 && source.root_ref !== undefined && !['source_root', 'external_control_plane'].includes(source.root_ref)) fail(errors, `invalid source root_ref: ${name}`);
     if (seal.schema_version >= 3 && source.root_ref === 'external_control_plane' && name !== 'control_plane_registry' && !['central_work_items', 'current_view', 'status_index'].includes(name)) fail(errors, `external root is only allowed for control-plane sources: ${name}`);
-    if (source.fact_cutoff !== seal.fact_cutoff) fail(errors, `source fact_cutoff mismatch: ${name}`);
+    if (Date.parse(source.fact_cutoff) > Date.parse(seal.fact_cutoff)) fail(errors, `source fact_cutoff is after seal fact_cutoff: ${name}`);
   }
   if (!['PASS', 'UNKNOWN', 'FAIL'].includes(seal.source_digest_status)) fail(errors, 'invalid source_digest_status');
+  const rules = seal.rule_baseline;
+  if (!rules && !requireExtensions) {
+    // v3 records written before the rule-baseline extension remain readable history.
+  } else if (!exactKeys(rules, ['rule_version', 'manifest_sha256']) || typeof rules.rule_version !== 'string' || !rules.rule_version || !HEX.test(rules.manifest_sha256 || '')) fail(errors, 'invalid rule baseline');
   if (!exactKeys(seal.objective, ['summary', 'breakpoint']) || typeof seal.objective.summary !== 'string' || typeof seal.objective.breakpoint !== 'string') fail(errors, 'objective summary/breakpoint required');
   if (!Array.isArray(seal.prohibitions) || seal.prohibitions.some(value => typeof value !== 'string')) fail(errors, 'prohibitions must be an array of strings');
   if (!exactKeys(seal.communications, ['status']) || !['NONE', 'AUTHORIZED', 'PENDING_CONFIRMATION', 'BLOCKED'].includes(seal.communications.status)) fail(errors, 'invalid communications status');
   const w = seal.workspace;
-  if (!exactKeys(w, ['root_ref', 'branch', 'head', 'tree', 'staged_count', 'tracked_modified_count', 'untracked_count', 'required_untracked']) || typeof w.root_ref !== 'string' || !w.root_ref || typeof w.branch !== 'string' || !w.branch || !/^[0-9a-f]{40,64}$/.test(w.head || '') || !/^[0-9a-f]{40,64}$/.test(w.tree || '') || !Number.isInteger(w.staged_count) || w.staged_count < 0 || !Number.isInteger(w.tracked_modified_count) || w.tracked_modified_count < 0 || !Number.isInteger(w.untracked_count) || w.untracked_count < 0 || !Array.isArray(w.required_untracked)) fail(errors, 'invalid workspace baseline');
+  const workspaceKeys = ['root_ref', 'branch', 'head', 'tree', 'staged_count', 'tracked_modified_count', 'untracked_count', 'required_untracked'];
+  const legacyWorkspace = w && !Object.hasOwn(w, 'worktree_fingerprint');
+  if (!w || (!legacyWorkspace && !exactKeys(w, [...workspaceKeys, 'worktree_fingerprint'])) || (legacyWorkspace && !requireExtensions && !exactKeys(w, workspaceKeys)) || (legacyWorkspace && requireExtensions) || typeof w.root_ref !== 'string' || !w.root_ref || typeof w.branch !== 'string' || !w.branch || !/^[0-9a-f]{40,64}$/.test(w.head || '') || !/^[0-9a-f]{40,64}$/.test(w.tree || '') || !Number.isInteger(w.staged_count) || w.staged_count < 0 || !Number.isInteger(w.tracked_modified_count) || w.tracked_modified_count < 0 || !Number.isInteger(w.untracked_count) || w.untracked_count < 0 || !Array.isArray(w.required_untracked) || (!legacyWorkspace && (!exactKeys(w.worktree_fingerprint, ['algorithm', 'tracked_diff_sha256', 'untracked_digest']) || w.worktree_fingerprint.algorithm !== 'git-diff-binary+untracked-content-sha256-v1' || !HEX.test(w.worktree_fingerprint.tracked_diff_sha256 || '') || !HEX.test(w.worktree_fingerprint.untracked_digest || '')))) fail(errors, 'invalid workspace baseline');
   else for (const item of w.required_untracked) if (!exactKeys(item, ['path_ref', 'sha256', 'reason']) || !relativeRef(item.path_ref) || !HEX.test(item.sha256 || '') || typeof item.reason !== 'string' || !item.reason) fail(errors, 'invalid required_untracked item');
   const r = seal.remote;
   if (!exactKeys(r, ['status', 'default_ref', 'head', 'observed_at']) || !['PASS', 'UNKNOWN', 'FAIL', 'NOT_APPLICABLE'].includes(r.status) || typeof r.default_ref !== 'string' || !r.default_ref || (r.head !== null && !/^[0-9a-f]{40,64}$/.test(r.head || '')) || (r.observed_at !== null && !iso(r.observed_at))) fail(errors, 'invalid remote baseline');
@@ -117,7 +123,7 @@ export function validateSeal(seal, { checkDigest = true } = {}) {
   if (!Array.isArray(seal.invalidation_conditions) || seal.invalidation_conditions.length === 0 || seal.invalidation_conditions.some(value => typeof value !== 'string')) fail(errors, 'invalidation_conditions must be a non-empty string array');
   const requiresReadyEvidence = seal.control_handoff_confidence === 'HIGH' || ['READY', 'READY_WITH_RESTRICTIONS', 'COMPLETED'].includes(seal.switch_status);
   if (requiresReadyEvidence && !['central_work_items', 'current_view', 'status_index'].every(key => seal.sources?.[key])) fail(errors, 'control handoff requires all canonical sources');
-  if (requiresReadyEvidence && r?.observed_at !== seal.fact_cutoff) fail(errors, 'remote observed_at must match fact_cutoff');
+  if (requiresReadyEvidence && r?.observed_at !== null && Date.parse(r.observed_at) > Date.parse(seal.fact_cutoff)) fail(errors, 'remote observed_at must not be after fact_cutoff');
   if (seal.control_handoff_confidence === 'HIGH' && (r?.status !== 'PASS' || seal.source_digest_status !== 'PASS')) fail(errors, 'HIGH control handoff requires remote PASS and source digest PASS');
   if (['READY', 'READY_WITH_RESTRICTIONS', 'COMPLETED'].includes(seal.switch_status) && (r?.status !== 'PASS' || seal.source_digest_status !== 'PASS')) fail(errors, 'READY status requires remote PASS and source digest PASS');
   // READY describes candidate material readiness, not a transfer of authority.
@@ -208,10 +214,17 @@ export function verifyChain(dir, options = {}) {
   const latest = result.records.at(-1) ?? null;
   if (!latest) result.errors.push('no immutable seal record');
   const requiresLiveSources = options.verifyLatestSources !== false && latest && latest.source_digest_status === 'PASS' && latest.sources;
-  if (requiresLiveSources) verifySourceFiles(latest, options.sourceRoot, options.externalControlPlaneRoot).forEach(error => result.errors.push(error));
+  const sourceVerificationErrors = requiresLiveSources
+    ? verifySourceFiles(latest, options.sourceRoot, options.externalControlPlaneRoot)
+    : [];
+  sourceVerificationErrors.forEach(error => result.errors.push(error));
   if (latest && latest.switch_status === 'COMPLETED' && latest.control_handoff_confidence !== 'HIGH') result.errors.push('COMPLETED requires control_handoff_confidence HIGH');
   if (latest && latest.control_handoff_confidence === 'HIGH' && latest.remote.status === 'UNKNOWN') result.errors.push('HIGH control handoff cannot hide unknown remote baseline');
-  const latestSourceStatus = requiresLiveSources ? (result.errors.some(error => error.startsWith('source verification failed:')) ? 'FAIL' : 'PASS') : 'NOT_CHECKED';
+  const latestSourceStatus = requiresLiveSources
+    ? sourceVerificationErrors.length === 0
+      ? 'PASS'
+      : sourceVerificationErrors.some(error => error.includes('INPUT_REQUIRED:')) ? 'NOT_CHECKED' : 'FAIL'
+    : 'NOT_CHECKED';
   const controlStatus = result.errors.length || latest?.switch_status === 'BLOCKED' || latestSourceStatus !== 'PASS' ? 'BLOCKED' : 'READY';
   const handoffReady = controlStatus === 'READY' && latest && ['READY', 'READY_WITH_RESTRICTIONS', 'COMPLETED'].includes(latest.switch_status);
   return { ...result, latest, latest_source_status: latestSourceStatus, control_status: controlStatus, handoff_ready: Boolean(handoffReady), transition_status: result.pending_intents?.length ? 'PENDING' : 'SETTLED', status: result.errors.length ? 'BLOCKED' : 'PASS' };
@@ -312,7 +325,7 @@ export function appendSeal(dir, draft, { expectedPreviousDigest, sourceRoot, ext
       if (![...names].some(name => previous.sources?.[name]?.digest !== seal.sources?.[name]?.digest)) throw new Error('current attestation requires at least one changed source digest');
     }
     seal.seal_digest = sealDigest(seal);
-    const errors = validateSeal(seal);
+    const errors = validateSeal(seal, { requireExtensions: true });
     if (errors.length) throw new Error(`draft invalid: ${errors.join('; ')}`);
     if (seal.control_handoff_confidence === 'HIGH' || ['READY', 'READY_WITH_RESTRICTIONS', 'COMPLETED'].includes(seal.switch_status)) {
       const sourceErrors = verifySourceFiles(seal, sourceRoot, externalControlPlaneRoot);
@@ -334,5 +347,5 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.a
   if (command === 'verify' && target) { const historicalOnly = rest.includes('--history-only'); const externalControlPlaneRoot = rest.find(value => value.startsWith('--external-control-plane-root='))?.slice('--external-control-plane-root='.length); const result = verifyChain(path.resolve(target), { sourceRoot, externalControlPlaneRoot, verifyLatestSources: !historicalOnly }); console.log(JSON.stringify(result, null, 2)); process.exitCode = result.status === 'PASS' ? 0 : 1; }
   else if (command === 'prepare' && target && sourceRoot && rest.length >= 3) { const [nextGeneration, nextWriterId, eventId] = rest; const externalControlPlaneRoot = rest.find(value => value.startsWith('--external-control-plane-root='))?.slice('--external-control-plane-root='.length); const result = prepareTransition(path.resolve(target), { sourceRoot, externalControlPlaneRoot, nextGeneration: Number(nextGeneration), nextWriterId, eventId }); console.log(JSON.stringify(result, null, 2)); }
   else if (command === 'append' && target && sourceRoot && rest.length >= 1) { const [draftPath, transitionTicket] = rest; const externalControlPlaneRoot = rest.find(value => value.startsWith('--external-control-plane-root='))?.slice('--external-control-plane-root='.length); const draft = JSON.parse(fs.readFileSync(draftPath, 'utf8')); const result = appendSeal(path.resolve(target), draft, { sourceRoot, externalControlPlaneRoot, transitionTicket }); console.log(JSON.stringify(result, null, 2)); }
-  else { console.error('usage: node HandoffSeal.mjs verify <seal-directory> [source-root] [--history-only] | prepare <seal-directory> <source-root> <next-generation> <next-writer-id> <event-id> | append <seal-directory> <source-root> <draft-json> [transition-ticket]'); process.exitCode = 2; }
+  else { console.error('usage: node HandoffSeal.mjs verify <seal-directory> <source-root> [--external-control-plane-root=<root>] [--history-only] | prepare <seal-directory> <source-root> <next-generation> <next-writer-id> <event-id> [--external-control-plane-root=<root>] | append <seal-directory> <source-root> <draft-json> [transition-ticket] [--external-control-plane-root=<root>]'); process.exitCode = 2; }
 }
