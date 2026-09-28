@@ -1,4 +1,13 @@
 # 变更日志
+## 2026-09-28：登记 Hindsight 外部记忆系统评估候选
+
+- 已讨论：把 Hindsight 作为可替换的外部 Agent 记忆层候选，评估长期记忆、证据化观察、项目隔离、隐私防护和 MCP/编码 Agent 接入；不把它视为总指挥控制面替代品。
+- 已记录：新增分阶段计划、对抗式风险审查、比较契约、安全验收、停止条件、回滚边界和替换决策门；当前状态为 `CANDIDATE / NOT_DEPLOYED`，未安装、未启动、未接入真实数据。
+- 已确认：计划来源为 Hindsight 公开 README（核验日期 2026-09-28）；上游能力和基准不直接构成本项目效果证据。
+- English: Hindsight is recorded as a replaceable external Agent-memory candidate for evaluating long-term memory, evidence-backed observations, project isolation, privacy defense, and MCP/coding-agent integration; it is not treated as a replacement for the commander control plane.
+- English: The new staged plan includes a comparison contract, adversarial risks, safety acceptance, stop conditions, rollback boundaries, and replacement gates. Status: `CANDIDATE / NOT_DEPLOYED`; no dependency, server, or real data was used.
+- English: The plan cites Hindsight's public README checked on 2026-09-28; upstream capabilities and benchmarks are not project-level evidence.
+
 ## 2026-09-28：修正交接来源根路径校验
 
 - 已执行：封条验证和交接预处理现在按各来源自身声明的根目录核对控制面 registry，并使用路径关系判断避免符号链接或相邻前缀绕过边界。
