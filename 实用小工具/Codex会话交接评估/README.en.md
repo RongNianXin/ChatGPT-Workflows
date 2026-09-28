@@ -14,6 +14,18 @@ Uses built-in Windows PowerShell 5.1 and a browser. Windows Edge is tested; macO
 
 `windows-local` contains the application, not temporary files. Use the launcher in this directory. Personal tasks and history stay in its `.local` folder and are excluded from distribution.
 
+## Version status and download verification
+
+`0.2.0-dev.10` is available from GitHub, but it is still marked as a development preview rather than a stable release. Repository source, the published ZIP, and a locally created package may come from different points in time; the same filename does not prove identical contents. When checking whether local and remote versions match, record the local runtime package version, the remote release tag, the downloaded ZIP SHA-256, and whether the release is a prerelease.
+
+After downloading, run this PowerShell command against the actual file:
+
+```powershell
+Get-FileHash .\Windows-SessionDesk-0.2.0-dev.10.zip -Algorithm SHA256
+```
+
+Compare the result with the attached `SHA256SUMS.txt`. Different hashes mean the archives are not byte-for-byte identical; a matching version number alone is not synchronization evidence. A formal release or replacement of a remote asset requires fresh validation of the exact package and a separate confirmation for the remote action.
+
 ## Everyday use
 
 - No fixed saved-task count limit; regression covers 20 tasks. Search, arrow ordering and Sort all are available, with order saved to disk. Refresh all runs at most two queries concurrently and restores the previous selection; an empty selection stays empty.
@@ -48,4 +60,4 @@ Results are engineering guidance, not official thresholds or live status. Segmen
 
 Detailed reports and history can contain complete user input and local paths. They remain in `.local` and must not be published without review. ZIP files exclude private state. The service listens only on loopback and validates a random connection token. Exit does not stop other programs or Codex tasks. Preserve the analyzer’s integrity warnings; missing Token counts must not be treated as zero.
 
-<!-- README-SOURCE-SHA256: a5274b732310428b1c10dd1add699caa5e97edfdfb1b69ba400f7cb749bb99d8 -->
+<!-- README-SOURCE-SHA256: beba9117506155648a617e65f89b247760c3bfebdce997c0bd4103598a14650d -->

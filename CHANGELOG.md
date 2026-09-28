@@ -1,4 +1,13 @@
 # 变更日志
+## 2026-09-28：明确 Windows 工作台版本与远端下载核对
+
+- 已执行：在 Windows 工作台中说明 `0.2.0-dev.10` 已有 GitHub 下载但仍是开发预览，并补充本地包、远端 Release、SHA-256 和预发布状态的核对方法。
+- 已执行：中英文 README 同步增加 `Get-FileHash` 示例，避免把同名 ZIP 或本地可运行误解为远端已同步。
+- 已验证：本次只修改公开说明和 CHANGELOG，未修改 Homepage、封面图、Topics、Release 状态或其他远端对象。
+- English: The Windows desk README now states that `0.2.0-dev.10` is downloadable from GitHub but remains a development preview, and documents how to compare the local package, remote release, SHA-256, and prerelease state.
+- English: Both README pages include a `Get-FileHash` example so a same-named ZIP or a locally working build is not mistaken for proof of remote synchronization.
+- English: This batch changed public documentation and the changelog only; it did not change the Homepage, cover image, Topics, release status, or any other remote object.
+
 ## 2026-09-28：交接与远端同步流程收口
 
 - 已执行：补齐交接预处理、正式候选附件、封条来源回算、工作区内容指纹和远端基线核验；缺少外部控制面根时明确返回 `INPUT_REQUIRED`，不把缺少参数误判为来源损坏。
