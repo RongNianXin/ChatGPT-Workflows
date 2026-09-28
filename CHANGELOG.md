@@ -1,4 +1,18 @@
 # 变更日志
+## 2026-09-28：建立外部材料原始证据定位规则
+
+- 已执行：规定外部网页、仓库、附件和第三方报告参与复盘或优化结论时，必须记录原始来源、取得日期、精确范围、支持/不支持的事实、保存状态和失效条件，并把来源与 AI 推断、本项目实测分开。
+- 已确认：该规则要求可回源，不要求复制完整网页；无法回源或内容漂移时，受影响结论必须回到“待确认”，不得把旧摘要当作当前事实。
+- English: External webpages, repositories, attachments, and third-party reports used in retrospectives or optimization decisions must record the original source, access date, exact scope, supported and unsupported facts, preservation state, and invalidation conditions, while separating source evidence from AI inference and project measurements.
+- English: The rule requires a reproducible source pointer, not a full webpage copy. If the source cannot be revisited or has drifted, affected conclusions return to pending confirmation instead of treating an old summary as current fact.
+
+## 2026-09-28：补充外部记忆候选的原始证据定位
+
+- 已执行：在 Hindsight 评估候选中记录原始 GitHub 地址、具体章节锚点、各自支持的事实和证据边界，区分“可回源指针”与“离线快照”。
+- 已确认：本轮未保存外部网页全文、视频、截图或仓库副本，未安装或运行 Hindsight；后续总指挥应先回源核对，再把上游声明与本项目实测分开。
+- English: The Hindsight evaluation now records the original GitHub URL, section anchors, supported facts, and evidence boundaries, distinguishing a source pointer from an offline snapshot.
+- English: No external webpage, video, screenshot, or repository copy was saved, and Hindsight was not installed or run; future commanders must recheck the source and keep upstream claims separate from project evidence.
+
 ## 2026-09-28：登记 Hindsight 外部记忆系统评估候选
 
 - 已讨论：把 Hindsight 作为可替换的外部 Agent 记忆层候选，评估长期记忆、证据化观察、项目隔离、隐私防护和 MCP/编码 Agent 接入；不把它视为总指挥控制面替代品。
