@@ -2,6 +2,12 @@
 
 本文件记录 ChatGPT Workflows 的重要变更。
 
+## 未发布：交接快照内容一致性门禁
+
+- 已修复：交接工具此前能验证封条和来源哈希，却不会自动发现快照正文残留旧世代、旧断点、旧工作区计数或过期交付状态。1C/04 现在要求在封存前把快照正文逐项与中央 CURRENT、状态索引、Git/远端和独立交付回执核对；无法核对的字段必须标记待确认。
+- 已验证：新增工作流契约检查；该门禁仍不替代候选对实际代码、配置和测试的回读。
+- English: Handoff tooling previously verified seals and source hashes without detecting stale generation, breakpoint, workspace counts, or delivery status in the snapshot body. Scenario 1C and rule 04 now require a content reconciliation against CURRENT state, the status index, Git/remote facts, and the independent delivery receipt before sealing; unverifiable fields must remain pending.
+
 ## 未发布：交接触发与当前轮指令优先修正
 
 - 已执行：明确每轮以当前操作者消息决定目标、时序和授权；上一轮“下一轮再交接”等内容只作背景，不能自动生成快照或继承权限。自然语言“准备交接/收口后交接”仅路由到场景 1C，必须完整执行预检、结束覆盖核账、成果回读、封条和交付门禁；仓库不存在独立的“场景 EC”，明确指向该目的时按 1C 处理。
