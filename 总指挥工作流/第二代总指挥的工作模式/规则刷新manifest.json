@@ -1,20 +1,32 @@
 {
   "schema_version": 1,
-  "rule_version": "2026-09-28.7",
+  "rule_version": "2026-09-28.12",
   "scope": "core_workflow_full",
   "path_base": "rule_root",
   "rules": [
     {
+      "path_ref": ".github/scripts/HandoffSeal.mjs",
+      "sha256": "B67E98F38899C5656E1306273C2CE60FE33675BC6601E1C9FC49906A1E2334D6"
+    },
+    {
+      "path_ref": ".github/scripts/Prepare-Handoff.mjs",
+      "sha256": "186C2D3144A5E99189447022931360C507F811475A97C13228DAA2190736477B"
+    },
+    {
+      "path_ref": ".github/scripts/Mark-Handoff-Delivered.mjs",
+      "sha256": "7DC7F1DA62F6F8E99D8E32C7F253A836D6935E2AD98D515FA51474F40405C3D8"
+    },
+    {
       "path_ref": "00-第二代工作流总览.md",
-      "sha256": "5D6B2C4B6F4EE4F0ED19A289D10AEC42ADDCF76761FB79CB113F73401C12B1C3"
+      "sha256": "1BC11671B207777926BD6C51CF74266161F0AAA7AEF164A9128541F2D64E9F26"
     },
     {
       "path_ref": "01-操作者操作手册.md",
-      "sha256": "E3E96F52DF50CED0F5C56102322C5024766434DED3AE4E56F0D25BEA1334FB70"
+      "sha256": "85B93AB17950501D86E482B7AFBC8760BC9EBA5F5A24E116117D38545F4480A4"
     },
     {
       "path_ref": "02-总指挥核心规则.md",
-      "sha256": "3CCCED2772381D7CE55933B68AD0CC332504431A6422C691BC00D673685967C9"
+      "sha256": "792C66960F5B9AC4A003AD66ECA302527A973D265D8387DB72D1F61B6DB9952B"
     },
     {
       "path_ref": "03-专项任务卡模板.md",
@@ -22,7 +34,7 @@
     },
     {
       "path_ref": "04-状态、目标变更与交接规范.md",
-      "sha256": "298576416A0B208BCC51ACAF0ED1DD6669344B9FBC170D9D3B9E8D361F25A640"
+      "sha256": "EB15F3F7771919B0E822C483386E5F5D1D080310F7129FCE036536A2D4B4B949"
     },
     {
       "path_ref": "05-模型选择与资源策略.md",
@@ -30,11 +42,11 @@
     },
     {
       "path_ref": "06-复盘与优化规则.md",
-      "sha256": "EFC0DE958504AD3A3A2497476539F281ED21B9BA9702652EB913BCC45CFD99CF"
+      "sha256": "38F313B22F895D5FEFA701DCF7BD443C05835FA74ECA3112BCA101FA45932E6C"
     },
     {
       "path_ref": "07-总指挥交接记录模板.md",
-      "sha256": "E77974E7E0549C301EF9C46338F8733FFD5CE95C9296164F5C4E606B06A8D522"
+      "sha256": "1A8E0326150DFA517ABCD655B9095D3D7B72889A28E4454722989DE2E7BB0F25"
     },
     {
       "path_ref": "08-旧版兼容与迁移规范.md",
@@ -42,19 +54,15 @@
     },
     {
       "path_ref": "09-自动化授权与风险分级.md",
-      "sha256": "880DDCAEBF2BAEC8B0485D667E22509B8AE61562C1EE993518CB0BEAD5C39756"
+      "sha256": "1F7F397A64CE35901C3D05CDA551D8B864DCDD3FF51B6D4BDF3A4DD095B1092B"
     },
     {
       "path_ref": "10-自动状态索引规范.md",
-      "sha256": "62CB7DE111C73AB3E8043556B0FCFE387B298F611244411031292491F985BA1E"
+      "sha256": "6B5A3CD17E2A957CB3A35B8DCF637C848F9A5F72A269B14E73A70B7DA95AD1E7"
     },
     {
       "path_ref": "11-操作者协作画像规范.md",
       "sha256": "0B3DA0EE5B421991055C4799ACFF24DE7DFC2B89E123FD27A8C9DB81167733EB"
-    },
-    {
-      "path_ref": "总指挥轻量交接启动配置.md",
-      "sha256": "025C673EBE7E724D9C42F039CA6291DE8A26810E9945A99F1963DEFB55E8D98F"
     },
     {
       "path_ref": "规则刷新广播包.md",
@@ -63,6 +71,14 @@
     {
       "path_ref": "规则刷新接收回执模板.md",
       "sha256": "44B482FD63BC7E1E5621F947E77B9FFB620260F2DE926E0B15C01D06519C926E"
+    },
+    {
+      "path_ref": "总指挥轻量交接启动配置.md",
+      "sha256": "E9752D3C9D0FE05394D570710A15CD11104B960B4C34F0C33A40DAC6439B1DEE"
+    },
+    {
+      "path_ref": "templates/HANDOFF_STATE.schema.json",
+      "sha256": "B449598340AE279C19556244D4D4A7510D12C02DA35A8C67948BFB0A0689FFBD"
     }
   ]
 }

@@ -9,6 +9,9 @@ const read = name => fs.readFileSync(path.join(workflow, name), 'utf8');
 const sha256 = value => crypto.createHash('sha256').update(value).digest('hex').toUpperCase();
 const schema = JSON.parse(fs.readFileSync(path.join(workflow, 'templates', 'HANDOFF_STATE.schema.json'), 'utf8'));
 const REFRESH_REQUIRED_RULES = [
+  '.github/scripts/HandoffSeal.mjs',
+  '.github/scripts/Prepare-Handoff.mjs',
+  '.github/scripts/Mark-Handoff-Delivered.mjs',
   ...Array.from({ length: 12 }, (_, index) => `${String(index).padStart(2, '0')}-`),
   '总指挥轻量交接启动配置.md',
   '规则刷新广播包.md',
@@ -39,11 +42,13 @@ checks.push(['diagnosis references resolve to the current section', `${read('02-
 checks.push(['bounded test scenario is distinct from feedback, diagnosis and legacy 2G', `${read('00-第二代工作流总览.md')}\n${read('01-操作者操作手册.md')}\n${read('02-总指挥核心规则.md')}`, ['场景 2G：用真实数据做有界自动测试、修复和复测', '旧版精简提示词的“2G”按内容和规则版本映射到当前 2B', '2E 用于反馈你已经观察到的结果；2C 是原因不明时的逐节点查因方法', '收到当前版 2G 的真实数据有界测试请求时走 2G', '可终止本轮进程及其子进程', '不因重试、换卡或切换窗口重置', '质量标准无法直接核验、又无可靠真值或必要人工确认时']]);
 checks.push(['cross-task receipt is an executable hard gate', `${read('02-总指挥核心规则.md')}\n${read('09-自动化授权与风险分级.md')}\n${fs.readFileSync(path.join(root, 'AGENTS.md'), 'utf8')}`, ['取得处理时隙后的第一项动作必须是实际发送回执并读取工具结果', '回执先行硬门禁（事故回归）', '实际跨任务发送工具', '缺少真实发送证据的事件不得收口', '不得写成已回执']]);
 checks.push(['cross-task workflow review routes separately from source business', `${read('09-自动化授权与风险分级.md')}\n${fs.readFileSync(path.join(root, 'AGENTS.md'), 'utf8')}`, ['公共工作流审查的正向分流', '按 FIFO 在取得处理时隙后完成最小只读核对', '只提取判断工作流缺陷所需的最小事实', '工作流部分继续处理，专项业务部分单独标记 `BLOCKED`', '没有回执要求时不强制向来源发送消息', '公共工作流审查与来源业务二分', '混合消息必须拆分处理']]);
-checks.push(['handoff obeys current-turn precedence and formal route', `${read('01-操作者操作手册.md')}\n${read('02-总指挥核心规则.md')}\n${read('04-状态、目标变更与交接规范.md')}\n${fs.readFileSync(path.join(root, 'AGENTS.md'), 'utf8')}`, ['自然语言在这里仅是路由信号，不是交接快照授权', '上一轮“下一轮再交接”等说法只保留为背景', '不得仅凭历史意图生成正式快照', '当前轮优先于历史时序约定', '自然语言不构成捷径', '必须补齐 1C/1D 的预检、收口核账、快照交付', '仓库没有独立的“场景 EC”']]);
+checks.push(['handoff obeys current-turn precedence and formal route', `${read('01-操作者操作手册.md')}\n${read('02-总指挥核心规则.md')}\n${read('04-状态、目标变更与交接规范.md')}\n${fs.readFileSync(path.join(root, 'AGENTS.md'), 'utf8')}`, ['自然语言在这里仅是路由信号，不是交接快照授权', '上一轮“下一轮再交接”等说法只保留为背景', '不得仅凭历史意图生成正式快照', '当前轮优先于历史时序约定', '自然语言不构成捷径', '必须补齐 1C/1D 的预检、收口核账、快照交付', '不存在“场景 EC”', '1B 预处理']]);
 checks.push(['handoff closeout distinguishes pending work from blockers', read('04-状态、目标变更与交接规范.md'), ['收口”是把执行中或结果未知的动作停在安全原子边界', '普通未完成项只要有状态、责任对象、精确断点、下一行动和失效条件', '高风险动作未安全停止', '必须 `BLOCKED`']]);
-checks.push(['handoff content reconciles before sealing', `${read('01-操作者操作手册.md')}\n${read('04-状态、目标变更与交接规范.md')}`, ['内容一致性回读', '中央 CURRENT、AI 状态索引、实际 Git/工作区/远端', '旧编号、旧世代、旧工作区计数或交付状态残留', '封条或哈希通过不能代替', '独立交付回执']]);
+checks.push(['handoff content reconciles before sealing', `${read('01-操作者操作手册.md')}\n${read('04-状态、目标变更与交接规范.md')}`, ['内容一致性回读', '中央 CURRENT、AI 状态索引、实际 Git/工作区/远端', '旧编号、旧世代、旧工作区计数或交付状态残留', '封条或哈希通过不能代替', '以候选当前消息实际收到附件作为送达事实']]);
+checks.push(['handoff preflight closes before snapshot', `${read('01-操作者操作手册.md')}\n${read('02-总指挥核心规则.md')}\n${read('总指挥轻量交接启动配置.md')}`, ['场景 1B：交接预处理与收口判断', '不生成 `final-*`', '不存在“场景 EC”', '1B→1C', '本地与远端尚未同步', '低风险、可回滚']]);
 checks.push(['handoff baseline is frozen only until takeover', `${read('01-操作者操作手册.md')}\n${read('04-状态、目标变更与交接规范.md')}\n${read('总指挥轻量交接启动配置.md')}`, ['规则版本和 manifest 必须保持冻结', '当前候选标为 `SUPERSEDED`', '普通进度更新不要求重新生成候选附件', '只有新规则明确改变当前授权、单写者、安全边界或正在进行的高影响动作时']]);
 checks.push(['handoff verification is executable and layered', `${read('07-总指挥交接记录模板.md')}\n${read('01-操作者操作手册.md')}`, ['封条验证入口', '直接使用其中的完整命令', '`INPUT_REQUIRED`', '不得把调用缺参写成来源损坏']]);
+checks.push(['handoff candidate reply is human-first', `${read('01-操作者操作手册.md')}\n${read('04-状态、目标变更与交接规范.md')}\n${read('总指挥轻量交接启动配置.md')}\n${read('07-总指挥交接记录模板.md')}`, ['默认先用四句人话回答', '真正阻断', '默认不展示机器字段', '只有操作者明确要求技术细节', '不得把 `NOT_RUN`、`GENERATED_NOT_DELIVERED`', '不阻止当前候选阶段，写入“补充限制”而不是“真正阻断”', '下列字段只供机器记录和异常定位']]);
 let failed = 0;
 for (const [name, text, needles] of checks) {
   const missing = needles.filter(needle => !text.includes(needle));
@@ -144,8 +149,9 @@ for (const required of REFRESH_REQUIRED_RULES) {
   }
 }
 for (const item of manifest.rules) {
-  const absolute = path.resolve(workflow, item.path_ref);
-  if (!absolute.startsWith(`${workflow}${path.sep}`) || !fs.existsSync(absolute) || item.sha256 !== sha256(fs.readFileSync(absolute))) {
+  const base = item.path_ref.startsWith('.github/') ? root : workflow;
+  const absolute = path.resolve(base, item.path_ref);
+  if (!absolute.startsWith(`${base}${path.sep}`) || !fs.existsSync(absolute) || item.sha256 !== sha256(fs.readFileSync(absolute))) {
     console.error(`FAIL: rule refresh manifest digest mismatch: ${item.path_ref}`);
     process.exit(1);
   }

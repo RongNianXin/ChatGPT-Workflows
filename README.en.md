@@ -37,6 +37,7 @@ Most of the repository is Markdown and PowerShell rather than a hosted service o
 
 ## What's new: evolving assessment, interface, and recovery capabilities
 
+- **Handoff and remote-sync flow are now tighter:** handoff preflight checks seal sources, worktree content fingerprints, and the remote baseline together. Candidate windows start with four plain-language lines, while remote-sync requests pass through local inventory, verification, and authorization gates.
 - **The session handoff evaluator keeps growing:** what began as task lookup and saving now includes a Windows desk, historical results and reports, handoff scoring, tiered reminders, and legacy-data compatibility. Its algorithm and visual style have both been revised.
 - **More recovery and troubleshooting capability:** an archive-path repair tool was added, while cross-window handoff, automation-result association, long sessions, and client failures were organized into searchable troubleshooting material.
 - **A more complete delivery surface:** offline Markdown reading, redacted real-run previews, a Chinese source of truth, and an English entry now let rules, tools, and showcase material evolve separately.
@@ -55,7 +56,7 @@ Establish the current baseline before deciding what to simplify, how to verify i
 | [Cross-machine reproduction and performance diagnosis](总指挥工作流/第二代总指挥的工作模式/docs/PIPELINE_DIAGNOSIS_AND_ALGORITHM_TUNING_STANDARD.md#跨机器效果与速度差异对照) | Check the actual code, configuration, models, inputs, and access to required resources. Separate output differences from timing differences, and verify the actual delivered result after merging rather than relying on “it works on my machine.” |
 | [Natural-language entry](总指挥工作流/第二代总指挥的工作模式/01-操作者操作手册.md#统一入口描述目标由-ai-核对场景) | Once the rule directory is registered, describe your goal without memorizing scenario numbers or fixed phrases. The AI selects the workflow using the goal, current state, and permissions. Publishing requests load delivery checks without forcing a PR when none is needed. |
 
-Scene 2 is the ordinary target entry; 2B covers behavior-preserving code simplification, and Scene 5 covers execution with independent review. Legacy numbering remains only as compatibility aliases and grants no new authorization. These rules do not guarantee equal speed on arbitrary machines or correct execution by every AI; actual outcomes require verification, and team rules and authorization boundaries still take precedence. See the [change log (Chinese)](CHANGELOG.md). The linked detailed guides are currently in Chinese.
+Scene 2 is the ordinary target entry; 2B covers behavior-preserving code simplification, and Scene 5 covers execution with independent review. Legacy numbering remains only as compatibility aliases and grants no new authorization. These rules do not guarantee equal speed on arbitrary machines or correct execution by every AI; actual outcomes require verification, and team rules and authorization boundaries still take precedence. See the [bilingual changelog](CHANGELOG.md). The linked detailed guides are currently in Chinese.
 
 ## What the commander workflow provides
 
@@ -162,4 +163,4 @@ Released under the [MIT License](LICENSE).
 
 This project acknowledges the [LINUX DO](https://linux.do/) community and supports sincere, friendly knowledge sharing and exchange.
 
-<!-- README-SOURCE-SHA256: 6412540de2ab3a84a8883c5bb9c62216beb21b8a4de397a9aafcddf36c183aa0 -->
+<!-- README-SOURCE-SHA256: 7685f3b6b97ce41bb9f48ffaea6c203458061eb30302076df0dd0208eb917172 -->

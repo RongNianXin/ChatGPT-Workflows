@@ -6,7 +6,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { detectUnicodeCollisions, prepareFormalHandoff, readGitWorkspaceBaseline, REQUIRED_RULES, verifyWorkspaceBaseline } from './Prepare-Handoff.mjs';
+import { detectUnicodeCollisions, prepareFormalHandoff, readGitWorkspaceBaseline, readLiveRemoteBaseline, REQUIRED_RULES, verifyWorkspaceBaseline } from './Prepare-Handoff.mjs';
 
 const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'prepare-handoff-'));
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
@@ -104,7 +104,9 @@ try {
   spawnSync('git', ['init', '--quiet', sourceRoot], { stdio: 'inherit' });
   fs.writeFileSync(path.join(sourceRoot, '.gitignore'), '.handoff-private/\n', 'utf8');
   fs.writeFileSync(path.join(temp, 'snapshot-template.md'), '# {{SNAPSHOT_ID}}\nseal={{SEAL_DIGEST}}\ncutoff={{FACT_CUTOFF}}\nevent={{EVENT_ID}}\n', 'utf8');
-  writeJson(path.join(temp, 'rule-manifest.json'), { schema_version: 1, rule_version: '2026-09-28.4', rules: REQUIRED_RULES.map(path_ref => ({ path_ref, sha256: sha256(fs.readFileSync(path.join(workflowRoot, path_ref))) })) });
+  const workflowFilesRoot = path.join(workflowRoot, '总指挥工作流', '第二代总指挥的工作模式');
+  const ruleFilePath = path_ref => path.join(path_ref.startsWith('.github/') || path_ref.startsWith('总指挥工作流/') ? workflowRoot : workflowFilesRoot, path_ref);
+  writeJson(path.join(temp, 'rule-manifest.json'), { schema_version: 1, rule_version: '2026-09-28.4', rules: REQUIRED_RULES.map(path_ref => ({ path_ref, sha256: sha256(fs.readFileSync(ruleFilePath(path_ref))) })) });
 
   check('Unicode NFC/NFD collisions are rejected without renaming', () => assert.throws(() => detectUnicodeCollisions(['资料/é.md', '资料/e\u0301.md']), /Unicode normalization collision/));
   const cli = spawnSync(process.execPath, ['./Prepare-Handoff.mjs'], { cwd: scriptDir, encoding: 'utf8' });
@@ -289,6 +291,28 @@ try {
     const sameCountBaseline = readGitWorkspaceBaseline(workspaceProbe);
     fs.writeFileSync(path.join(workspaceProbe, 'untracked.txt'), 'two\n', 'utf8');
     assert.ok(verifyWorkspaceBaseline(workspaceProbe, sameCountBaseline).some(error => error.includes('worktree_fingerprint.untracked_digest')));
+  });
+  check('live remote probe observes the advertised head instead of a stale draft value', () => {
+    const remoteBare = path.join(temp, 'remote-probe.git');
+    const remoteWork = path.join(temp, 'remote-probe-work');
+    spawnSync('git', ['init', '--bare', '--quiet', remoteBare], { stdio: 'inherit' });
+    spawnSync('git', ['init', '--quiet', remoteWork], { stdio: 'inherit' });
+    spawnSync('git', ['-C', remoteWork, 'config', 'user.name', 'Test'], { stdio: 'inherit' });
+    spawnSync('git', ['-C', remoteWork, 'config', 'user.email', 'test@example.invalid'], { stdio: 'inherit' });
+    fs.writeFileSync(path.join(remoteWork, 'remote.txt'), 'one\n', 'utf8');
+    spawnSync('git', ['-C', remoteWork, 'add', '--', 'remote.txt'], { stdio: 'inherit' });
+    spawnSync('git', ['-C', remoteWork, 'commit', '--quiet', '-m', 'one'], { stdio: 'inherit' });
+    spawnSync('git', ['-C', remoteWork, 'remote', 'add', 'origin', remoteBare], { stdio: 'inherit' });
+    spawnSync('git', ['-C', remoteWork, 'push', '--quiet', '-u', 'origin', 'HEAD:main'], { stdio: 'inherit' });
+    const firstRemote = readLiveRemoteBaseline(remoteWork, 'origin/main');
+    assert.match(firstRemote.head, /^[0-9a-f]{40}$/);
+    const staleHead = firstRemote.head;
+    fs.writeFileSync(path.join(remoteWork, 'remote.txt'), 'two\n', 'utf8');
+    spawnSync('git', ['-C', remoteWork, 'add', '--', 'remote.txt'], { stdio: 'inherit' });
+    spawnSync('git', ['-C', remoteWork, 'commit', '--quiet', '-m', 'two'], { stdio: 'inherit' });
+    spawnSync('git', ['-C', remoteWork, 'push', '--quiet', 'origin', 'HEAD:main'], { stdio: 'inherit' });
+    const secondRemote = readLiveRemoteBaseline(remoteWork, 'origin/main');
+    assert.notEqual(secondRemote.head, staleHead);
   });
   console.log(`Prepare handoff: PASS (${passed} cases)`);
 } finally {

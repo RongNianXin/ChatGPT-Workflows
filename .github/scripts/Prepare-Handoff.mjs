@@ -106,19 +106,22 @@ function findActiveControlPlaneIndexes(sourceRoot, canonicalStatusIndex, registr
   return found;
 }
 
-function verifyRuleManifest(workflowRoot, manifestPath) {
+function verifyRuleManifest(ruleRoot, manifestPath) {
+  const repositoryRoot = path.resolve(ruleRoot, '..', '..');
   const manifest = readJson(manifestPath);
   if (manifest?.schema_version !== 1 || !Array.isArray(manifest.rules)) throw new Error('rule manifest must use schema_version 1 and a rules array');
   const entries = new Map(manifest.rules.map(item => [item?.path_ref, item]));
   for (const relative of REQUIRED_RULES) {
-    const item = entries.get(relative);
-    if (!item || !/^[0-9a-f]{64}$/.test(item.sha256 || '')) throw new Error(`rule manifest is missing a valid digest: ${relative}`);
-    const absolute = fs.realpathSync(path.resolve(workflowRoot, relative));
-    if (!isInside(workflowRoot, absolute)) throw new Error(`rule path escapes workflow root: ${relative}`);
-    if (sha256(fs.readFileSync(absolute)) !== item.sha256) throw new Error(`rule digest mismatch: ${relative}`);
+    const ruleRelative = relative.startsWith('总指挥工作流/第二代总指挥的工作模式/') ? relative.slice('总指挥工作流/第二代总指挥的工作模式/'.length) : relative;
+    const item = entries.get(relative) ?? entries.get(ruleRelative);
+    if (!item || !/^[0-9a-f]{64}$/i.test(item.sha256 || '')) throw new Error(`rule manifest is missing a valid digest: ${relative}`);
+    const baseRoot = relative.startsWith('.github/') ? repositoryRoot : ruleRoot;
+    const absolute = fs.realpathSync(path.resolve(baseRoot, relative.startsWith('.github/') ? relative : ruleRelative));
+    if (!isInside(baseRoot, absolute)) throw new Error(`rule path escapes workflow root: ${relative}`);
+    if (sha256(fs.readFileSync(absolute)).toLowerCase() !== String(item.sha256).toLowerCase()) throw new Error(`rule digest mismatch: ${relative}`);
   }
   for (const tool of ['.github/scripts/HandoffSeal.mjs', '.github/scripts/Prepare-Handoff.mjs']) {
-    const tracked = spawnSync('git', ['-C', workflowRoot, 'ls-files', '--error-unmatch', '--', tool], { encoding: 'utf8' });
+    const tracked = spawnSync('git', ['-C', repositoryRoot, 'ls-files', '--error-unmatch', '--', tool], { encoding: 'utf8' });
     if (tracked.status !== 0) throw new Error(`handoff tool is not tracked in the verified workflow repository: ${tool}`);
   }
   return manifest;
@@ -154,6 +157,38 @@ function readGitWorkspaceBaseline(sourceRoot, requiredRefs = []) {
   });
   const untrackedDigest = sha256(Buffer.from(JSON.stringify(untrackedFiles), 'utf8'));
   return { head: head.stdout.trim(), branch: branch.stdout.trim() || 'HEAD', tree: tree.stdout.trim(), staged_count: staged, tracked_modified_count: trackedModified, untracked_count: untrackedCount, worktree_fingerprint: { algorithm: 'git-diff-binary+untracked-content-sha256-v1', tracked_diff_sha256: sha256(diff.stdout), untracked_digest: untrackedDigest } };
+}
+
+// A handoff draft may have been assembled before a local push completed.  The
+// draft's remote block is therefore only a claim until the final preflight
+// queries the configured remote again.  This probe deliberately avoids fetch:
+// it reads the remote advertisement without changing the repository.
+export function readLiveRemoteBaseline(sourceRoot, defaultRef) {
+  const head = spawnSync('git', ['-C', sourceRoot, 'rev-parse', 'HEAD'], { encoding: 'utf8' });
+  // Synthetic contract fixtures may not have a commit or a remote.  A real
+  // formal handoff always has a Git HEAD; callers treat null as a test-only
+  // unavailable probe and keep the existing workspace gate in force.
+  if (head.status !== 0) return null;
+  const remotes = spawnSync('git', ['-C', sourceRoot, 'remote'], { encoding: 'utf8' });
+  if (remotes.status !== 0) throw new Error('cannot enumerate Git remotes for live handoff verification');
+  const names = remotes.stdout.split(/\r?\n/).map(value => value.trim()).filter(Boolean);
+  let remoteName;
+  let ref;
+  if (/^refs\//.test(defaultRef)) {
+    remoteName = names.includes('origin') ? 'origin' : names[0];
+    ref = defaultRef;
+  } else {
+    const slash = defaultRef.indexOf('/');
+    remoteName = slash > 0 ? defaultRef.slice(0, slash) : undefined;
+    const branch = slash > 0 ? defaultRef.slice(slash + 1) : defaultRef;
+    ref = branch.startsWith('refs/') ? branch : `refs/heads/${branch}`;
+  }
+  if (!remoteName || !names.includes(remoteName)) throw new Error(`remote target is not configured locally: ${defaultRef}`);
+  const result = spawnSync('git', ['-C', sourceRoot, 'ls-remote', '--exit-code', remoteName, ref], { encoding: 'utf8' });
+  if (result.status !== 0) throw new Error(`cannot read live remote baseline for ${defaultRef}: ${String(result.stderr || '').trim() || 'ls-remote failed'}`);
+  const advertised = result.stdout.trim().split(/\s+/)[0];
+  if (!/^[0-9a-f]{40,64}$/i.test(advertised)) throw new Error(`live remote returned an invalid head for ${defaultRef}`);
+  return { head: advertised.toLowerCase(), observed_at: new Date().toISOString(), remote_name: remoteName, ref };
 }
 
 export { readGitWorkspaceBaseline };
@@ -228,6 +263,7 @@ export function prepareFormalHandoff(configPath) {
 
   const scriptDir = path.dirname(fileURLToPath(import.meta.url));
   const workflowRoot = fs.realpathSync(path.resolve(scriptDir, '..', '..'));
+  const ruleRoot = fs.realpathSync(path.join(workflowRoot, '总指挥工作流', '第二代总指挥的工作模式'));
   const sealDirectory = resolveFrom(configDir, config.seal_directory);
   const sourceRoot = fs.realpathSync(resolveFrom(configDir, config.source_root));
   const externalControlPlaneRoot = config.external_control_plane_root ? fs.realpathSync(resolveFrom(configDir, config.external_control_plane_root)) : null;
@@ -253,7 +289,7 @@ export function prepareFormalHandoff(configPath) {
   if (ignored.status !== 0) throw new Error('seal directory must be excluded by the source repository .gitignore');
 
   const ruleManifestDigest = sha256(fs.readFileSync(manifestPath));
-  const ruleManifest = verifyRuleManifest(workflowRoot, manifestPath);
+  const ruleManifest = verifyRuleManifest(ruleRoot, manifestPath);
   const draft = readJson(draftPath);
   if (draft.rule_baseline?.manifest_sha256?.toLowerCase() !== ruleManifestDigest.toLowerCase() || draft.rule_baseline?.rule_version !== ruleManifest.rule_version) throw new Error('rule baseline is stale: candidate was prepared under a different rule manifest');
   const existingSealState = verifyChain(realSealDirectory, { sourceRoot, externalControlPlaneRoot, verifyLatestSources: false });
@@ -303,6 +339,21 @@ export function prepareFormalHandoff(configPath) {
   if (sourceDigestErrors.length) throw new Error(`preflight source verification failed: ${sourceDigestErrors.join('; ')}`);
   const workspaceErrors = verifyWorkspaceBaseline(sourceRoot, draft.workspace);
   if (workspaceErrors.length) throw new Error(`preflight workspace verification failed: ${workspaceErrors.join('; ')}`);
+  if (draft.remote?.status === 'PASS') {
+    const liveRemote = readLiveRemoteBaseline(sourceRoot, draft.remote.default_ref);
+    if (liveRemote) {
+      if (liveRemote.head !== String(draft.remote.head || '').toLowerCase()) {
+        throw new Error(`preflight remote baseline drift: expected ${draft.remote.head}, found ${liveRemote.head}`);
+      }
+      // Bind the seal to the same observation that passed the final probe.
+      // The draft is an input; do not rewrite it on disk or create a second
+      // central state source.
+      draft.remote.head = liveRemote.head;
+      draft.remote.observed_at = liveRemote.observed_at;
+      draft.fact_cutoff = liveRemote.observed_at;
+      draft.sealed_at = liveRemote.observed_at;
+    }
+  }
   if (preflightOnly) return {
     status: 'READY',
     mode: 'PREFLIGHT_ONLY',
@@ -363,9 +414,13 @@ export function prepareFormalHandoff(configPath) {
   try { fs.writeFileSync(tempFd, finalBytes); fs.fsyncSync(tempFd); } finally { fs.closeSync(tempFd); }
   try {
     if (sha256(fs.readFileSync(manifestPath)) !== ruleManifestDigest) throw new Error('rule manifest drifted while preparing the attachment');
-    verifyRuleManifest(workflowRoot, manifestPath);
+    verifyRuleManifest(ruleRoot, manifestPath);
     const finalVerification = verifyChain(realSealDirectory, { sourceRoot, externalControlPlaneRoot });
     if (finalVerification.status !== 'PASS' || !finalVerification.handoff_ready || finalVerification.latest?.seal_digest !== seal.seal_digest || finalVerification.latest_source_status !== 'PASS') throw new Error(`facts drifted while rendering the attachment: ${finalVerification.errors.join('; ')}`);
+    if (seal.remote?.status === 'PASS') {
+      const finalLiveRemote = readLiveRemoteBaseline(sourceRoot, seal.remote.default_ref);
+      if (finalLiveRemote && finalLiveRemote.head !== String(seal.remote.head || '').toLowerCase()) throw new Error(`remote baseline drifted while rendering the attachment: expected ${seal.remote.head}, found ${finalLiveRemote.head}`);
+    }
     const receipt = {
       schema_version: 1,
       artifact_status: 'GENERATED_NOT_DELIVERED',

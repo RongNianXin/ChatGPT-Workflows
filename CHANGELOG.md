@@ -1,4 +1,42 @@
 # 变更日志
+## 2026-09-28：交接与远端同步流程收口
+
+- 已执行：补齐交接预处理、正式候选附件、封条来源回算、工作区内容指纹和远端基线核验；缺少外部控制面根时明确返回 `INPUT_REQUIRED`，不把缺少参数误判为来源损坏。
+- 已执行：候选交接回复统一先给四句人话摘要，再按需展开机器字段；远端同步自然语言入口继续经过本地成果盘点、验证和授权门禁。
+- 已执行：同步更新根 README 中英文入口，说明当前交接规则、证据边界和远端同步流程。
+- 已验证：本地规则指纹、封条链、工作区聚合指纹和远端 `origin/main` 基线已回读；仓库质量、工作流刷新契约、Prepare-Handoff、HandoffSeal 与 `git diff --check` 均通过。
+- English: Handoff closeout now covers preflight, formal candidate attachments, live seal-source verification, worktree content fingerprints, and the remote baseline. Missing external control-plane roots are reported as `INPUT_REQUIRED` instead of being treated as source corruption.
+- English: Candidate handoff replies start with four plain-language lines and expand machine fields only when needed. Natural-language remote-sync requests still pass through local inventory, verification, and authorization gates.
+- English: The root Chinese and English README pages now describe the current handoff evidence boundaries and remote-sync flow together.
+- English: Local rule fingerprints, the seal chain, the worktree aggregate, and the `origin/main` baseline were reread. Repository quality, the workflow refresh contract, Prepare-Handoff, HandoffSeal, and `git diff --check` all pass.
+
+## 未发布：交接候选回复改为人话优先
+
+- 已执行：修正交接规则之间的出口冲突。候选回复现在必须先用四行普通中文说明评分、是否建议交接、真正阻断和操作者下一步；机器字段、计数、指纹和内部状态码只在用户要求或真实异常需要定位时补充。`NOT_RUN`、`GENERATED_NOT_DELIVERED`、不可观察状态和旧总指挥未归档，不再被自动写成阻断。
+- 已验证：新增人话出口契约检查；规则版本升至 `2026-09-28.12`。本批验证结果以当前回合实际运行结果为准，未执行远端写入。
+- English: Handoff candidate replies now start with four plain-language lines: confidence, whether handoff is recommended, the real blocker, and the operator’s next action. Machine fields, counts, hashes, and internal statuses are shown only when requested or needed to locate a real exception. `NOT_RUN`, `GENERATED_NOT_DELIVERED`, unobservable state, and an unarchived old commander are no longer treated as blockers by default. Rule version `2026-09-28.12`; no remote write was performed.
+
+## 未发布：交接预处理、收口与远端差异分级
+
+- 已执行：场景 1B 改为交接预处理与收口判断；它先给出评分、是否建议交接、真实阻断和可执行收口项。不存在场景 EC；历史误写“EC”均按场景 1C 理解。需要先收口时使用 1B，只有收口后达到稳定条件才进入 1C 并生成 `final-*`；仍不适合交接时不生成快照。
+- 已执行：本地未 Push 或本地与远端尚未同步的成果不再单独阻断交接，改登记为交接后的待办；只有当前断点依赖远端且远端无法核验或存在未解释冲突时，才阻断受影响动作。规则版本升至 `2026-09-28.11`。
+- 已验证：Prepare-Handoff 20/20、HandoffSeal 54/54、WorkflowRefreshContract 29/29、Test-Repository 和 `git diff --check` 均通过；未执行远端写入。
+- English: Scenario 1B now performs handoff preflight and closeout triage. There is no Scenario EC; historical “EC” mentions are treated as typos for Scenario 1C. When closeout is needed first, Scenario 1B precedes 1C, and a `final-*` artifact is generated only after closeout reaches a stable handoff condition. Local work that has not been pushed is tracked as a post-handoff item rather than a blocker unless the current breakpoint depends on an unverifiable or conflicting remote fact. Prepare-Handoff 20/20, HandoffSeal 54/54, WorkflowRefreshContract 29/29, repository quality, and diff checks pass locally; no remote write was performed. Rule version `2026-09-28.11`.
+
+## 未发布：交接实时远端核验与无回执候选流程
+
+- 已执行：Prepare-Handoff 在生成正式附件前重新查询已绑定远端 ref，并将通过核验的远端 Head 与事实截点绑定到封条；增加实时远端漂移回归用例。修订正常交接语义：主附件生成后即可由操作者发送，`GENERATED_NOT_DELIVERED` 是内部中间状态，候选以当前消息收到主附件为送达事实，不再要求独立 `DELIVERED` 回执。
+- 已执行：交接以磁盘最后一次保存内容为边界；编辑器未保存缓冲只登记为不可观察信息，不降低控制面评分。候选汇报先给评分、是否建议交接、真实阻断和操作者下一步，再附技术字段。规则版本升至 `2026-09-28.9`。
+- 已执行：规则 manifest 纳入 HandoffSeal、Prepare-Handoff 和历史交付工具的实际文件指纹；交接工具改动会使候选规则基线失效并要求重生成。
+- 已验证：Prepare-Handoff 20/20、HandoffSeal 54/54、工作流刷新契约 28/28、仓库质量检查和差异检查均通过；未执行远端写入。真实空白窗口交接行为仍需后续观察。
+- English: Prepare-Handoff now re-queries the bound remote ref before creating a formal attachment and binds the observed remote head to the seal cutoff; a regression probe covers remote drift. Normal handoff now treats `GENERATED_NOT_DELIVERED` as an internal post-generation state: the operator sends the single Markdown attachment, and the candidate uses receipt of that attachment in the current message as delivery evidence without a separate `DELIVERED` callback. Handoff uses the last saved disk state; unobservable editor buffers are informational and do not lower control confidence. Prepare-Handoff 20/20, HandoffSeal 54/54, workflow refresh 28/28, repository quality, and diff checks passed locally; no remote write was performed. Rule version is `2026-09-28.9`.
+- English: The rule manifest now includes file digests for HandoffSeal, Prepare-Handoff, and the historical delivery utility, so tool changes invalidate the candidate rule baseline and require regeneration.
+
+## 未发布：交接主附件出口明确化
+
+- 已执行：明确交接生成后的唯一人工转发对象是项目化命名的 `final-*.md` 主附件；操作者按场景 1D 第一步发送该附件和提示词，机器 JSON、封条、manifest 与回执只供 AI 核验。为兼容历史称呼，场景 ED 解释为现行场景 1D。
+- 已验证：同步更新 01/04/07 的交接出口说明；规则版本升至 `2026-09-28.8`，manifest 按实际文件重算；本地远端同步仍需另行授权。
+- English: Handoff output now has one explicit human-forwardable artifact: the project-named `final-*.md` attachment. The operator sends that file with Scenario 1D Step 1; machine JSON, seals, manifests, and receipts remain verification-only. The historical label “Scenario ED” maps to current Scenario 1D. Rule version `2026-09-28.8` and the manifest were refreshed; remote sync remains separately authorized.
 
 本文件记录 ChatGPT Workflows 的重要变更。
 
@@ -44,9 +82,9 @@
 
 ## 未发布：交接触发与当前轮指令优先修正
 
-- 已执行：明确每轮以当前操作者消息决定目标、时序和授权；上一轮“下一轮再交接”等内容只作背景，不能自动生成快照或继承权限。自然语言“准备交接/收口后交接”仅路由到场景 1C，必须完整执行预检、结束覆盖核账、成果回读、封条和交付门禁；仓库不存在独立的“场景 EC”，明确指向该目的时按 1C 处理。
+- 已执行：明确每轮以当前操作者消息决定目标、时序和授权；上一轮“下一轮再交接”等内容只作背景，不能自动生成快照或继承权限。自然语言“准备交接/收口后交接”仅路由到场景 1C，必须完整执行预检、结束覆盖核账、成果回读、封条和交付门禁；不存在场景 EC；历史误写“EC”按场景 1C 处理。
 - 已执行：定义“收口”为安全停止原子步骤并登记状态、责任、断点、下一行动和恢复/失效条件；普通未完成项可进入快照非终态队列，结果未知的高风险动作或缺少稳定断点时才阻断。新增契约断言并升级规则版本到 `2026-09-28.1`。
-- English: Each turn now derives its action, timing, and authorization from the current operator message. Earlier “handoff next turn” wording is background only and cannot generate a snapshot or inherit permissions. Natural-language handoff requests route to scenario 1C but do not bypass its preflight, closeout coverage, readback, seal, and delivery gates. “EC” is not a separate scenario and maps to 1C only when the intent is explicit. Closeout means safely stopping at an atomic boundary and recording status, owner, checkpoint, next action, and recovery/expiry conditions; ordinary pending work may remain in the snapshot queue, while unknown high-risk work or missing checkpoints blocks readiness.
+- English: Each turn now derives its action, timing, and authorization from the current operator message. Earlier “handoff next turn” wording is background only and cannot generate a snapshot or inherit permissions. Natural-language handoff requests route to scenario 1C but do not bypass its preflight, closeout coverage, readback, seal, and delivery gates. There is no Scenario EC; historical “EC” mentions are typos for Scenario 1C. Closeout means safely stopping at an atomic boundary and recording status, owner, checkpoint, next action, and recovery/expiry conditions; ordinary pending work may remain in the snapshot queue, while unknown high-risk work or missing checkpoints blocks readiness.
 
 ## 未发布：跨任务工作流审查与来源业务分流修正
 
