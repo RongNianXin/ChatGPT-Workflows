@@ -308,7 +308,7 @@ function Test-CommanderDurableWorkflowContract {
         },
         @{
             Path = '总指挥工作流/第二代总指挥的工作模式/templates/SCHEDULER_REBUILD_GUIDE.md'
-            Required = @('VERIFY_ONLY', 'REBUILD_CANDIDATE_ONLY', 'STOP_AND_REVIEW', 'source_prompt_entry:', 'schedule_cadence:', 'timezone:', 'target_binding_abstract:', 'preflight_read_only_checks:', 'creation_or_recovery_authorization:', 'pause_conditions:', 'verification_commands:', '不复制正文', '完整提示词', '指纹一致只证明说明内容未漂移')
+            Required = @('VERIFY_ONLY', 'REBUILD_CANDIDATE_ONLY', 'STOP_AND_REVIEW', 'source_prompt_entry:', 'schedule_cadence:', 'timezone:', 'target_binding_abstract:', 'preflight_read_only_checks:', 'creation_or_recovery_authorization:', 'pause_conditions:', 'verification_commands:', '不复制正文', '完整的非秘密提示词', 'original_prompt_non_secret:', 'post_creation_verification:', '指纹一致只证明说明内容未漂移')
         },
         @{
             Path = '总指挥工作流/第二代总指挥的工作模式/docs/PR_SUBMISSION_AND_REVIEW_STANDARD.md'

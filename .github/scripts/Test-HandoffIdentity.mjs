@@ -87,7 +87,9 @@ try {
   check('scheduler guide is non-sensitive and references the canonical prompt entry', () => {
     assert.match(schedulerGuide, /source_prompt_entry:/);
     assert.match(schedulerGuide, /不复制正文/);
-    assert.match(schedulerGuide, /完整提示词/);
+    assert.match(schedulerGuide, /完整的非秘密提示词/);
+    assert.match(schedulerGuide, /original_prompt_non_secret:/);
+    assert.match(schedulerGuide, /post_creation_verification:/);
     assert.doesNotMatch(schedulerGuide, /^task_id:/m);
     assert.doesNotMatch(schedulerGuide, /^credential:/m);
   });
