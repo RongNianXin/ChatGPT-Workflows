@@ -19,10 +19,10 @@ const REFRESH_REQUIRED_RULES = [
 ];
 const checks = [
   ['matrix separates logical and machine phases', read('交接阶段矩阵.md'), ['逻辑交接阶段', '封条阶段', '附件交付状态', '候选核验状态']],
-  ['broadcast is load-only and self-describing', read('规则刷新广播包.md'), ['规则广播只做一件事', '规则更新指令 + 第二代规则路径', '不需要手工填写 `RULE_REFRESH_ID`', '项目问题另列待办']],
+  ['broadcast is load-only and self-describing', read('规则刷新广播包.md'), ['规则广播只做一件事', '规则更新指令 + 第二代规则路径', '不需要手工填写 `RULE_REFRESH_ID`', '项目问题另列待办', '规则根向上两级得到的仓库根', '以 `.github/` 开头']],
   ['broadcast limits failure to rule-root faults', read('规则刷新广播包.md'), ['路径不可访问', '必需文件缺失', '哈希不一致', '更高优先级规则冲突', '不得触发 `WARN/BLOCKED`']],
   ['broadcast requires a frozen source', read('规则刷新广播包.md'), ['广播前冻结门禁', '不得一边修改同一规则根一边要求其他总指挥刷新', '立即取消本批']],
-  ['manual bootstrap is one path command', read('01-操作者操作手册.md'), ['不需要填写事件编号、哈希、版本、变化清单或写入范围', '这是操作者下达的规则更新指令', '【第二代总指挥工作模式的实际路径】', '本次只更新规则，不做项目体检、配置迁移或交接', '长期人工兜底模板', '不必随版本号、manifest 摘要或接收者身份改写']],
+  ['manual bootstrap carries the dual-root manifest rule', read('01-操作者操作手册.md'), ['不需要填写事件编号、哈希、版本、变化清单或写入范围', '这是操作者下达的规则更新指令', '【第二代总指挥工作模式的实际路径】', '本次只更新规则，不做项目体检、配置迁移或交接', '以 `.github/` 开头的文件，按规则根向上两级得到的仓库根读取', '不得复制文件，也不得把所有条目都拼到同一个根目录', '长期人工兜底模板', '不必随版本号、manifest 摘要或接收者身份改写']],
   ['receipt is minimal pass or fail', read('规则刷新接收回执模板.md'), ['正常成功只回复', 'result：PASS', 'result：FAIL', '规则加载结果不使用 `WARN/BLOCKED`']],
   ['project migration is independent', read('项目配置迁移清单.md'), ['不再随规则广播自动执行', '本清单存在缺口也不得降低规则加载结果']],
   ['project state cannot block rule loading', read('09-自动化授权与风险分级.md'), ['规则刷新是纯规则加载事件', '规则加载只允许两种最终结果：`PASS` 或 `FAIL`', '不得产生 `WARN/BLOCKED`']],
@@ -49,7 +49,9 @@ checks.push(['handoff preflight closes before snapshot', `${read('01-操作者�
 checks.push(['handoff baseline is frozen only until takeover', `${read('01-操作者操作手册.md')}\n${read('04-状态、目标变更与交接规范.md')}\n${read('总指挥轻量交接启动配置.md')}`, ['规则版本和 manifest 必须保持冻结', '当前候选标为 `SUPERSEDED`', '普通进度更新不要求重新生成候选附件', '只有新规则明确改变当前授权、单写者、安全边界或正在进行的高影响动作时']]);
 checks.push(['handoff verification is executable and layered', `${read('07-总指挥交接记录模板.md')}\n${read('01-操作者操作手册.md')}`, ['封条验证入口', '直接使用其中的完整命令', '`INPUT_REQUIRED`', '不得把调用缺参写成来源损坏']]);
 checks.push(['handoff candidate reply is human-first', `${read('01-操作者操作手册.md')}\n${read('04-状态、目标变更与交接规范.md')}\n${read('总指挥轻量交接启动配置.md')}\n${read('07-总指挥交接记录模板.md')}`, ['默认先用四句人话回答', '真正阻断', '默认不展示机器字段', '只有操作者明确要求技术细节', '不得把 `NOT_RUN`、`GENERATED_NOT_DELIVERED`', '不阻止当前候选阶段，写入“补充限制”而不是“真正阻断”', '下列字段只供机器记录和异常定位']]);
+checks.push(['handoff scoring separates control confidence from switch and acceptance states', `${read('04-状态、目标变更与交接规范.md')}\n${read('总指挥轻量交接启动配置.md')}`, ['控制面必要证据全部通过且没有真实控制面冲突或缺口时必须记为 `HIGH`', '候选阶段旧写者 `IDLE/UNKNOWN`', '运行/专业状态 `UNKNOWN/NOT_RUN/FAIL` 不得降低控制面评分', '“尚未正式切换”本身不是降分理由']]);
 checks.push(['goal handoff stops business execution and exposes platform controls', `${read('01-操作者操作手册.md')}\n${read('05-模型选择与资源策略.md')}\n${read('06-复盘与优化规则.md')}`, ['不得开始新的业务步骤', '`/goal pause`', '`/goal resume`', '`/goal clear`', '垃圾桶删除聊天', '不能代替客户端改变持久 Goal 状态', '操作者先暂停平台状态', '暂停后才执行收口', '只有我明确要求“恢复 Goal”或“从断点继续”时才恢复']]);
+checks.push(['goal handoff has a platform pause gate', `${read('01-操作者操作手册.md')}\n${read('04-状态、目标变更与交接规范.md')}\n${read('交接阶段矩阵.md')}\n${read('07-总指挥交接记录模板.md')}\n${read('10-自动状态索引规范.md')}`, ['PAUSE_REQUIRED', 'PAUSED', 'Goal 交接权限', 'CLOSEOUT_ONLY', '交接材料生成并回读成功后必须为 `NONE`', '不能覆盖上述平台状态']]);
 let failed = 0;
 for (const [name, text, needles] of checks) {
   const missing = needles.filter(needle => !text.includes(needle));
@@ -74,6 +76,46 @@ for (const [name, input, expected] of routeCases) {
 }
 if (!failed) console.log('PASS: cross-task route cases are synthetic contract checks, not live Agent behavior');
 if (failed) process.exit(1);
+const scoreControlConfidence = ({ controlEvidence, switchStatus, oldWriterStatus, editorBuffer, runtime, professional }) => {
+  if (controlEvidence !== 'PASS') return 'MEDIUM';
+  return 'HIGH';
+};
+const scoreCases = [
+  ['complete control evidence with candidate-only restrictions stays HIGH', {
+    controlEvidence: 'PASS', switchStatus: 'READY_WITH_RESTRICTIONS', oldWriterStatus: 'IDLE', editorBuffer: 'UNKNOWN', runtime: 'UNKNOWN', professional: 'FAIL'
+  }, 'HIGH'],
+  ['control evidence conflict is not promoted to HIGH', {
+    controlEvidence: 'CONFLICT', switchStatus: 'READY_WITH_RESTRICTIONS', oldWriterStatus: 'IDLE', editorBuffer: 'UNKNOWN', runtime: 'UNKNOWN', professional: 'NOT_RUN'
+  }, 'MEDIUM']
+];
+for (const [name, input, expected] of scoreCases) {
+  const actual = scoreControlConfidence(input);
+  if (actual !== expected) { failed += 1; console.error(`FAIL: synthetic handoff score ${name}: ${actual} <> ${expected}`); }
+  else console.log(`PASS: synthetic handoff score ${name}`);
+}
+if (failed) process.exit(1);
+console.log('PASS: handoff score cases are synthetic contract checks, not live Agent behavior');
+const goalHandoffDecision = ({ platform, permission, output }) => {
+  if (platform === 'ACTIVE' || platform === 'UNKNOWN') return 'PAUSE_REQUIRED';
+  if ((output === 'MATERIAL_PREPARED' || output === 'GENERATED_NOT_DELIVERED') && platform !== 'PAUSED' && platform !== 'CLEARED') return 'PAUSE_REQUIRED';
+  if (output === 'MATERIAL_PREPARED' && platform === 'PAUSED' && permission === 'CLOSEOUT_ONLY') return 'CLOSEOUT_ONLY';
+  if (output === 'GENERATED_NOT_DELIVERED' && permission === 'BUSINESS_ALLOWED') return 'INVALID';
+  if (output === 'GENERATED_NOT_DELIVERED' && permission === 'NONE') return 'NONE';
+  return permission;
+};
+const goalHandoffCases = [
+  ['active platform cannot continue after handoff request', { platform: 'ACTIVE', permission: 'BUSINESS_ALLOWED', output: 'MATERIAL_PREPARED' }, 'PAUSE_REQUIRED'],
+  ['paused platform may only close out', { platform: 'PAUSED', permission: 'CLOSEOUT_ONLY', output: 'MATERIAL_PREPARED' }, 'CLOSEOUT_ONLY'],
+  ['generated material leaves old Goal terminal', { platform: 'PAUSED', permission: 'NONE', output: 'GENERATED_NOT_DELIVERED' }, 'NONE'],
+  ['unknown platform state cannot authorize continuation', { platform: 'UNKNOWN', permission: 'BUSINESS_ALLOWED', output: 'GENERATED_NOT_DELIVERED' }, 'PAUSE_REQUIRED']
+];
+for (const [name, input, expected] of goalHandoffCases) {
+  const actual = goalHandoffDecision(input);
+  if (actual !== expected) { failed += 1; console.error(`FAIL: synthetic Goal handoff gate ${name}: ${actual} <> ${expected}`); }
+  else console.log(`PASS: synthetic Goal handoff gate ${name}`);
+}
+if (failed) process.exit(1);
+console.log('PASS: Goal handoff gate cases are synthetic contract checks, not live platform control');
 const diagnosticDocs = `${read('00-第二代工作流总览.md')}\n${read('01-操作者操作手册.md')}\n${read('02-总指挥核心规则.md')}\n${read('docs/PIPELINE_DIAGNOSIS_AND_ALGORITHM_TUNING_STANDARD.md')}`;
 if (diagnosticDocs.includes('默认交付紧凑文本执行图') || diagnosticDocs.includes('排查的基础交付必须先确认实际运行身份，再给')) {
   console.error('FAIL: diagnosis still requires a diagram before the finding or repair');
@@ -132,8 +174,8 @@ const manifestBytes = fs.readFileSync(manifestPath);
 const manifest = JSON.parse(manifestBytes.toString('utf8'));
 const versionedRules = ['00-第二代工作流总览.md', '02-总指挥核心规则.md', '09-自动化授权与风险分级.md', '10-自动状态索引规范.md', '总指挥轻量交接启动配置.md'];
 const versions = versionedRules.map(name => read(name).match(/^版本：(\d{4}-\d{2}-\d{2}\.\d+)$/m)?.[1]);
-if (manifest.schema_version !== 1 || !Array.isArray(manifest.rules) || !manifest.rule_version || manifest.scope !== 'core_workflow_full' || manifest.path_base !== 'rule_root') {
-  console.error('FAIL: rule refresh manifest must declare schema, version, full core scope, rule-root base and a rules array');
+if (manifest.schema_version !== 1 || !Array.isArray(manifest.rules) || !manifest.rule_version || manifest.scope !== 'core_workflow_full' || manifest.path_base !== 'rule_root' || manifest.repository_root_ref !== '../..' || !Array.isArray(manifest.repository_root_prefixes) || manifest.repository_root_prefixes.length !== 1 || manifest.repository_root_prefixes[0] !== '.github/') {
+  console.error('FAIL: rule refresh manifest must declare schema, version, full core scope, dual-root path bases and a rules array');
   process.exit(1);
 }
 if (versions.some(version => version !== manifest.rule_version)) {
@@ -150,7 +192,9 @@ for (const required of REFRESH_REQUIRED_RULES) {
   }
 }
 for (const item of manifest.rules) {
-  const base = item.path_ref.startsWith('.github/') ? root : workflow;
+  const base = manifest.repository_root_prefixes.some(prefix => item.path_ref.startsWith(prefix))
+    ? path.resolve(workflow, manifest.repository_root_ref)
+    : workflow;
   const absolute = path.resolve(base, item.path_ref);
   if (!absolute.startsWith(`${base}${path.sep}`) || !fs.existsSync(absolute) || item.sha256 !== sha256(fs.readFileSync(absolute))) {
     console.error(`FAIL: rule refresh manifest digest mismatch: ${item.path_ref}`);

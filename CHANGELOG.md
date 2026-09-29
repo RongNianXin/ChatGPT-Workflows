@@ -1,4 +1,21 @@
 # 变更日志
+## 2026-09-30：场景 0A 固定提示词补齐 manifest 双根路径规则
+
+- 已修复：场景 0A 的长期人工兜底提示词现在直接携带 manifest 的路径解析规则：`.github/` 条目从规则根向上两级的仓库根读取，其他条目从规则根读取。操作者不再需要在失败后手工补发这段规则；同时加入刷新契约检查并更新规则版本。
+- English: Fixed the Scene 0A long-term manual fallback prompt so it carries the manifest path-resolution rule directly: `.github/` entries are read from the repository root two levels above the rule root, while other entries are read from the rule root. Operators no longer need to append this rule after a failed refresh. Added a refresh-contract check and updated the rule version.
+
+## 2026-09-30：修正候选交接评分映射
+
+- 已修复：候选材料控制面证据完整且无真实控制面阻断时，交接评分必须为 `HIGH`。`READY_WITH_RESTRICTIONS`、候选阶段旧写者仍为 `IDLE/UNKNOWN`、编辑器缓冲不可观察，以及运行/专业状态 `UNKNOWN/NOT_RUN/FAIL` 只影响各自依赖动作，不再把控制面评分降为 `MEDIUM/LOW`。新增组合回归测试，规则版本更新为 `2026-09-30.6`。
+- English: Fixed candidate handoff scoring. When control-plane evidence is complete and no real control-plane blocker exists, the confidence must be `HIGH`. `READY_WITH_RESTRICTIONS`, a candidate-stage old writer still being `IDLE/UNKNOWN`, an unobservable editor buffer, and runtime/professional `UNKNOWN/NOT_RUN/FAIL` states only restrict their dependent actions; they no longer lower control confidence to `MEDIUM/LOW`. Added a combination regression test and updated the rule version to `2026-09-30.6`.
+
+## 2026-09-30：Goal 交接平台暂停闸门
+
+- 已修订：针对 Goal 交接后仍继续执行的实战记录，增加 `Goal 平台状态` 与 `Goal 交接权限` 两个控制字段。交接请求后进入 `PAUSE_REQUIRED / CLOSEOUT_ONLY`；平台确认暂停后才能安全收口；交接材料生成并回读成功后，旧 Goal 的交接权限改为 `NONE`，不得继续测试、修改、分析或启动新批次。`MATERIAL_PREPARED` 和 `GENERATED_NOT_DELIVERED` 不再被视为平台已暂停或旧 Goal 可继续的依据。
+- 已补充：模型容量错误在 Goal 中先保存断点、登记 `PAUSE_REQUIRED`，不重复重试同一模型；更新了手册、状态规范、交接模板、阶段矩阵、模型策略、复盘记录和质量契约。版本与规则 manifest 已同步更新。
+- English: Added a platform-pause gate after a real Goal handoff incident where the old Goal continued running. Handoff records now carry `Goal platform state` and `Goal continuation authority`: a handoff request enters `PAUSE_REQUIRED / CLOSEOUT_ONLY`, closeout is allowed only after the platform reports paused, and a rereadable handoff changes the old Goal authority to `NONE`. `MATERIAL_PREPARED` and `GENERATED_NOT_DELIVERED` no longer imply that the platform is paused or that the old Goal may continue.
+- English: Model-capacity errors now checkpoint the Goal and record `PAUSE_REQUIRED` before any fallback decision; the same unavailable model is not retried. The manual, state rules, handoff template, phase matrix, model strategy, retrospective, and contract checks were updated, and the rule version and manifest were refreshed.
+
 ## 未发布：独立 Gen1 Goal 模式与周额度保护
 
 - 已修复：Goal 交接不再只生成文档后继续推进。Gen1 现在把“交接材料生成并回读成功后停止后续业务执行”设为硬停止，并在操作手册中补充 `/goal pause`、`/goal resume`、`/goal clear` 的使用顺序；垃圾桶删除聊天，不作为 Goal 暂停方式。由于工作流文字不能直接证明能够调用客户端暂停 API，平台持久状态仍需操作者用命令或 Goal 进度条 Pause 控制。
@@ -1506,3 +1523,8 @@ The roadmap items above are candidates only. Before every commit, update this ch
 - 已执行：侧栏脚本更新至 2.1，拖动时同步调整侧栏外框与标题区域，手柄跟随实际边界。
 - 已验证：JavaScript 语法检查与差异空白检查通过；真实 ChatGPT 页面效果仍待人工验收。
 - English: Updated the sidebar userscript to 2.1 so its handle follows the actual edge while resizing the sidebar frame and title area. Syntax and diff checks passed; live-site behavior still needs manual validation.
+## 未发布：规则刷新双根路径契约修复
+
+- 中文：修复规则刷新 manifest 将仓库根 `.github/scripts/` 与规则根文件混用时的路径歧义；广播和回归检查现在明确 `.github/` 条目按仓库根、其他条目按规则根解析，并记录了仓库根相对路径。
+- English: Clarified the rule-refresh manifest's dual-root path contract: `.github/` entries resolve from the repository root while other entries resolve from the rule root, with the repository-root reference recorded and regression-checked.
+- 状态 / Status：本地已修改，待验证；未 Commit，未 Push / Modified locally, verification pending; not committed or pushed.
