@@ -1,6 +1,9 @@
 # 变更日志
 ## 未发布：独立 Gen1 Goal 模式与周额度保护
 
+- 已修复：Goal 交接不再只生成文档后继续推进。Gen1 现在把“交接材料生成并回读成功后停止后续业务执行”设为硬停止，并在操作手册中补充 `/goal pause`、`/goal resume`、`/goal clear` 的使用顺序；垃圾桶删除聊天，不作为 Goal 暂停方式。由于工作流文字不能直接证明能够调用客户端暂停 API，平台持久状态仍需操作者用命令或 Goal 进度条 Pause 控制。
+- English: Fixed the Goal handoff gap where the task could keep running after producing a handoff document. Gen1 now treats “generate and reread the handoff material, then stop all further business execution” as a hard stop. The operator manual now documents `/goal pause`, `/goal resume`, and `/goal clear`; the trash action deletes the chat and is not a Goal pause mechanism. Because workflow text alone cannot prove that it can call the client pause API, the operator must still control the persistent Goal state with the command or the Goal progress-row Pause control.
+
 - 已调整：Gen1 的“允许操作”方括号现在提供可直接选择的常见权限类别，包括项目材料读取、本地代码/配置/文档修改、普通与高资源验证、本地测试服务和后台任务、无头自动化、Computer Use、已有费用范围内的模型调整、本地依赖更新，以及不 Push 的本地检查点 Commit/分支/worktree。明确保留账号、凭据、远端写入、发布/部署、不可恢复删除、额外费用和专业最终验收的单独授权门禁。最长执行时间默认值改为 8 小时，并同步更新中央默认规则。
 - English: Expanded the Gen1 “allowed operations” bracket with selectable common permission categories: project-material reads, local code/config/document edits, ordinary and high-resource validation, local test services and background jobs, headless automation, Computer Use, model adjustments within the existing plan and cost scope, local dependency updates, and local checkpoint commits/branches/worktrees without Push. Account access, credentials, remote writes, publishing/deployment, irreversible deletion, extra costs, and professional final acceptance remain separately gated. The default maximum execution time is now 8 hours, with the central default updated accordingly.
 

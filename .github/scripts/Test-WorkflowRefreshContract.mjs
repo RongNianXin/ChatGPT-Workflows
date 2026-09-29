@@ -49,6 +49,7 @@ checks.push(['handoff preflight closes before snapshot', `${read('01-操作者�
 checks.push(['handoff baseline is frozen only until takeover', `${read('01-操作者操作手册.md')}\n${read('04-状态、目标变更与交接规范.md')}\n${read('总指挥轻量交接启动配置.md')}`, ['规则版本和 manifest 必须保持冻结', '当前候选标为 `SUPERSEDED`', '普通进度更新不要求重新生成候选附件', '只有新规则明确改变当前授权、单写者、安全边界或正在进行的高影响动作时']]);
 checks.push(['handoff verification is executable and layered', `${read('07-总指挥交接记录模板.md')}\n${read('01-操作者操作手册.md')}`, ['封条验证入口', '直接使用其中的完整命令', '`INPUT_REQUIRED`', '不得把调用缺参写成来源损坏']]);
 checks.push(['handoff candidate reply is human-first', `${read('01-操作者操作手册.md')}\n${read('04-状态、目标变更与交接规范.md')}\n${read('总指挥轻量交接启动配置.md')}\n${read('07-总指挥交接记录模板.md')}`, ['默认先用四句人话回答', '真正阻断', '默认不展示机器字段', '只有操作者明确要求技术细节', '不得把 `NOT_RUN`、`GENERATED_NOT_DELIVERED`', '不阻止当前候选阶段，写入“补充限制”而不是“真正阻断”', '下列字段只供机器记录和异常定位']]);
+checks.push(['goal handoff stops business execution and exposes platform controls', `${read('01-操作者操作手册.md')}\n${read('05-模型选择与资源策略.md')}\n${read('06-复盘与优化规则.md')}`, ['交接材料生成并回读成功后，立即停止本 Goal 的后续业务执行', '`/goal pause`', '`/goal resume`', '`/goal clear`', '垃圾桶删除聊天', '不能代替客户端把持久 Goal 状态改成暂停', '只有我明确要求“恢复 Goal”或“从断点继续”时才恢复']]);
 let failed = 0;
 for (const [name, text, needles] of checks) {
   const missing = needles.filter(needle => !text.includes(needle));
