@@ -1,4 +1,11 @@
 # 变更日志
+## 2026-10-03：自然语言场景路由与旧任务兼容过渡
+
+- 已优化：在不引入 API 服务或复杂运行环境的前提下，增加“自然语言入口 → 场景提示词按需加载”的路由契约；明确确定命中、有限候选和无法判断三种分流，减少无关规则读取。新增 `workflow_version`、`state_schema_version`、`scenario_id`、`loaded_sections`、`route_confidence` 和 `migration_status` 的导航语义。
+- 已补充：新版采用“双读、单写”兼容过渡，能够读取旧任务快照并生成新版当前视图；`LEGACY_READABLE`、`MIGRATION_REQUIRED`、`MIGRATED` 和 `MIGRATION_BLOCKED` 不得被解释为完成、授权或真实平台验收。脚本仍只承担确定性核验，语义判断和高风险门禁保持在 AI/操作者侧。
+- 已验证：刷新契约从 39 项增加到 41 项；`Test-Repository.ps1` 全部通过。独立 AI 审查因未完成正文读取，状态保留为 `UNKNOWN/部分审查`，未把它写成通过。
+- English: Added a natural-language routing contract that loads only the matching scenario prompt pack without introducing an API service or complex runtime. The route distinguishes a clear match, a bounded candidate set, and an unknown route, and records workflow/schema versions, scenario, loaded sections, confidence, and migration status. Added a dual-read/single-write compatibility path for legacy tasks; migration states do not grant authorization or prove completion. Deterministic checks remain scriptable while semantic and high-risk decisions stay with the AI/operator. Contract checks increased from 39 to 41 and the repository quality suite passed. The independent review is recorded as `UNKNOWN/partial` because the reviewer stopped before reading the required source sections.
+
 ## 2026-10-03：Skin_Texture 交接反馈的预检与候选唯一性修补
 
 - 已执行：将真实交接反馈区分为网络偶发因素与流程性缺口；补充交接前第一道 `preflight_only` 门、固定事实截点与规则基线、远端失败分类和有限重试、唯一 active candidate 登记、附件与封条两阶段边界，以及旧链只读兼容要求。未修改来源项目，未执行远端写入。
