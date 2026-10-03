@@ -1,4 +1,12 @@
 # 变更日志
+## 2026-10-03：独立审查完成门禁、故障复发性与提交回读修补
+
+- 已修订：独立审查必须实际读取共同契约点名的必要正文，并回报读取清单、证据指针、未读项和状态；只确认文件存在、只看目录或中途停止时登记 `UNKNOWN/INCOMPLETE_REVIEW`，不得写成审查通过。
+- 已修订：阻断、故障、验证失败和流程偏差收口前必须判断一次性环境因素、可复现操作失误或系统性流程缺口；后两类必须留下永久措施和回归验证。
+- 已修订：复杂任务在当前操作者已授权的范围内可由总指挥自主安排只读分析者或独立审查者；该授权不扩展到跨任务通信、产品写入或远端写入。
+- 已修订：本地 Commit 使用真实换行的提交说明文件或多个独立 `-m` 参数，提交后必须回读提交正文并检查字面量 `\\n`、截断和验证信息。
+- English: Independent review now requires reading the necessary source bodies named by the shared contract and returning a read list, evidence pointers, unread items, and status. File-existence checks, directory-only inspection, or an interrupted read must be recorded as `UNKNOWN/INCOMPLETE_REVIEW`, never as approval. Failures must be triaged as one-off environmental factors, reproducible operational errors, or systemic workflow gaps; the latter two require a permanent control and regression evidence. Complex tasks may autonomously use read-only analyzers or independent reviewers within the operator’s existing authorization, without extending communication, product-write, or remote-write permissions. Local commits must use real-newline message files or separate `-m` arguments, then read back the commit body and check for literal `\\n`, truncation, and verification notes.
+
 ## 2026-10-03：自然语言场景路由与旧任务兼容过渡
 
 - 已优化：在不引入 API 服务或复杂运行环境的前提下，增加“自然语言入口 → 场景提示词按需加载”的路由契约；明确确定命中、有限候选和无法判断三种分流，减少无关规则读取。新增 `workflow_version`、`state_schema_version`、`scenario_id`、`loaded_sections`、`route_confidence` 和 `migration_status` 的导航语义。
