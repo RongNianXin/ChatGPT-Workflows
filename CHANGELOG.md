@@ -1,4 +1,19 @@
 # 变更日志
+## 2026-10-03：Skin_Texture 交接反馈的预检与候选唯一性修补
+
+- 已执行：将真实交接反馈区分为网络偶发因素与流程性缺口；补充交接前第一道 `preflight_only` 门、固定事实截点与规则基线、远端失败分类和有限重试、唯一 active candidate 登记、附件与封条两阶段边界，以及旧链只读兼容要求。未修改来源项目，未执行远端写入。
+- English: Classified the real handoff feedback into an intermittent network factor and workflow gaps. Added a first `preflight_only` gate, frozen fact cutoff and rule baseline, remote failure categories with bounded retries, a unique active-candidate registry, a two-phase artifact/seal boundary, and read-only compatibility for legacy chains. No source-project or remote changes were performed.
+
+## 2026-10-03：跨窗口材料完整读取与只读互联网核验
+
+- 已修订：收到跨窗口消息后，默认完整取得并阅读当前消息提供的可访问材料；必要时可在只读范围内检索互联网、公开文档和公开代码仓库。读取、核验和总结与来源项目执行授权分离，不再因为未获执行授权而拒绝阅读或总结。本轮回读了 Skin_Texture 反馈消息及其可见引用内容，未修改来源项目或发送外部消息。
+- English: Updated cross-window handling so the receiver must fully obtain and read all accessible materials provided with the message, and may perform read-only searches of the web, public documentation, and public repositories when needed. Reading, verification, and summarization are separate from authorization to act on the source project; lack of execution permission no longer justifies refusing to read or summarize. This batch reread the visible Skin_Texture feedback and references, with no source-project or external-message changes.
+
+## 2026-10-03：公开故障反馈先查重与透明引用
+
+- 已修订：公开发帖前必须在目标网站检索相似故障，记录查询范围、命中链接和“跟进原帖 / 新发 / 不发布”的决定；相同主题优先跟进原帖。公开载荷必须脱敏，仓库链接只能作为复现记录或参考实现，不得伪装广告或官方背书。本轮只完成规则更新和只读检索，未向外部平台发帖。
+- English: Added a pre-publication duplicate-search gate for public bug reports. Before posting, search the target site for similar symptoms, model/version, interface, client, and error terms; record the scope, hits, and the decision to follow an existing thread, create a new post, or not publish. Use a redacted payload and link the repository only as a reproducibility record or reference implementation, never as disguised advertising or implied official endorsement. This batch updated the rules and performed read-only searches; no external post was submitted.
+
 ## 2026-10-03：Goal 模板用法与内容触发回执门限
 
 - 已修订：保留现有 Gen1 字段和顺序，在 Goal 入口说明整段代码块才是可编辑区输入，解释文字不重复粘贴；Agency Agents 仍是基线之后的可选只读附录，不是 Goal 启动前置条件。跨任务消息新增内容触发回执信号：场景五/5A–5D、对抗式反馈、征求建议、希望帮忙分析、请审查或评估并给意见。同步定义“入站事件”，并明确“需要回执”与“允许发送回执”分开核验。

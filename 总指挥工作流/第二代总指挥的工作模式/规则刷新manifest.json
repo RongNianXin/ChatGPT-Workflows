@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "rule_version": "2026-10-03.1",
+  "rule_version": "2026-10-03.4",
   "scope": "core_workflow_full",
   "path_base": "rule_root",
   "repository_root_ref": "../..",
@@ -22,7 +22,7 @@
     },
     {
       "path_ref": "00-第二代工作流总览.md",
-      "sha256": "8B2E7EB863CED7535F62AF44D16CF09EE4BB8784A7137778BE7B0B455CA3130D"
+      "sha256": "816372592D83457FAE6C43BA9636A1932FA9B551564798B9F3727BA0D077F6F4"
     },
     {
       "path_ref": "01-操作者操作手册.md",
@@ -30,7 +30,7 @@
     },
     {
       "path_ref": "02-总指挥核心规则.md",
-      "sha256": "BEB9A549BB902BDC905D64DABC2FD47B5B07B2489E2694E16E6FDEB7E373A654"
+      "sha256": "50DE95237C3AB68DEC24DF63E6F8B108FFFBA8B3298D3C09C2E9C04EAAEFDBBE"
     },
     {
       "path_ref": "03-专项任务卡模板.md",
@@ -38,7 +38,7 @@
     },
     {
       "path_ref": "04-状态、目标变更与交接规范.md",
-      "sha256": "B97F143BFF7E9FCEEB116B7A04D8D4E184C2219CEBF2236AEFC52694634AE9FF"
+      "sha256": "6D6717D0F27A9D3CDA5F48FF1596D3013BCC71B7D4BC842CD32E441BCE762CA3"
     },
     {
       "path_ref": "05-模型选择与资源策略.md",
@@ -46,7 +46,7 @@
     },
     {
       "path_ref": "06-复盘与优化规则.md",
-      "sha256": "BE10D28FF436E8D28B870F7240BBEF00E85B416F9251762457DD187FE126DBB6"
+      "sha256": "E60E5B61420B5229462B04DF66EBAF051E0B7F6137648CA242FCED9E689453D6"
     },
     {
       "path_ref": "07-总指挥交接记录模板.md",
@@ -58,11 +58,11 @@
     },
     {
       "path_ref": "09-自动化授权与风险分级.md",
-      "sha256": "A87B1EB1CDD00687C182081A822E840531F1B22E06CD748985AC2F34F2CEBA9E"
+      "sha256": "81D0CF8AA97021CB0468BA93C4DCCE7067E9967AA1BF238896BC2B40E827C6E5"
     },
     {
       "path_ref": "10-自动状态索引规范.md",
-      "sha256": "1A908B1865C831DD00297B248AA3A6431AD1B9E721A9A4DA04D388DA5C1EEB60"
+      "sha256": "8E522D2CE564FE6BD2C78579BE0CB73233AD040E43681D8B6C38D10C04642240"
     },
     {
       "path_ref": "11-操作者协作画像规范.md",
@@ -78,7 +78,7 @@
     },
     {
       "path_ref": "总指挥轻量交接启动配置.md",
-      "sha256": "8EE09B96AF9A0F5637C704A18EE0AD161B1955C6CA9309EADD8D8C8FCC2B9518"
+      "sha256": "6DE7B903D4FF6C3557780052D49C08F654FCAF501B0824D6F1E550BDA4AB32A7"
     },
     {
       "path_ref": "templates/HANDOFF_STATE.schema.json",
