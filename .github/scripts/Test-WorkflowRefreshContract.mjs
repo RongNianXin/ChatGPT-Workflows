@@ -41,7 +41,11 @@ checks.push(['diagnosis keeps node-level evidence while reporting results first'
 checks.push(['diagnosis references resolve to the current section', `${read('02-总指挥核心规则.md')}\n${read('06-复盘与优化规则.md')}\n${read('docs/PIPELINE_DIAGNOSIS_AND_ALGORITHM_TUNING_STANDARD.md')}`, ['#21-2e-分流与-2c-连续执行', '<a id="21-2e-分流与-2c-连续执行"></a>']]);
 checks.push(['bounded test scenario is distinct from feedback, diagnosis and legacy 2G', `${read('00-第二代工作流总览.md')}\n${read('01-操作者操作手册.md')}\n${read('02-总指挥核心规则.md')}`, ['场景 2G：用真实数据做有界自动测试、修复和复测', '旧版精简提示词的“2G”按内容和规则版本映射到当前 2B', '2E 用于反馈你已经观察到的结果；2C 是原因不明时的逐节点查因方法', '收到当前版 2G 的真实数据有界测试请求时走 2G', '可终止本轮进程及其子进程', '不因重试、换卡或切换窗口重置', '质量标准无法直接核验、又无可靠真值或必要人工确认时']]);
 checks.push(['cross-task receipt is an executable hard gate', `${read('02-总指挥核心规则.md')}\n${read('09-自动化授权与风险分级.md')}\n${fs.readFileSync(path.join(root, 'AGENTS.md'), 'utf8')}`, ['取得处理时隙后的第一项动作必须是实际发送回执并读取工具结果', '回执先行硬门禁（事故回归）', '实际跨任务发送工具', '缺少真实发送证据的事件不得收口', '不得写成已回执']]);
+checks.push(['receipt threshold explains content signals and inbound events', `${read('02-总指挥核心规则.md')}\n${read('09-自动化授权与风险分级.md')}\n${fs.readFileSync(path.join(root, 'AGENTS.md'), 'utf8')}`, ['场景五/场景 5A–5D', '对抗式反馈', '希望征求建议', '希望帮忙分析', '需要回执', '通信授权', '入站事件']]);
 checks.push(['cross-task workflow review routes separately from source business', `${read('09-自动化授权与风险分级.md')}\n${fs.readFileSync(path.join(root, 'AGENTS.md'), 'utf8')}`, ['公共工作流审查的正向分流', '按 FIFO 在取得处理时隙后完成最小只读核对', '只提取判断工作流缺陷所需的最小事实', '工作流部分继续处理，专项业务部分单独标记 `BLOCKED`', '没有回执要求时不强制向来源发送消息', '公共工作流审查与来源业务二分', '混合消息必须拆分处理']]);
+checks.push(['Goal input boundary is explicit', read('01-操作者操作手册.md'), ['Goal 模板怎么用', '整段代码块一次粘贴', '不要重复粘贴', 'Agency Agents', '不是 Goal 启动的前置条件']]);
+checks.push(['cross-project route separates affiliation from operator authorization', `${read('09-自动化授权与风险分级.md')}\n${fs.readFileSync(path.join(root, 'AGENTS.md'), 'utf8')}`, ['跨项目默认路由', '本项目 AI / 其他项目 AI / 归属未知', '当前操作者在接收窗口直接明确要求处理来源业务', '来源归属与通信授权分开核验', '其他项目或归属未知的 AI 来信默认进入 `WORKFLOW_FEEDBACK`']]);
+checks.push(['Goal acceptance evidence and raw platform states stay bounded', `${read('01-操作者操作手册.md')}\n${read('02-总指挥核心规则.md')}\n${read('04-状态、目标变更与交接规范.md')}\n${read('10-自动状态索引规范.md')}`, ['AUTO_VERIFIABLE', 'VISUAL_REVIEW', 'PROXY_ONLY', 'HUMAN_OR_PROFESSIONAL_GATE', '没有严格量化定义的自然语言目标', '有界试验或可逆替代', '平台原始状态：保留客户端或工具实际返回值', '来源项目归属核验']]);
 checks.push(['handoff obeys current-turn precedence and formal route', `${read('01-操作者操作手册.md')}\n${read('02-总指挥核心规则.md')}\n${read('04-状态、目标变更与交接规范.md')}\n${fs.readFileSync(path.join(root, 'AGENTS.md'), 'utf8')}`, ['自然语言在这里仅是路由信号，不是交接快照授权', '上一轮“下一轮再交接”等说法只保留为背景', '不得仅凭历史意图生成正式快照', '当前轮优先于历史时序约定', '自然语言不构成捷径', '必须补齐 1C/1D 的预检、收口核账、快照交付', '不存在“场景 EC”', '1B 预处理']]);
 checks.push(['handoff closeout distinguishes pending work from blockers', read('04-状态、目标变更与交接规范.md'), ['收口”是把执行中或结果未知的动作停在安全原子边界', '普通未完成项只要有状态、责任对象、精确断点、下一行动和失效条件', '高风险动作未安全停止', '必须 `BLOCKED`']]);
 checks.push(['handoff content reconciles before sealing', `${read('01-操作者操作手册.md')}\n${read('04-状态、目标变更与交接规范.md')}`, ['内容一致性回读', '中央 CURRENT、AI 状态索引、实际 Git/工作区/远端', '旧编号、旧世代、旧工作区计数或交付状态残留', '封条或哈希通过不能代替', '以候选当前消息实际收到附件作为送达事实']]);
@@ -58,14 +62,16 @@ for (const [name, text, needles] of checks) {
   if (missing.length) { failed += 1; console.error(`FAIL: ${name}: missing ${missing.join(', ')}`); }
   else console.log(`PASS: ${name}`);
 }
-const syntheticRoute = ({ workflowReview, sourceBusiness }) => ({
+const syntheticRoute = ({ workflowReview, sourceBusiness, operatorAuthorized = false }) => ({
   workflow: workflowReview ? 'PROCESS_READ_ONLY' : 'NONE',
-  business: sourceBusiness ? 'BLOCKED' : 'NONE'
+  business: sourceBusiness ? (operatorAuthorized ? 'AUTHORIZED_SCOPED' : 'BLOCKED') : 'NONE'
 });
 const routeCases = [
   ['pure source business', { workflowReview: false, sourceBusiness: true }, { workflow: 'NONE', business: 'BLOCKED' }],
   ['pure public workflow review', { workflowReview: true, sourceBusiness: false }, { workflow: 'PROCESS_READ_ONLY', business: 'NONE' }],
-  ['mixed workflow and source business', { workflowReview: true, sourceBusiness: true }, { workflow: 'PROCESS_READ_ONLY', business: 'BLOCKED' }]
+  ['mixed workflow and source business', { workflowReview: true, sourceBusiness: true }, { workflow: 'PROCESS_READ_ONLY', business: 'BLOCKED' }],
+  ['direct operator authorization scopes source business', { workflowReview: false, sourceBusiness: true, operatorAuthorized: true }, { workflow: 'NONE', business: 'AUTHORIZED_SCOPED' }],
+  ['direct operator authorization may accompany workflow review', { workflowReview: true, sourceBusiness: true, operatorAuthorized: true }, { workflow: 'PROCESS_READ_ONLY', business: 'AUTHORIZED_SCOPED' }]
 ];
 for (const [name, input, expected] of routeCases) {
   const actual = syntheticRoute(input);

@@ -1,4 +1,14 @@
 # 变更日志
+## 2026-10-03：Goal 模板用法与内容触发回执门限
+
+- 已修订：保留现有 Gen1 字段和顺序，在 Goal 入口说明整段代码块才是可编辑区输入，解释文字不重复粘贴；Agency Agents 仍是基线之后的可选只读附录，不是 Goal 启动前置条件。跨任务消息新增内容触发回执信号：场景五/5A–5D、对抗式反馈、征求建议、希望帮忙分析、请审查或评估并给意见。同步定义“入站事件”，并明确“需要回执”与“允许发送回执”分开核验。
+- 已记录：用户转述或附件没有当前可定位的来源、目标和本轮通信授权时，只能登记 `尚未向来源回执 / INPUT_REQUIRED`，不得凭猜测补发。未修改来源项目、产品代码或远端状态。
+- English: Clarified that the existing Gen1 field order stays intact and the full code block is the editable Goal input; explanatory text is not pasted again. Agency Agents remains an optional read-only appendix after the baseline, not a Goal startup prerequisite. Added content signals that imply a receipt is expected: Scene Five/5A–5D, adversarial feedback, requests for advice or analysis, and review/evaluation requests. Defined an inbound event and separated “a receipt is required” from “sending permission exists”. If a forwarded text lacks a locatable source, target, and current communication authorization, record `NOT YET ACKED / INPUT_REQUIRED` instead of guessing a recipient. No source-project, product, or remote changes were made.
+## 2026-09-30：Goal 验收可达性、跨项目反馈路由与复盘积压收口
+
+- 已修订：跨项目来信先核验项目归属；其他项目或归属未知时默认只做 `WORKFLOW_FEEDBACK`，不接管来源业务。Goal 新增逐验收项证据类型、模糊目标的可观察判据、缺证自主恢复与风险相称复核规则；平台未定义原始状态保留为 `UNKNOWN`，不把业务缺口、Pause 和部署门禁互相推导。状态索引新增 `WORKFLOW_FEEDBACK` 最小字段；06 建立阶段状态表，已落地项转观察、外部候选冻结、无触发项不再作为当前待办。未安装外部 Agent、未启动 Hindsight、未执行产品或远端动作。
+- English: Updated cross-project routing to verify project affiliation first. Messages from another or unknown project default to `WORKFLOW_FEEDBACK` and do not take over source business work. Goal now records evidence type per acceptance item, converts vague goals into observable criteria, attempts bounded recovery before local waiting, and performs risk-proportional review after decisions; undefined platform states retain their raw value and normalize to `UNKNOWN` instead of conflating business gaps, Pause, and deployment gates. Added minimal `WORKFLOW_FEEDBACK` fields to the state index and a phase status table in the retrospective. External Agents remain uninstalled, Hindsight was not started, and no product or remote action was performed.
+
 ## 2026-09-30：场景 0A 固定提示词补齐 manifest 双根路径规则
 
 - 已修复：场景 0A 的长期人工兜底提示词现在直接携带 manifest 的路径解析规则：`.github/` 条目从规则根向上两级的仓库根读取，其他条目从规则根读取。操作者不再需要在失败后手工补发这段规则；同时加入刷新契约检查并更新规则版本。
