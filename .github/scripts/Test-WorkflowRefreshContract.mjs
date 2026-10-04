@@ -52,7 +52,16 @@ checks.push(['Goal input boundary is explicit', read('01-操作者操作手册.m
 checks.push(['external tool scenario is operator-facing and path-addressable', read('01-操作者操作手册.md'), ['可选功能场景：外部工具调用', '### 外部工具总体接入规则', '[EXT-001：Agency Agents]', '### EXT-001：Agency Agents', '它是做什么的：', '操作者入口：', '工具子目录的 `README.md` 是该工具唯一的操作者入口', 'agency agents/README.md', 'ChatGPT-Workflows/引用的外部工具/agency agents/README.md']]);
 checks.push(['operator manual defines the natural-language update and path-check contract', read('01-操作者操作手册.md'), ['01 手册的场景编写与路径变更规范', '一个场景只解决一个操作者目标', '正文固定按四段写', '入口必须完整可寻址', '自然语言改手册的固定动作', '路径检查在三处触发']]);
 checks.push(['scenario zero has a unified entry and scoped commander broadcast', `${read('01-操作者操作手册.md')}\n${read('规则刷新广播包.md')}\n${read('09-自动化授权与风险分级.md')}`, ['场景 0A：统一接入与规则更新', '场景 0B：总指挥广播最新工作流', 'broadcast_scope', 'ALL', 'SELECTED', '逐目标', '强制接收', '不保证平台一定送达', '兼容分支']]);
-checks.push(['scenario 0B operator prompt is Chinese-first', read('01-操作者操作手册.md'), ['广播范围：【全部子任务 / 指定子任务】', '指定子任务：【选择“指定子任务”时填写唯一任务编号；没有则留空】']]);
+checks.push(['scenario 0B operator prompt is Chinese-first', read('01-操作者操作手册.md'), ['广播范围：【全部子任务 / 指定子任务】', '指定子任务：【选择“指定子任务”时填写名称或任务编号；全部子任务时留空】']]);
+const manual = read('01-操作者操作手册.md');
+const scene0A = manual.split('### 场景 0A：')[1]?.split('### 场景 0B：')[0] || '';
+const scene0B = manual.split('### 场景 0B：')[1]?.split('### 兼容分支：')[0] || '';
+checks.push(['0A acts only on its direct receiver', scene0A, ['本条指令只作用于接收它、正在与我对话的AI', '无论你是总指挥、普通任务还是专项任务', '不要替其他对话更新，不盘点、广播或转达', '无法确认身份只暂停依赖身份的动作，不否决普通规则刷新']]);
+checks.push(['0B is commander-only and project-scoped', scene0B, ['只发给已核验的本项目现任总指挥', '可以只指定一个专项', '不得跨项目转达', '不是或无法确认时停止转达', '由AI核对唯一对象']]);
+const legacy0C = manual.split('### 兼容分支：把已运行项目的现有窗口接入工作流（原场景 0C）')[1]?.split('```text')[1]?.split('```')[0] || '';
+checks.push(['legacy 0C copy block preserves current 0B gates', legacy0C, ['本旧入口按现行0B处理', '本项目现任总指挥，否则停止转达', '本项目当前清单中全部可核验子任务', '不扩大到其他项目', '不迁移控制面']]);
+checks.push(['identity reference does not confer authority or require manual IDs', read('10-自动状态索引规范.md'), ['接收本条指令的对话', '中央登记的现任总指挥', '原/旧对话', '平台任务ID、逻辑 `writer_id`、总指挥世代和任务标题分别记录', '不能冒充平台ID', '不要求操作者手填技术ID', '不自动产生世代切换、中央写权、旧授权继承或远端权限', 'ID不可见本身不撤销已有中央证据确认的身份或切换状态', '普通规则刷新可以独立PASS', '在旧对话发送', '在新对话发送', '在接收对话发送']]);
+checks.push(['handoff and task continuation distinguish receiver from source', manual, ['本次拟建立或恢复的总指挥是接收本条指令的对话', '这里的当前窗口指接收本条指令、拟移交职责的旧对话', '接收本条指令的对话现在是本项目的新总指挥候选', '调度权切换给接收本条指令的新候选对话', '由接收本条指令、拟移交工作的旧对话', '由接收本条指令的新对话读取', '原对话与接收对话分别定位']]);
 checks.push(['4K resolves reversible preparation problems without weakening publish gates', `${read('01-操作者操作手册.md')}\n${read('02-总指挥核心规则.md')}\n${read('09-自动化授权与风险分级.md')}`, ['4K简单问题自主处理', '无法在原范围安全修复的验证失败', '不得以取消测试、降低验收', '同类修复连续两次无改善', '修复改变纳入内容时', '结果未知不重复副作用', '先完成可审阅候选', '最终远端确认仍适用', '已有有效精确确认不重复索权']]);
 checks.push(['cross-project route separates affiliation from operator authorization', `${read('09-自动化授权与风险分级.md')}\n${fs.readFileSync(path.join(root, 'AGENTS.md'), 'utf8')}`, ['跨项目默认路由', '本项目 AI / 其他项目 AI / 归属未知', '当前操作者在接收窗口直接明确要求处理来源业务', '来源归属与通信授权分开核验', '其他项目或归属未知的 AI 来信默认进入 `WORKFLOW_FEEDBACK`']]);
 checks.push(['cross-window feedback reads accessible material before execution gating', `${fs.readFileSync(path.join(root, 'AGENTS.md'), 'utf8')}\n${read('09-自动化授权与风险分级.md')}\n${read('06-复盘与优化规则.md')}`, ['完整取得并阅读当前消息提供的可访问材料', '只读范围内检索互联网', '读取、核验和总结不等于接管来源业务', '来源业务未授权', '缺失材料仍需标为 `INPUT_REQUIRED`']]);

@@ -1,3 +1,10 @@
+## 2026-10-05：0A直接更新、0B项目转达与对话身份消歧
+
+- 0A只作用于直接接收指令的AI，无论总指挥、普通任务或专项身份；已接入就更新，未接入就核对最小条件，不盘点、联系或替其他对话更新。0B仅由已核验的本项目现任总指挥向本项目全部或指定子任务转达，指定范围可只有一个专项；名称由AI核对唯一编号，不让操作者填技术表。
+- 01启动/交接/续接入口区分接收对话、中央登记的现任总指挥与原/旧对话；10维护唯一定位规则，04短引用，06保存脱敏复盘。平台实际ID、逻辑写者、世代、标题分列；平台字段不可见保留UNKNOWN及原因，不用逻辑ID冒充，也不单独否定中央证据确认的身份。指代确认不自动换任、扩权或继承授权，身份缺口不否决普通规则刷新。
+- 版本 `2026-10-05.3`。文档样例覆盖旧对话准备、新候选读取和接收对话消歧；PowerShell7全仓质量、59项规则契约、18项普通刷新回归、8文档入口、23项严格manifest与24项LF检查通过。独立审查发现旧0C复制块缺少新门禁，已原位修正并增加直接检查复制块的回归，定点复核关闭。未修改来源项目、未回传来源、未执行远端写入；真实接收窗口行为仍待复测。
+- English: Scenario 0A updates only the conversation directly receiving the instruction, regardless of role. Scenario 0B is restricted to the verified current commander and forwards to all or selected tasks within the same project. Updated startup, handoff, and continuation prompts to distinguish the receiver, registered commander, and source conversation. Platform IDs, logical writers, generations, and titles remain separate; unavailable platform IDs are recorded as unknown without invalidating independently verified control evidence. Reference clarification neither transfers authority nor blocks an otherwise successful ordinary refresh. Three documented cases cover old, new, and receiving conversations. Repository checks, 59 contract checks, 18 local-refresh regressions, eight entry documents, 23 strict manifest entries, and 24 LF checks passed. Independent review identified a missing gate in the legacy 0C copy block; it was fixed, directly checked, and closed by focused re-review. No source-project changes, reply, or remote writes occurred. Live receiver behavior remains unverified.
+
 ## 2026-10-05：发布准备中的简单问题由AI自主处理
 
 - 场景4K的自然语言同步请求由AI连续完成可发布成果盘点、有限修复、验证、精确暂存及分组Commit。目标、归属和权限明确、处理可逆且能验证的小问题自行决定；文档链接/换行、版本/清单同步、普通新增文件和限定检查修复不再直接升级为操作者裁决。
