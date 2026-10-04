@@ -1,0 +1,37 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import { execFileSync, spawnSync } from 'node:child_process';
+import os from 'node:os';
+import { fileURLToPath } from 'node:url';
+import assert from 'node:assert/strict';
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
+const script = path.join(root, '.github', 'scripts', 'Inspect-WorkspaceTracking.mjs');
+const fixture = fs.mkdtempSync(path.join(os.tmpdir(), 'tracking-test-'));
+try {
+  const git = args => execFileSync('git', args, {cwd:fixture,encoding:'utf8'});
+  git(['init','-q']);
+  fs.writeFileSync(path.join(fixture,'result.md'),'ordinary result');
+  fs.writeFileSync(path.join(fixture,'private.md'),'private');
+  fs.writeFileSync(path.join(fixture,'.env'),'secret');
+  fs.mkdirSync(path.join(fixture,'sub'));
+  const invoke = (args=[],cwd=fixture) => spawnSync(process.execPath,[script,...args],{cwd,encoding:'utf8'});
+  let outcome=invoke([],path.join(fixture,'sub'));
+  assert.equal(outcome.status,0);
+  const result=JSON.parse(outcome.stdout);
+  assert.equal(result.mode,'CLASSIFY_ONLY');
+  assert.deepEqual(result.safe_candidates,['result.md']);
+  assert.equal(result.review_required[0].path,'private.md');
+  assert.equal(result.protected[0].path,'.env');
+  assert.equal(git(['diff','--cached','--name-only']).trim(),'');
+  assert.notEqual(invoke(['--stage-safe']).status,0);
+  assert.notEqual(invoke(['--stage-safe','--reviewed-path=.env']).status,0);
+  assert.notEqual(invoke(['--stage-safe','--reviewed-path=private.md']).status,0);
+  assert.notEqual(invoke(['--stage-safe','--reviewed-path=../outside.md']).status,0);
+  outcome=invoke(['--stage-safe','--reviewed-path=result.md']);
+  assert.equal(outcome.status,0,outcome.stderr);
+  assert.equal(git(['diff','--cached','--name-only']).trim(),'result.md');
+  fs.writeFileSync(path.join(fixture,'unreviewed.md'),'left untouched');
+  assert.equal(invoke(['--stage-safe','--reviewed-path=unreviewed.md','--reviewed-path=.env']).status,1);
+  assert.equal(git(['diff','--cached','--name-only']).trim(),'result.md');
+  console.log('Workspace tracking scanner: PASS (default read-only, repository root, protected paths, explicit reviewed paths, atomic rejection)');
+} finally { fs.rmSync(fixture,{recursive:true,force:true}); }

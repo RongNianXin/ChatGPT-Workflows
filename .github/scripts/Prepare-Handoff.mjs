@@ -36,6 +36,7 @@ const physicalTarget = target => {
   }
   return path.join(fs.realpathSync(cursor), ...suffix);
 };
+const verificationCommandPattern = /node\s+"[^"]*HandoffSeal\.mjs"\s+verify\s+"[^"]+"\s+"[^"]+"(?:\s+"[^"]+")?/;
 
 function readJson(file) {
   return JSON.parse(fs.readFileSync(file, 'utf8'));
@@ -185,8 +186,26 @@ export function readLiveRemoteBaseline(sourceRoot, defaultRef) {
   }
   if (!remoteName || !names.includes(remoteName)) throw new Error(`remote target is not configured locally: ${defaultRef}`);
   const result = spawnSync('git', ['-C', sourceRoot, 'ls-remote', '--exit-code', remoteName, ref], { encoding: 'utf8' });
-  if (result.status !== 0) throw new Error(`cannot read live remote baseline for ${defaultRef}: ${String(result.stderr || '').trim() || 'ls-remote failed'}`);
-  const advertised = result.stdout.trim().split(/\s+/)[0];
+  let advertised = result.status === 0 ? result.stdout.trim().split(/\s+/)[0] : '';
+  // Some locked-down environments allow api.github.com but reset the Git
+  // smart-HTTP request to github.com. For a public GitHub remote, use the
+  // read-only REST ref endpoint as a transport fallback; do not change the
+  // repository or silently fall back for non-GitHub remotes.
+  if (!/^[0-9a-f]{40,64}$/i.test(advertised)) {
+    const remoteUrl = spawnSync('git', ['-C', sourceRoot, 'remote', 'get-url', remoteName], { encoding: 'utf8' });
+    const match = remoteUrl.status === 0
+      ? remoteUrl.stdout.trim().match(/^https?:\/\/github\.com\/([^/]+)\/([^/]+?)(?:\.git)?\/?$/i)
+      : null;
+    const branchMatch = ref.match(/^refs\/heads\/(.+)$/);
+    if (match && branchMatch) {
+      const apiUrl = `https://api.github.com/repos/${match[1]}/${match[2]}/git/ref/heads/${encodeURIComponent(branchMatch[1])}`;
+      const api = spawnSync(process.platform === 'win32' ? 'curl.exe' : 'curl', ['-fsSL', '--max-time', '20', apiUrl], { encoding: 'utf8' });
+      if (api.status === 0) {
+        try { advertised = JSON.parse(api.stdout)?.object?.sha || ''; } catch { advertised = ''; }
+      }
+    }
+  }
+  if (!/^[0-9a-f]{40,64}$/i.test(advertised)) throw new Error(`cannot read live remote baseline for ${defaultRef}: ${String(result.stderr || '').trim() || 'ls-remote and GitHub API fallback failed'}`);
   if (!/^[0-9a-f]{40,64}$/i.test(advertised)) throw new Error(`live remote returned an invalid head for ${defaultRef}`);
   return { head: advertised.toLowerCase(), observed_at: new Date().toISOString(), remote_name: remoteName, ref };
 }
@@ -406,9 +425,20 @@ export function prepareFormalHandoff(configPath) {
     '{{FACT_CUTOFF}}': seal.fact_cutoff,
     '{{EVENT_ID}}': seal.event_id
   };
+  const verificationCommand = `node "${path.join(scriptDir, 'HandoffSeal.mjs')}" verify "${realSealDirectory}" "${sourceRoot}"${externalControlPlaneRoot ? ` "--external-control-plane-root=${externalControlPlaneRoot}"` : ''}`;
+  if (!rendered.includes('{{VERIFICATION_COMMAND}}') && !verificationCommandPattern.test(rendered)) {
+    throw new Error('snapshot template is missing verification command placeholder or entry');
+  }
+  replacements['{{VERIFICATION_COMMAND}}'] = verificationCommand;
   for (const [token, value] of Object.entries(replacements)) {
+    if (token === '{{VERIFICATION_COMMAND}}' && !rendered.includes(token)) continue;
     if (!rendered.includes(token)) throw new Error(`snapshot template is missing placeholder: ${token}`);
     rendered = rendered.replaceAll(token, value);
+  }
+  rendered = rendered.replace(verificationCommandPattern, verificationCommand);
+  const renderedVerificationCommand = rendered.match(verificationCommandPattern)?.[0];
+  if (renderedVerificationCommand !== verificationCommand) {
+    throw new Error('snapshot verification command does not match the live seal directory and source root');
   }
   const finalBytes = Buffer.from(rendered, 'utf8');
   const tempSnapshot = path.join(path.dirname(finalPath), `.${path.basename(finalPath)}.${process.pid}.tmp`);
@@ -437,7 +467,7 @@ export function prepareFormalHandoff(configPath) {
       unicode_inventory: inventory,
       verification: {
         tool: 'HandoffSeal.mjs',
-        command: `node "${path.join(scriptDir, 'HandoffSeal.mjs')}" verify "${realSealDirectory}" "${sourceRoot}"${externalControlPlaneRoot ? ` "--external-control-plane-root=${externalControlPlaneRoot}"` : ''}`,
+        command: verificationCommand,
         source_root: sourceRoot,
         external_control_plane_root: externalControlPlaneRoot,
         expected: { status: 'PASS', latest_source_status: 'PASS', handoff_ready: true }

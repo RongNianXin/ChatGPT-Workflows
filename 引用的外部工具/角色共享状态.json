@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "registry_kind": "shared_external_role_registry",
+  "owner": "central-commander",
+  "shared_install_root": {
+    "kind": "user_shared",
+    "path_ref": "<USER_CODEX_HOME>/agents",
+    "scope": "all_projects_on_same_user_profile",
+    "status": "NOT_PROVISIONED"
+  },
+  "roles": [],
+  "reuse_rule": "同一角色、来源、版本和文件哈希全部匹配时直接复用；任一项不匹配先标记 UNKNOWN，不重复安装或覆盖。",
+  "experience_record": "角色经验与反馈记录.md",
+  "feedback_route": "当前项目总指挥接收自然语言反馈，生成结构化建议包，由中央总指挥审核后更新本文件和经验记录。",
+  "last_verified": null
+}

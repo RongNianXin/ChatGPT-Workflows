@@ -103,7 +103,7 @@ try {
   fs.mkdirSync(sourceRoot, { recursive: true });
   spawnSync('git', ['init', '--quiet', sourceRoot], { stdio: 'inherit' });
   fs.writeFileSync(path.join(sourceRoot, '.gitignore'), '.handoff-private/\n', 'utf8');
-  fs.writeFileSync(path.join(temp, 'snapshot-template.md'), '# {{SNAPSHOT_ID}}\nseal={{SEAL_DIGEST}}\ncutoff={{FACT_CUTOFF}}\nevent={{EVENT_ID}}\n', 'utf8');
+  fs.writeFileSync(path.join(temp, 'snapshot-template.md'), '# {{SNAPSHOT_ID}}\nseal={{SEAL_DIGEST}}\ncutoff={{FACT_CUTOFF}}\nevent={{EVENT_ID}}\nverify={{VERIFICATION_COMMAND}}\n', 'utf8');
   const workflowFilesRoot = path.join(workflowRoot, '总指挥工作流', '第二代总指挥的工作模式');
   const ruleFilePath = path_ref => path.join(path_ref.startsWith('.github/') || path_ref.startsWith('总指挥工作流/') ? workflowRoot : workflowFilesRoot, path_ref);
   writeJson(path.join(temp, 'rule-manifest.json'), { schema_version: 1, rule_version: '2026-09-28.4', rules: REQUIRED_RULES.map(path_ref => ({ path_ref, sha256: sha256(fs.readFileSync(ruleFilePath(path_ref))) })) });
@@ -126,6 +126,20 @@ try {
     assert.ok(LONG_STATUS_PATH.length > 150);
     assert.equal(sha256(fs.readFileSync(first.finalPath)), firstResult.receipt.snapshot_sha256);
     assert.doesNotMatch(fs.readFileSync(first.finalPath, 'utf8'), /{{[A-Z_]+}}/);
+    assert.ok(fs.readFileSync(first.finalPath, 'utf8').includes(firstResult.receipt.verification.command));
+  });
+
+  const staleVerification = prepareCase(15, 'formal-event-15');
+  const staleTemplate = path.join(path.dirname(staleVerification.configPath), 'stale-template.md');
+  fs.writeFileSync(staleTemplate, '# {{SNAPSHOT_ID}}\nseal={{SEAL_DIGEST}}\ncutoff={{FACT_CUTOFF}}\nevent={{EVENT_ID}}\nverify=node "old/HandoffSeal.mjs" verify "old-seals" "old-root"\n', 'utf8');
+  const staleConfig = readJsonForTest(staleVerification.configPath);
+  staleConfig.snapshot_template_path = staleTemplate;
+  writeJson(staleVerification.configPath, staleConfig);
+  check('stale verification command is normalized to the live seal directory', () => {
+    const result = prepareFormalHandoff(staleVerification.configPath);
+    assert.equal(result.chain_status, 'PASS');
+    assert.ok(fs.readFileSync(staleVerification.finalPath, 'utf8').includes(result.receipt.verification.command));
+    assert.doesNotMatch(fs.readFileSync(staleVerification.finalPath, 'utf8'), /old-seals/);
   });
 
   const preflight = prepareCase(2, 'preflight-event-2');

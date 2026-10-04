@@ -1,4 +1,78 @@
+## 2026-10-04：外部工具新手入口与工作区跟踪安全门禁
+
+- 已统一外部工具入口：每个工具提供自然语言入口或固定复制模板，AI 自动判断适用性、选择角色、核对安装状态并组合正式提示词，操作者不需要知道内部编号、安装命令或手工拼接提示词。
+- 已完善 Agency Agents：增加跨项目共享状态、版本/哈希复用、项目激活卡、自然语言反馈和安装状态边界；当前仍为 `DOCUMENTED_ONLY / NOT_INSTALLED`。
+- 已新增工作区跟踪扫描器：默认只读分类 `SAFE_CANDIDATE`、`REVIEW`、`PROTECTED`；暂存必须逐项提供已复核路径，拒绝路径越界、符号链接和混合失败，不能替代内容审查或提交授权。
+- 已修订交接工具：远端基线支持公开 GitHub 只读 API 备用查询；正式交接附件和回执统一使用实时封条验证命令。
+- 已验证：工作区扫描器、外部工具入口、规则刷新契约和仓库全量检查通过；本次未安装 Agency Agents，未执行远端写入。
+
+- English: Standardized beginner-friendly external-tool entry points with natural-language routing or copyable templates; AI now selects roles, checks installation state, and composes formal prompts internally. Added shared Agency Agents state, activation cards, feedback routing, and explicit `DOCUMENTED_ONLY / NOT_INSTALLED` boundaries. Added a read-only workspace tracker with explicit reviewed-path staging and symlink/path-traversal rejection. Handoff tooling now uses a read-only public GitHub API fallback and one live seal verification command. Full repository checks passed; no Agency Agents installation or remote write was performed.
 # 变更日志
+## 2026-10-04：工作区未跟踪成果自动分流
+
+- 已新增：`Inspect-WorkspaceTracking.mjs` 自动检查未跟踪文件，将普通成果、待确认对象和受保护对象分别标记为 `SAFE_CANDIDATE`、`REVIEW`、`PROTECTED`。
+- 已明确：在整理本地成果、准备交接或准备提交时，AI 可以只对安全候选使用精确路径暂存；敏感、临时、来源不明和受保护内容必须保留并说明原因。默认扫描只读，不自动提交、推送、删除或覆盖。
+- 已补充：操作者手册加入新手最短路径和工作区跟踪说明；新增回归检查。本轮未执行远端写入。
+
+## 2026-10-04：交接验证命令与实时封条来源统一
+
+- 已修订：交接生成器现在从实际封条目录、来源根和外部控制面根实时生成唯一验证命令，并把同一命令写入正式附件和回执；旧模板中的候选编号或旧目录会在生成时被替换，缺少验证入口则直接失败。
+- 已补充：新增旧验证命令漂移回归用例，覆盖正式附件与回执命令一致性；更新规则刷新 manifest 指纹。本轮未修改来源项目、未执行远端写入。
+- English: Handoff generation now derives one live verification command from the actual seal directory, source root, and optional external control-plane root, and writes it to both the formal artifact and receipt. Stale candidate or seal-directory commands are normalized, while a missing verification entry fails preparation. Added regression coverage and refreshed the rule manifest; no source-project or remote writes were performed.
+
+## 2026-10-04：跨任务事件增加操作者六段汇报出口
+
+- 已修订：跨任务来信处理结束、阻断或等待回调时，统一向操作者说明来源与要求、实际读取与分析、执行决定、来源回执、必要的操作者步骤、事件状态与原主线恢复。
+- 已明确：来源回执与操作者汇报是两件事；发送工具成功只能写“已发送待确认”；缺少通信授权只能写“尚未向来源回执”；阻断或待回调不得写“处理完毕”。
+- 已补充：`01` 入口指针、根 `AGENTS.md` 引用和工作流契约回归检查；规则版本更新为 `2026-10-04.12`。本轮未修改来源项目、未新增跨任务发送、未执行远端写入。
+- English: Added a six-part operator-facing report for cross-task events, covering source/request, reading and analysis, execution decision, source receipt, required operator action, and event closure/mainline recovery. Clarified that source receipts and operator reports are separate, and that blocked or callback-waiting events must not be reported as complete. Updated rule version to `2026-10-04.12`; no source-project changes, new cross-task messages, or remote writes were performed.
+
+## 2026-10-04：交接身份门禁、连续入口与专项自动化范围修补
+
+- 已修订：1B 改为可选的轻量预处理；1C 保留自带预检，并在任何收口、封条或中央写入前增加总指挥身份硬门禁。普通/专项任务误收到 1C 时必须停下，不升级身份、不生成 `final-*`，改用 1E/1F。
+- 已修订：1C 明确记录准备锁；规则、manifest、中央世代、单写者或工作区发生影响性漂移时，候选标记 `SUPERSEDED` 后按新基线重来。1B 的“继续”只有在明确可进入 1C 且基线未漂移时才进入正式交接。
+- 已修订：1E/1F 只核对与当前任务或项目有绑定证据的自动化；无绑定证据时写“无；未扫描账户级任务”，避免把其他项目的定时任务误列为专项事项。
+- 已记录：示例前哨项目 7/8、示例图像项目 35/36、示例游戏项目专项 2/3 的只读复盘。规则版本更新为 `2026-10-04.11`，刷新 manifest 指纹；本轮未修改来源项目、未发送跨任务消息、未执行远端写入。
+- English: Added a commander identity gate before any 1C closeout or control-plane write, kept 1B optional with explicit continuation semantics, froze handoff preparation baselines, and scoped 1E/1F automation checks to task/project-bound evidence. Recorded read-only findings from three handoff sample pairs. Updated the rule version to `2026-10-04.11` and refreshed manifest digests; no source-project changes, cross-task messages, or remote writes were performed.
+
+## 2026-10-04：统一 EXT-001 操作者入口并增加路径变更检查
+
+- 已修订：01 手册目录、场景总览和正文统一使用 `EXT-001：Agency Agents`；正文改为面向操作者的人话简介、适用时机、最小例子和边界说明，并保留可点击的文件相对链接。
+- 已补充：操作者可见的仓库根相对路径显示，统一采用 `ChatGPT-Workflows/...`；新增 01 手册场景编写规范，明确自然语言新增、修改、迁移和改名时要同步核对的对象。
+- 已新增：`Test-OperatorManualExternalEntries.mjs`，在手册或外部工具入口变化、路径改名/移动/删除以及 Commit 前，检查入口文件、标题、EXT 编号、根路径展示和受影响链接；不扫描无关未跟踪文件。
+- 已验证：规则刷新契约、操作者手册与外部工具入口检查、仓库质量检查和 `git diff --check`；规则版本更新为 `2026-10-04.10`。本轮未安装 Agency Agents，未修改其他项目，未执行远端写入。
+- English: Unified the visible `EXT-001: Agency Agents` naming, rewrote the operator entry in plain language with a minimal example and boundaries, and kept clickable file-relative links. Added repository-root path display conventions, a natural-language manual-update contract, and a scoped external-entry/path consistency check. Updated the rule version to `2026-10-04.10`; no Agency Agents installation, other-project change, or remote write was performed.
+
+## 2026-10-04：补齐外部工具场景的 EXT-001 子场景入口
+
+- 已修订：操作手册原本只在段落内提到 `EXT-001`，没有独立子场景标题，导致阅读器中不易发现。现已在目录和正文中增加 `EXT-001：Agency Agents` 子场景标题及详细正文入口。
+- 已保持：操作手册仍只保存外部工具索引，不复制 Agency Agents 的完整提示词、安装命令或角色正文；具体说明继续放在 `引用的外部工具/agency agents/`。
+- 已验证：新增子场景回归断言、规则刷新契约、仓库质量检查和 Markdown 差异检查；规则版本更新为 `2026-10-04.9` 并同步 manifest 指纹。
+- English: Added a visible `EXT-001: Agency Agents` child entry to the operator manual and table of contents. The manual remains an index only; detailed prompts, installation notes, and role content stay in the tool directory. Added a regression assertion, updated the rule version to `2026-10-04.9`, refreshed manifest digests, and passed repository checks.
+
+## 2026-10-03：自动化能力分层与适配器故障误判修补
+
+- 已确认：一次 `not a function` 包装器错误被错误扩大为“平台无法进行原生窗口自动化”，随后正确读取 Computer Use Skill 并初始化备用入口后成功发现目标窗口；这是可复现的流程缺口，不是授权缺失或平台整体不可用。
+- 已修订：`09-自动化授权与风险分级.md` 新增命令行、浏览器、原生窗口、项目专用四层能力核验，以及 `ADAPTER_FAILURE`、`CAPABILITY_UNAVAILABLE`、`TEST_ASSET_MISSING`、`HUMAN_JUDGMENT_REQUIRED` 分类；声称整体不可用前必须读取适用 Skill、核验工具清单、正确初始化并尝试首选与明确备用路径。
+- 已补充：`02-总指挥核心规则.md` 增加适配器错误的按需加载指针；`06-复盘与优化规则.md` 记录根因、永久措施和边界；Goal 只因全部授权路径被证据阻断才可 `BLOCKED`，单个适配器错误或测试资产缺失只影响受影响步骤。
+- 已验证：工作流刷新契约回归检查新增能力分层断言；规则版本更新为 `2026-10-03.8` 并同步 manifest 指纹。未接管来源项目、未执行微信窗口操作、未执行远端写入。
+- English: Added layered automation capability checks and adapter-failure classification. A wrapper `not a function` error can no longer be promoted to platform-wide unavailability. The workflow now distinguishes CLI, browser, native-window, and project-specific paths; requires skill/tool/initialization and preferred-plus-fallback checks before `CAPABILITY_UNAVAILABLE`; separates `ADAPTER_FAILURE`, `TEST_ASSET_MISSING`, and human judgment. The rule version is `2026-10-03.8`, with manifest digests updated and regression assertions added. No source-project operation or remote write was performed.
+
+## 2026-10-03：外部工具调用场景与 EXT-001 注册模板
+
+- 已新增：`可选功能场景：外部工具调用`，在 `01-操作者操作手册.md` 中只保留外部工具目录、EXT-001 工具索引和正文指针；Agency Agents 的详细提示词与维护记录仍独立保存在工具子目录。
+- 已新增：`引用的外部工具/README.md`、`外部工具目录.md` 和 `外部工具接入模板.md`，统一使用不可复用的 `EXT-xxx` 编号；当前 Agency Agents 登记为 `EXT-001`，不采用容易与 export/experiment/version 混淆的 `exp01`。
+- 已补充：外部工具登记、安装、激活和项目实际使用是四个独立状态；模板覆盖来源版本、安装范围、Goal 状态、权限、回滚、基线、证据和停止条件。
+- 已验证：中英文 README 互链及源哈希已更新，新增手册链接使用仓库内相对路径；本轮仅修改工作流文档，未安装 Agency Agents，未修改其他项目，未执行跨任务通信或远端写入。
+- English: Added the optional “External tool invocation” scenario. The operator manual now keeps only EXT-00 routing, the EXT-001 index, and pointers; Agency Agents prompts and maintenance records remain in its tool directory. Added a registry, a reusable registration template, and the stable `EXT-xxx` naming scheme. Registration, installation, activation, and project use remain separate states. README links and source hashes were updated; no Agency Agents installation, other-project change, cross-task message, or remote write was performed.
+
+## 2026-10-03：Agency Agents 傻瓜式接入文档与维护记录
+
+- 已新增：`引用的外部工具/agency agents/` 文档区，包含中文入口、调用指南、跨项目引用提示词、角色激活卡、个性化配置建议和安装维护记录；项目总指挥可按入口逐步接入，归档后仍能从仓库恢复操作方法。
+- 已补充：相关文档定位索引增加外部角色工具入口。明确 Agency Agents 当前仅登记为 `DOCUMENTED_ONLY / NOT_INSTALLED`，不自动安装、不加载全部角色，不增加产品、跨任务或远端权限；个性化配置只提供候选短路由文本，未修改全局配置。
+- 已验证：新目录文件清单、中文 README 与英文 README 互链、英文源文档 SHA-256 同步、`git diff --check` 均通过；本轮未安装 Agency Agents，未修改其他项目，未执行远端写入。
+- English: Added `引用的外部工具/agency agents/` with a Chinese entry point, usage guide, cross-project prompt, role activation card, personalization guidance, and an installation/maintenance ledger. Added the external-tool entry to the document locator. The current state remains `DOCUMENTED_ONLY / NOT_INSTALLED`; no automatic installation, all-role loading, product, cross-task, or remote permission is granted. The personalization text is only a candidate short router and global settings were not changed. Verified the file list, reciprocal README links, synchronized English source SHA-256, and `git diff --check`; no Agency Agents installation, external-project change, or remote write was performed.
+
 ## 2026-10-03：独立审查完成门禁、故障复发性与提交回读修补
 
 - 已修订：独立审查必须实际读取共同契约点名的必要正文，并回报读取清单、证据指针、未读项和状态；只确认文件存在、只看目录或中途停止时登记 `UNKNOWN/INCOMPLETE_REVIEW`，不得写成审查通过。
@@ -14,15 +88,15 @@
 - 已验证：刷新契约从 39 项增加到 41 项；`Test-Repository.ps1` 全部通过。独立 AI 审查因未完成正文读取，状态保留为 `UNKNOWN/部分审查`，未把它写成通过。
 - English: Added a natural-language routing contract that loads only the matching scenario prompt pack without introducing an API service or complex runtime. The route distinguishes a clear match, a bounded candidate set, and an unknown route, and records workflow/schema versions, scenario, loaded sections, confidence, and migration status. Added a dual-read/single-write compatibility path for legacy tasks; migration states do not grant authorization or prove completion. Deterministic checks remain scriptable while semantic and high-risk decisions stay with the AI/operator. Contract checks increased from 39 to 41 and the repository quality suite passed. The independent review is recorded as `UNKNOWN/partial` because the reviewer stopped before reading the required source sections.
 
-## 2026-10-03：Skin_Texture 交接反馈的预检与候选唯一性修补
+## 2026-10-03：ExampleImageProject 交接反馈的预检与候选唯一性修补
 
 - 已执行：将真实交接反馈区分为网络偶发因素与流程性缺口；补充交接前第一道 `preflight_only` 门、固定事实截点与规则基线、远端失败分类和有限重试、唯一 active candidate 登记、附件与封条两阶段边界，以及旧链只读兼容要求。未修改来源项目，未执行远端写入。
 - English: Classified the real handoff feedback into an intermittent network factor and workflow gaps. Added a first `preflight_only` gate, frozen fact cutoff and rule baseline, remote failure categories with bounded retries, a unique active-candidate registry, a two-phase artifact/seal boundary, and read-only compatibility for legacy chains. No source-project or remote changes were performed.
 
 ## 2026-10-03：跨窗口材料完整读取与只读互联网核验
 
-- 已修订：收到跨窗口消息后，默认完整取得并阅读当前消息提供的可访问材料；必要时可在只读范围内检索互联网、公开文档和公开代码仓库。读取、核验和总结与来源项目执行授权分离，不再因为未获执行授权而拒绝阅读或总结。本轮回读了 Skin_Texture 反馈消息及其可见引用内容，未修改来源项目或发送外部消息。
-- English: Updated cross-window handling so the receiver must fully obtain and read all accessible materials provided with the message, and may perform read-only searches of the web, public documentation, and public repositories when needed. Reading, verification, and summarization are separate from authorization to act on the source project; lack of execution permission no longer justifies refusing to read or summarize. This batch reread the visible Skin_Texture feedback and references, with no source-project or external-message changes.
+- 已修订：收到跨窗口消息后，默认完整取得并阅读当前消息提供的可访问材料；必要时可在只读范围内检索互联网、公开文档和公开代码仓库。读取、核验和总结与来源项目执行授权分离，不再因为未获执行授权而拒绝阅读或总结。本轮回读了 ExampleImageProject 反馈消息及其可见引用内容，未修改来源项目或发送外部消息。
+- English: Updated cross-window handling so the receiver must fully obtain and read all accessible materials provided with the message, and may perform read-only searches of the web, public documentation, and public repositories when needed. Reading, verification, and summarization are separate from authorization to act on the source project; lack of execution permission no longer justifies refusing to read or summarize. This batch reread the visible ExampleImageProject feedback and references, with no source-project or external-message changes.
 
 ## 2026-10-03：公开故障反馈先查重与透明引用
 
@@ -78,8 +152,8 @@
 - English: Re-reviewed Gen1 against the operator’s original template and kept only necessary changes. The operator’s directory level, field order, numbering, line breaks, and plain-language quota wording are the baseline; the intentionally removed model-capacity section was not restored. Bracketed fill-in notes and centralized defaults were added so deleting the “maximum 2 hours” helper text still leaves the 2-hour default in force.
 - English: Added a rule that every template edit must explain each change and its reason; intentionally deleted sections must not be silently restored; and every prompt edit must check linked manuals, core rules, quota/authorization rules, scripts, the manifest, bilingual notes, and quality tests.
 
-- 已修订：Gen1 不再作为场景七外的独立目录，而是归入场景七并与 Gen2 同级；模板改为“最终目标—细节描述—素材提供—身份赋予—允许操作—默认规则约束—能力剖面—自动化验证—停止条件—额度保护—模型容量故障—执行要求”。移除“测试规则/测试变量”等容易让操作者误解的字段，并删除皮纹理专用措辞和场景 2E 的样本分类要求。
-- English: Revised: Gen1 is no longer a standalone directory outside Scene Seven. It now sits under Scene Seven beside Gen2. The template uses “final goal, detail description, supplied materials, assigned role, allowed operations, default constraints, capability profile, automated validation, stop conditions, quota protection, model-capacity handling, and execution requirements.” Confusing test-rule/test-variable fields and project-specific Skin_Texture or Scene 2E wording were removed.
+- 已修订：Gen1 不再作为场景七外的独立目录，而是归入场景七并与 Gen2 同级；模板改为“最终目标—细节描述—素材提供—身份赋予—允许操作—默认规则约束—能力剖面—自动化验证—停止条件—额度保护—模型容量故障—执行要求”。移除“测试规则/测试变量”等容易让操作者误解的字段，并删除示例图像项目专用措辞和场景 2E 的样本分类要求。
+- English: Revised: Gen1 is no longer a standalone directory outside Scene Seven. It now sits under Scene Seven beside Gen2. The template uses “final goal, detail description, supplied materials, assigned role, allowed operations, default constraints, capability profile, automated validation, stop conditions, quota protection, model-capacity handling, and execution requirements.” Confusing test-rule/test-variable fields and project-specific ExampleImageProject or Scene 2E wording were removed.
 
 - 已核验：操作者提供的桌面端和网页版截图指向同一个每周共享限额，界面显示剩余百分比；当前 Codex 环境的只读用量接口与截图的剩余方向一致。具体动态数值不写入公开记录。
 - 已调整：Goal 额度保护只保留两个操作者可理解的停止条件：剩余额度低于保留下限，或本轮观测到的额度差值达到任务上限。默认保留下限从 2 个百分点调整为 5 个百分点，可选 3 / 5 / 10 / 自定义；默认任务上限为 `min(20%, R0-保留下限)`。触发任一条件后先保存断点、任务记录和下一步再停止；不再要求操作者理解软停止/硬停止或填写复杂采样表。
@@ -97,10 +171,10 @@
 - English: The first read-only comparison found substantial overlap between both candidate roles and existing project rules and test materials. The AI Engineer role's generic production metrics cannot be transferred, so installation is not recommended. The Game Designer role remains a candidate for one targeted run and must identify a verifiable gap absent from the current materials. No independent Agent instance was run; status is `DESK_REVIEW_COMPLETE / NOT_INSTALLED`. Neither real project was modified, no broadcast was sent, and no remote action was performed.
 - 已调整：接受“角色赋予”与“全局安装”分开验证。当前轮次收口后，先保留总指挥原输出作为基线，再对同一材料临时叠加 AI Engineer 或 Game Designer 角色做 A/B 对照；比较新增发现、证据、重复度、成本和越权倾向。状态改为 `ROLE_OVERLAY_AB_TEST_PENDING / NO_GLOBAL_INSTALL`，仍不修改真实项目、不广播、不执行远端动作。
 - English: The evaluation now separates temporary role assignment from global installation. After the current round closes, the commander's original output will be kept as a baseline, then the same materials will be reviewed with a temporary AI Engineer or Game Designer overlay. The comparison will cover new findings, evidence, overlap, cost, and scope expansion. Status: `ROLE_OVERLAY_AB_TEST_PENDING / NO_GLOBAL_INSTALL`; real projects, broadcasts, and remote state remain unchanged.
-- 已确认：Agency Agents 的 Codex 集成说明把 TOML 安装到用户级 `~/.codex/agents/`，不能据此声称只给某个项目或专项任务安装。当前不做全局安装；数字门先在总指挥窗口使用一条临时 Game Designer 角色叠加提示词，皮纹理等 Goal 长任务等形成断点后再试。已补充傻瓜式调用入口和冲突边界，未广播、未改真实项目、未执行远端动作。
-- English: The Agency Agents Codex integration installs TOML files in the user-level `~/.codex/agents/`; this does not provide project- or task-only installation. No global install is performed. The DigitalGate project will first use a temporary Game Designer overlay in its commander window; long-running Goal work such as Skin_Texture will wait for a checkpoint. A plain-language invocation and conflict boundary were added; no broadcast, real-project change, or remote action was performed.
-- 已验证：首次实际角色叠加已在数字门总指挥窗口完成。未安装 Agent，而是发送了精简的 Game Designer 工作约束；总指挥确认当前真正缺口是真人无口头提示试玩，不是设计建议，因此没有转交开发专项、修改代码或远端操作。结果为“角色入口可用，但本轮没有新增价值”，尚不能证明安装版有额外收益。
-- English: The first real role overlay was completed in the DigitalGate commander window. No Agent was installed; a concise Game Designer constraint set was supplied instead. The commander confirmed that the actual gap is an unprompted human playtest, not another design recommendation, so no developer handoff, code change, or remote action occurred. Result: the role entry works, but this round added no value; installed-agent gains remain unproven.
+- 已确认：Agency Agents 的 Codex 集成说明把 TOML 安装到用户级 `~/.codex/agents/`，不能据此声称只给某个项目或专项任务安装。当前不做全局安装；示例游戏项目先在总指挥窗口使用一条临时 Game Designer 角色叠加提示词，示例图像项目等 Goal 长任务等形成断点后再试。已补充傻瓜式调用入口和冲突边界，未广播、未改真实项目、未执行远端动作。
+- English: The Agency Agents Codex integration installs TOML files in the user-level `~/.codex/agents/`; this does not provide project- or task-only installation. No global install is performed. The ExampleGameProject project will first use a temporary Game Designer overlay in its commander window; long-running Goal work such as ExampleImageProject will wait for a checkpoint. A plain-language invocation and conflict boundary were added; no broadcast, real-project change, or remote action was performed.
+- 已验证：首次实际角色叠加已在示例游戏项目总指挥窗口完成。未安装 Agent，而是发送了精简的 Game Designer 工作约束；总指挥确认当前真正缺口是真人无口头提示试玩，不是设计建议，因此没有转交开发专项、修改代码或远端操作。结果为“角色入口可用，但本轮没有新增价值”，尚不能证明安装版有额外收益。
+- English: The first real role overlay was completed in the ExampleGameProject commander window. No Agent was installed; a concise Game Designer constraint set was supplied instead. The commander confirmed that the actual gap is an unprompted human playtest, not another design recommendation, so no developer handoff, code change, or remote action occurred. Result: the role entry works, but this round added no value; installed-agent gains remain unproven.
 
 ## 2026-09-28：建立外部材料原始证据定位规则
 
@@ -396,15 +470,15 @@
 
 - 已执行：采纳 31 号独立审查的最小建议，在 02 的临时 worktree 收口规则和 10 的现有 `WORKTREE` 记录中补充远端写入后的来源、主工作区、集成状态、下一行动方与恢复条件字段。
 - 已执行：明确只读审查、CI 临时修复和未 Push 实验 worktree 可标记 `integration_status=NOT_REQUIRED`，不强制整合；仍须确认删除前没有未保存成果和唯一证据。
-- 未执行：未修改皮纹理项目，未执行 Git 合并、Commit、Push 或远端对象操作。
+- 未执行：未修改示例图像项目项目，未执行 Git 合并、Commit、Push 或远端对象操作。
 
 ## 当前暂停记录：2026-09-26
 
 - **任务一：worktree 总指挥工作流优化**：状态 `PAUSED`。已完成最小规则补充，明确隔离 worktree 完成远端写入后必须回读日常主工作区；未完成本轮提交、广播或远端发布。恢复条件：回读本规则、当前 manifest 和工作区状态后继续审查。
 - **任务二：远端与本地冲突处理**：状态 `PAUSED`。已确认本地 `main` 落后远端 3 个提交，且本地存在未提交/未跟踪成果；未执行合并、重置、覆盖、提交或清理。恢复条件：逐文件锁定远端来源、本地目标、重叠路径和保护点后再制卡。
-- **当前优先事项**：处理规则刷新 manifest 与当前规则文件指纹不一致，完成指纹回读后再评估 31 号规则刷新回执；不处理皮纹理项目代码、配置、中央状态或远端状态。
+- **当前优先事项**：处理规则刷新 manifest 与当前规则文件指纹不一致，完成指纹回读后再评估 31 号规则刷新回执；不处理示例图像项目项目代码、配置、中央状态或远端状态。
 - **31号刷新事件**：已将规则版本更新为 `2026-09-26.1`，15 个 manifest 条目逐文件回读无差异；已向 31 号发起一次仅限规则刷新与回执的重试。平台显示回合完成，但当前接口仍未返回可见正文，因此采用 `DELIVERY/UNKNOWN`，不宣称其已采用规则。
-- **31号正式刷新回执**：31 号已返回 `COMPLETED + PASS`，确认 15 个 manifest 条目全部匹配，并已采用 `2026-09-26.3` 及新增 worktree 收口字段；它确认本轮未执行皮纹理项目、产品、部署或远端操作，未提出规则冲突或疑问。
+- **31号正式刷新回执**：31 号已返回 `COMPLETED + PASS`，确认 15 个 manifest 条目全部匹配，并已采用 `2026-09-26.3` 及新增 worktree 收口字段；它确认本轮未执行示例图像项目项目、产品、部署或远端操作，未提出规则冲突或疑问。
 
 ## 未发布：隔离 worktree 远端写入后的主工作区收口
 
@@ -502,7 +576,7 @@
 
 - 已执行：正式交接准备器现在强制核对中央状态索引 CURRENT 区的 `规则清单摘要`，必须与本轮实际规则 manifest 的 SHA-256 完全一致；中央索引过期时在生成附件前阻断，避免出现“附件看似 READY、登记表仍是旧规则”的假收敛。
 - 已执行：新增 `.github/scripts/Mark-Handoff-Delivered.mjs`，把 `GENERATED_NOT_DELIVERED` 与实际交付后的独立 `DELIVERED` 回执分开，并回读附件文件、校验哈希、绑定接收对象和交付事件；新增 3 项交付闭环测试及仓库质量脚本入口。
-- 已验证：HandoffSeal 52/52、Prepare-Handoff 16/16、交付闭环 3/3；仓库质量脚本整体 PASS。未执行真实皮纹理项目交接、Commit 或远端写入。
+- 已验证：HandoffSeal 52/52、Prepare-Handoff 16/16、交付闭环 3/3；仓库质量脚本整体 PASS。未执行真实示例图像项目项目交接、Commit 或远端写入。
 - English: Formal handoff preparation now requires the canonical status index CURRENT block to carry a `规则清单摘要` SHA-256 matching the current rule manifest; stale indexes are blocked before an apparently READY artifact can be produced. Added `.github/scripts/Mark-Handoff-Delivered.mjs` to separate `GENERATED_NOT_DELIVERED` from an independently verified `DELIVERED` receipt, including artifact hash, recipient and delivery event binding. HandoffSeal passed 52/52, Prepare-Handoff 16/16, delivery closure 3/3, and the repository quality suite passed. No real product-project handoff, commit, or remote write was performed.
 
 ## 未发布：规则接入提示词简化与交接审计分流
