@@ -107,18 +107,35 @@ function findActiveControlPlaneIndexes(sourceRoot, canonicalStatusIndex, registr
   return found;
 }
 
-function verifyRuleManifest(ruleRoot, manifestPath) {
-  const repositoryRoot = path.resolve(ruleRoot, '..', '..');
+export function verifyRuleManifest(ruleRoot, manifestPath) {
   const manifest = readJson(manifestPath);
   if (manifest?.schema_version !== 1 || !Array.isArray(manifest.rules)) throw new Error('rule manifest must use schema_version 1 and a rules array');
+  const rootRef = manifest.repository_root_ref ?? '../..';
+  const prefixes = manifest.repository_root_prefixes ?? ['.github/'];
+  if (rootRef !== '../..' || !Array.isArray(prefixes) || !prefixes.includes('.github/') ||
+      prefixes.some(prefix => typeof prefix !== 'string' || !/^[^/\\]+(?:\/[^/\\]+)*\/$/.test(prefix) || prefix.split('/').some(part => part === '..' || part === '.'))) {
+    throw new Error('rule manifest has invalid repository root metadata');
+  }
+  const repositoryRoot = path.resolve(ruleRoot, rootRef);
   const entries = new Map(manifest.rules.map(item => [item?.path_ref, item]));
+  if (entries.size !== manifest.rules.length) throw new Error('rule manifest contains duplicate paths');
   for (const relative of REQUIRED_RULES) {
     const ruleRelative = relative.startsWith('总指挥工作流/第二代总指挥的工作模式/') ? relative.slice('总指挥工作流/第二代总指挥的工作模式/'.length) : relative;
     const item = entries.get(relative) ?? entries.get(ruleRelative);
     if (!item || !/^[0-9a-f]{64}$/i.test(item.sha256 || '')) throw new Error(`rule manifest is missing a valid digest: ${relative}`);
-    const baseRoot = relative.startsWith('.github/') ? repositoryRoot : ruleRoot;
-    const absolute = fs.realpathSync(path.resolve(baseRoot, relative.startsWith('.github/') ? relative : ruleRelative));
-    if (!isInside(baseRoot, absolute)) throw new Error(`rule path escapes workflow root: ${relative}`);
+  }
+  // Required legacy entries and new registered dependencies share one digest gate.
+  for (const item of manifest.rules) {
+    const relative = item?.path_ref;
+    if (typeof relative !== 'string' || !relative || path.isAbsolute(relative) || relative.split(/[\\/]/).includes('..') || !/^[0-9a-f]{64}$/i.test(item.sha256 || '')) {
+      throw new Error('rule manifest contains an invalid entry');
+    }
+    const ruleRelative = relative.startsWith('总指挥工作流/第二代总指挥的工作模式/')
+      ? relative.slice('总指挥工作流/第二代总指挥的工作模式/'.length) : relative;
+    const fromRepository = prefixes.some(prefix => relative.startsWith(prefix));
+    const baseRoot = fromRepository ? repositoryRoot : ruleRoot;
+    const absolute = fs.realpathSync(path.resolve(baseRoot, fromRepository ? relative : ruleRelative));
+    if (!isInside(fs.realpathSync(baseRoot), absolute)) throw new Error(`rule path escapes workflow root: ${relative}`);
     if (sha256(fs.readFileSync(absolute)).toLowerCase() !== String(item.sha256).toLowerCase()) throw new Error(`rule digest mismatch: ${relative}`);
   }
   for (const tool of ['.github/scripts/HandoffSeal.mjs', '.github/scripts/Prepare-Handoff.mjs']) {

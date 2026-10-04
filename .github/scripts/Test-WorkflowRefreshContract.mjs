@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
+import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
@@ -12,17 +13,21 @@ const REFRESH_REQUIRED_RULES = [
   '.github/scripts/HandoffSeal.mjs',
   '.github/scripts/Prepare-Handoff.mjs',
   '.github/scripts/Mark-Handoff-Delivered.mjs',
+  '.github/scripts/Inspect-RuleRefresh.mjs',
   ...Array.from({ length: 12 }, (_, index) => `${String(index).padStart(2, '0')}-`),
   '总指挥轻量交接启动配置.md',
   '规则刷新广播包.md',
-  '规则刷新接收回执模板.md'
+  '规则刷新接收回执模板.md',
+  '引用的外部工具/外部工具目录.md',
+  '引用的外部工具/外部工具自动对接规范.md'
 ];
 const checks = [
   ['matrix separates logical and machine phases', read('交接阶段矩阵.md'), ['逻辑交接阶段', '封条阶段', '附件交付状态', '候选核验状态']],
   ['broadcast is load-only and self-describing', read('规则刷新广播包.md'), ['规则广播只做一件事', '规则更新指令 + 第二代规则路径', '不需要手工填写 `RULE_REFRESH_ID`', '项目问题另列待办', '规则根向上两级得到的仓库根', '以 `.github/` 开头']],
   ['broadcast limits failure to rule-root faults', read('规则刷新广播包.md'), ['路径不可访问', '必需文件缺失', '哈希不一致', '更高优先级规则冲突', '不得触发 `WARN/BLOCKED`']],
-  ['broadcast requires a frozen source', read('规则刷新广播包.md'), ['广播前冻结门禁', '不得一边修改同一规则根一边要求其他总指挥刷新', '立即取消本批']],
-  ['manual bootstrap carries the dual-root manifest rule', read('01-操作者操作手册.md'), ['不需要填写事件编号、哈希、版本、变化清单或写入范围', '这是操作者下达的规则更新指令', '【第二代总指挥工作模式的实际路径】', '本次只更新规则，不做项目体检、配置迁移或交接', '以 `.github/` 开头的文件，按规则根向上两级得到的仓库根读取', '不得复制文件，也不得把所有条目都拼到同一个根目录', '长期人工兜底模板', '不必随版本号、manifest 摘要或接收者身份改写']],
+  ['ordinary refresh reads saved local text while pinned verification stays strict', read('规则刷新广播包.md'), ['普通本地刷新（默认）', '旧预期指纹或版本标签待同步', '不单独否决普通刷新', '精确版本核验', '不自动降为本地正文模式', '立即取消本批']],
+  ['refresh separates bytes, reading and adoption', read('规则刷新广播包.md'), ['必要正文实际呈现', '补读截断部分', '不能替代正文理解', '任一必需条目核验失败', '不得以“其余文件已读”宣称刷新完成', '外部工具目录与统一自动对接规范也是必需条目']],
+  ['manual bootstrap carries saved local adoption and the dual-root rule', read('01-操作者操作手册.md'), ['请完整读取并采用规则目录中已保存的最新本地正文', '规则加载、项目接入、身份确认和控制面写入分开处理', '以 `.github/` 开头的文件，按规则根向上两级得到的仓库根读取', '不要猜测身份、授权或任务清单', '不执行远端写入']],
   ['receipt is minimal pass or fail', read('规则刷新接收回执模板.md'), ['正常成功只回复', 'result：PASS', 'result：FAIL', '规则加载结果不使用 `WARN/BLOCKED`']],
   ['project migration is independent', read('项目配置迁移清单.md'), ['不再随规则广播自动执行', '本清单存在缺口也不得降低规则加载结果']],
   ['project state cannot block rule loading', read('09-自动化授权与风险分级.md'), ['规则刷新是纯规则加载事件', '规则加载只允许两种最终结果：`PASS` 或 `FAIL`', '不得产生 `WARN/BLOCKED`']],
@@ -44,8 +49,11 @@ checks.push(['cross-task receipt is an executable hard gate', `${read('02-总指
 checks.push(['receipt threshold explains content signals and inbound events', `${read('02-总指挥核心规则.md')}\n${read('09-自动化授权与风险分级.md')}\n${fs.readFileSync(path.join(root, 'AGENTS.md'), 'utf8')}`, ['场景五/场景 5A–5D', '对抗式反馈', '希望征求建议', '希望帮忙分析', '需要回执', '通信授权', '入站事件']]);
 checks.push(['cross-task workflow review routes separately from source business', `${read('09-自动化授权与风险分级.md')}\n${fs.readFileSync(path.join(root, 'AGENTS.md'), 'utf8')}`, ['公共工作流审查的正向分流', '按 FIFO 在取得处理时隙后完成最小只读核对', '只提取判断工作流缺陷所需的最小事实', '工作流部分继续处理，专项业务部分单独标记 `BLOCKED`', '没有回执要求时不强制向来源发送消息', '公共工作流审查与来源业务二分', '混合消息必须拆分处理']]);
 checks.push(['Goal input boundary is explicit', read('01-操作者操作手册.md'), ['Goal 模板怎么用', '整段代码块一次粘贴', '不要重复粘贴', 'Agency Agents', '不是 Goal 启动的前置条件']]);
-checks.push(['external tool scenario is operator-facing and path-addressable', read('01-操作者操作手册.md'), ['可选功能场景：外部工具调用', '### 外部工具总体接入规则', '[EXT-001：Agency Agents]', '### EXT-001：Agency Agents', '它是做什么的：', '什么时候用、怎么做：', '最小例子：', 'agency agents/README.md', 'ChatGPT-Workflows/引用的外部工具/agency agents/README.md', '你不需要知道 `EXT-001`、角色名称、安装命令']]);
+checks.push(['external tool scenario is operator-facing and path-addressable', read('01-操作者操作手册.md'), ['可选功能场景：外部工具调用', '### 外部工具总体接入规则', '[EXT-001：Agency Agents]', '### EXT-001：Agency Agents', '它是做什么的：', '操作者入口：', '工具子目录的 `README.md` 是该工具唯一的操作者入口', 'agency agents/README.md', 'ChatGPT-Workflows/引用的外部工具/agency agents/README.md']]);
 checks.push(['operator manual defines the natural-language update and path-check contract', read('01-操作者操作手册.md'), ['01 手册的场景编写与路径变更规范', '一个场景只解决一个操作者目标', '正文固定按四段写', '入口必须完整可寻址', '自然语言改手册的固定动作', '路径检查在三处触发']]);
+checks.push(['scenario zero has a unified entry and scoped commander broadcast', `${read('01-操作者操作手册.md')}\n${read('规则刷新广播包.md')}\n${read('09-自动化授权与风险分级.md')}`, ['场景 0A：统一接入与规则更新', '场景 0B：总指挥广播最新工作流', 'broadcast_scope', 'ALL', 'SELECTED', '逐目标', '强制接收', '不保证平台一定送达', '兼容分支']]);
+checks.push(['scenario 0B operator prompt is Chinese-first', read('01-操作者操作手册.md'), ['广播范围：【全部子任务 / 指定子任务】', '指定子任务：【选择“指定子任务”时填写唯一任务编号；没有则留空】']]);
+checks.push(['4K resolves reversible preparation problems without weakening publish gates', `${read('01-操作者操作手册.md')}\n${read('02-总指挥核心规则.md')}\n${read('09-自动化授权与风险分级.md')}`, ['4K简单问题自主处理', '无法在原范围安全修复的验证失败', '不得以取消测试、降低验收', '同类修复连续两次无改善', '修复改变纳入内容时', '结果未知不重复副作用', '先完成可审阅候选', '最终远端确认仍适用', '已有有效精确确认不重复索权']]);
 checks.push(['cross-project route separates affiliation from operator authorization', `${read('09-自动化授权与风险分级.md')}\n${fs.readFileSync(path.join(root, 'AGENTS.md'), 'utf8')}`, ['跨项目默认路由', '本项目 AI / 其他项目 AI / 归属未知', '当前操作者在接收窗口直接明确要求处理来源业务', '来源归属与通信授权分开核验', '其他项目或归属未知的 AI 来信默认进入 `WORKFLOW_FEEDBACK`']]);
 checks.push(['cross-window feedback reads accessible material before execution gating', `${fs.readFileSync(path.join(root, 'AGENTS.md'), 'utf8')}\n${read('09-自动化授权与风险分级.md')}\n${read('06-复盘与优化规则.md')}`, ['完整取得并阅读当前消息提供的可访问材料', '只读范围内检索互联网', '读取、核验和总结不等于接管来源业务', '来源业务未授权', '缺失材料仍需标为 `INPUT_REQUIRED`']]);
 checks.push(['cross-task operator report has six explicit sections', `${fs.readFileSync(path.join(root, 'AGENTS.md'), 'utf8')}\n${read('01-操作者操作手册.md')}\n${read('09-自动化授权与风险分级.md')}`, ['跨任务事件的操作者可见六段汇报', '来源与要求', '读取与分析', '执行决定', '来源回执', '操作者干预', '处理状态与主线', '恢复原主线断点', '已发送待确认', '尚未向来源回执', '事件阻断或待回调时，不得写“处理完毕”']]);
@@ -193,7 +201,7 @@ const manifestBytes = fs.readFileSync(manifestPath);
 const manifest = JSON.parse(manifestBytes.toString('utf8'));
 const versionedRules = ['00-第二代工作流总览.md', '02-总指挥核心规则.md', '09-自动化授权与风险分级.md', '10-自动状态索引规范.md', '总指挥轻量交接启动配置.md'];
 const versions = versionedRules.map(name => read(name).match(/^版本：(\d{4}-\d{2}-\d{2}\.\d+)$/m)?.[1]);
-if (manifest.schema_version !== 1 || !Array.isArray(manifest.rules) || !manifest.rule_version || manifest.scope !== 'core_workflow_full' || manifest.path_base !== 'rule_root' || manifest.repository_root_ref !== '../..' || !Array.isArray(manifest.repository_root_prefixes) || manifest.repository_root_prefixes.length !== 1 || manifest.repository_root_prefixes[0] !== '.github/') {
+if (manifest.schema_version !== 1 || !Array.isArray(manifest.rules) || !manifest.rule_version || manifest.scope !== 'core_workflow_full' || manifest.path_base !== 'rule_root' || manifest.repository_root_ref !== '../..' || !Array.isArray(manifest.repository_root_prefixes) || !['.github/', '引用的外部工具/'].every(prefix => manifest.repository_root_prefixes.includes(prefix))) {
   console.error('FAIL: rule refresh manifest must declare schema, version, full core scope, dual-root path bases and a rules array');
   process.exit(1);
 }
@@ -221,4 +229,16 @@ for (const item of manifest.rules) {
   }
 }
 console.log(`Rule refresh manifest: PASS (${sha256(manifestBytes)})`);
+const managedPaths = manifest.rules.map(item => manifest.repository_root_prefixes.some(prefix => item.path_ref.startsWith(prefix))
+  ? item.path_ref : `总指挥工作流/第二代总指挥的工作模式/${item.path_ref}`);
+managedPaths.push('总指挥工作流/第二代总指挥的工作模式/规则刷新manifest.json');
+const attrs = spawnSync('git', ['check-attr', '-z', '--stdin', 'eol'], { cwd: root, input: `${managedPaths.join('\0')}\0`, encoding: 'utf8' });
+const fields = attrs.stdout?.split('\0') || [];
+if (attrs.status !== 0 || fields.length !== managedPaths.length * 3 + 1 || managedPaths.some((file, index) =>
+  fields[index * 3] !== file || fields[index * 3 + 1] !== 'eol' || fields[index * 3 + 2] !== 'lf' ||
+  fs.readFileSync(path.join(root, file)).includes(13))) {
+  console.error('FAIL: every raw-hash-managed file must use LF bytes and an explicit LF checkout attribute');
+  process.exit(1);
+}
+console.log(`Managed checkout line endings: PASS (${managedPaths.length} files)`);
 console.log(`Workflow refresh contract: PASS (${checks.length} cases)`);

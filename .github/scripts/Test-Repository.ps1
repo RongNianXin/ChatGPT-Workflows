@@ -296,7 +296,7 @@ function Test-CommanderDurableWorkflowContract {
         },
         @{
             Path = '总指挥工作流/第二代总指挥的工作模式/10-自动状态索引规范.md'
-            Required = @('COMMIT-LEDGER', '中央工作项清单的规范化相对路径', '只写专项或会议材料而未同步中央入口不得登记为保存完成', '人工核验运行身份清单', '规范启动命令及自检输出', '并存实现决议矩阵', '节点覆盖状态', '事故证据回归', '常规测试结果不得替代本项验收', 'TASK-RESUME', 'CONTINUITY-PACK', '触发类型（总指挥交接 / 主线分支 / 归档）', '送达状态', '恢复提示词不能把普通或专项任务升级为总指挥', '恢复收益门禁', 'unasked / enabled / paused / disabled / unavailable', 'not-shown / shown / answered / ignored', 'profile_revision', '不发送画像正文', '不创建定时任务或后台轮询', '重新绑定到当前仓库根目录', '活跃请求清单中每项的来源', '单项卡完成后不得据此删除未覆盖项', '自动化交接清单指针', '调度重建说明指针', 'VERIFY_ONLY / REBUILD_CANDIDATE_ONLY / BLOCKED / EXPIRED', '规则加载批次记录只保存在发送方现有状态中', '已更新 / 更新失败 / 不可达', '项目状态、身份、写者、CURRENT、配置迁移、耐久登记、交接或封条问题与加载结果正交', '加载成功不能直接控制模型未来注意力', '测试数据来源', '只有一个可机器定位的 `CURRENT` 区', 'HISTORY 只在冲突、审计、恢复或明确证据缺口命中时')
+            Required = @('COMMIT-LEDGER', '中央工作项清单的规范化相对路径', '只写专项或会议材料而未同步中央入口不得登记为保存完成', '人工核验运行身份清单', '规范启动命令及自检输出', '并存实现决议矩阵', '节点覆盖状态', '事故证据回归', '常规测试结果不得替代本项验收', 'TASK-RESUME', 'CONTINUITY-PACK', '触发类型（总指挥交接 / 主线分支 / 归档）', '送达状态', '恢复提示词不能把普通或专项任务升级为总指挥', '恢复收益门禁', 'unasked / enabled / paused / disabled / unavailable', 'not-shown / shown / answered / ignored', 'profile_revision', '不发送画像正文', '不创建定时任务或后台轮询', '重新绑定到当前仓库根目录', '活跃请求清单中每项的来源', '单项卡完成后不得据此删除未覆盖项', '自动化交接清单指针', '调度重建说明指针', 'VERIFY_ONLY / REBUILD_CANDIDATE_ONLY / BLOCKED / EXPIRED', '规则加载批次记录只保存在发送方现有状态中', '已更新 / 更新失败 / 不可达', '项目状态、身份、写者、CURRENT、配置迁移、耐久登记、交接或封条问题不得产生规则加载', '加载不保证未来注意力或永久记忆', '测试数据来源', '只有一个可机器定位的 `CURRENT` 区', 'HISTORY 只在冲突、审计、恢复或明确证据缺口命中时')
         },
         @{
             Path = '总指挥工作流/第二代总指挥的工作模式/07-总指挥交接记录模板.md'
@@ -1341,6 +1341,8 @@ if ($LASTEXITCODE -ne 0) { throw '正式交接附件原子生成检查失败。'
 if ($LASTEXITCODE -ne 0) { throw '交接附件交付闭环检查失败。' }
 & node (Join-Path $PSScriptRoot 'Test-WorkflowRefreshContract.mjs')
 if ($LASTEXITCODE -ne 0) { throw '工作流刷新契约检查失败。' }
+& node (Join-Path $PSScriptRoot 'Test-Inspect-RuleRefresh.mjs')
+if ($LASTEXITCODE -ne 0) { throw '已保存本地规则刷新合成检查失败。' }
 & node (Join-Path $PSScriptRoot 'Test-OperatorManualExternalEntries.mjs')
 if ($LASTEXITCODE -ne 0) { throw '操作者手册与外部工具入口检查失败。' }
 & node (Join-Path $PSScriptRoot 'Test-Inspect-WorkspaceTracking.mjs')

@@ -1,3 +1,44 @@
+## 2026-10-05：发布准备中的简单问题由AI自主处理
+
+- 场景4K的自然语言同步请求由AI连续完成可发布成果盘点、有限修复、验证、精确暂存及分组Commit。目标、归属和权限明确、处理可逆且能验证的小问题自行决定；文档链接/换行、版本/清单同步、普通新增文件和限定检查修复不再直接升级为操作者裁决。
+- 同步01/02/09与文档契约检查；保留最终远端确认，不取消测试或降低验收，不覆盖未知成果。实质产品含义、权限、隐私、不可逆或无法安全合并的问题仅暂停受影响对象；已授权写入网络报错先回读，结果未知不重复副作用。重复迁移指针按明确规则保留本地并排除，不拖住独立成果。
+- 发布前发现受管文件工作区CRLF与Git检出LF不一致；按23项清单精确统一LF，并为受管脚本、外部规范及schema补齐精确换行属性，防止提交/克隆后原始字节指纹失配，不改变正文语义。
+- 版本 `2026-10-05.2`；换行修正后54项规则契约、18项刷新回归、8文档入口及全仓质量复验通过，23项暂存区/工作区字节与manifest匹配、24项LF属性与实际字节检查通过。独立实例两轮定点审查通过，无实质返工项；38项可发布成果准备完成，私有资料和重复迁移指针留本地。此次整理同时包含前轮EXT-001、普通规则刷新、0A/0B、模型建议及双语入口成果；真实专项恢复/效果仍未验证，远端发布尚未执行。
+- English: Scenario 4K now resolves well-scoped, reversible, verifiable preparation issues autonomously, including documentation, version/manifest synchronization, reviewed new files, and bounded test repairs. Updated 01/02/09 and the contract regression. Final remote approval, privacy, acceptance, and destructive-action gates remain in force. Unknown write outcomes are read back before any retry. Clearly excluded local items are preserved without blocking independent deliverables. Publication checks identified CRLF worktree bytes that Git would check out as LF; normalized the 23 manifest entries and pinned line endings for managed scripts, external contracts, and the schema without changing semantics. After normalization, 54 contract cases, 18 refresh cases, eight entry documents, and repository checks passed. All 23 staged entries matched worktree bytes and the manifest; all 24 managed files passed LF checks. Two rounds of independent targeted review passed with no substantive rework. The 38-file candidate excludes private materials and a duplicate migration pointer. Live role recovery and effectiveness remain unverified, and remote publication has not occurred.
+
+## 2026-10-05：EXT-001职责覆盖、任务绑定与专项阶段调用
+
+- 按场景5A由维护者执行、另一项目总指挥只读独立审查，原身份与写权不变；先覆盖目标、交付物、阶段及平台职责，再分开安装集合与本阶段调用。默认轻量遗漏检查，关键未知最多追问1～3项，复杂或关键风险才评估独立分析者，不把首次少量试用缩成完整需求。
+- 统一任务职责、阶段加载与单次结果；确认任务职责随同一业务任务保留，明确一次试用仍受其边界约束。开始前持久消费并回读，中断/失败占一次，同次恢复不清零、不重跑。自足专项卡在授权有序计划内自主继续，暂停/撤销/人工验收及独立互审终点门优先；03/04/07/10和轻量交接入口显式续接锚点，继任者独立读正文核权。
+- 补登记六个已有共享角色，保留原工作流架构师，共7个；真实文件名和来源/实物/指令摘要保留，用户根使用可移植占位符，不重新安装或改全局配置。规划、已授权实现及检查用途同步中英文入口、AI契约和通用模板；01仍只索引唯一工具README。主复盘位于角色经验文件。
+- 规则版本 `2026-10-05.1`；入口8份文档及角色契约、刷新契约53项、全部23项manifest精确核验、7份TOML/文件/指令与六份来源摘要、PowerShell7全仓质量及diff检查通过。第二轮独立审查完整取得必要正文，独立重核入口、冻结manifest/snapshot及7份角色TOML摘要，R1–R4在静态契约层关闭，A–H静态情形通过，无实质返工项；双方一致收口。真实专项首次调用、模糊需求覆盖、压缩/换窗/换任恢复、阶段自主执行及原生发现尚未验证。未启动来源专项/Goal，未改来源产品，未Commit或远端写入。
+- English: Separated full responsibility mapping from installation and current invocation. Persisted task responsibilities, stage loading, and individual results independently; consumed attempts are saved before execution and retained across interruptions. Specialist tasks may continue through an authorized ordered plan while honoring pause, revocation, acceptance, and review-closeout gates. Added explicit recovery pointers to task and handoff entries. Registered six existing shared roles without reinstalling them, bringing the registry to seven. Bilingual entries, internal contracts, and templates are aligned. Entry and role contracts, 53 refresh cases, all 23 pinned manifest entries, seven TOML/file/instruction checks, six source hashes, repository quality, and diff checks passed. The independent reviewer read the necessary actual documents, rechecked entries, the frozen snapshot, and seven role files, and closed R1–R4 at the static-contract level. Eight static scenarios passed with no substantive rework; both parties agreed to close the batch. Live recovery, specialist execution, and native discovery remain unverified. No source-product changes, trial start, commit, or remote writes.
+
+## 2026-10-04：普通规则刷新采用已保存本地正文
+
+- 实际刷新在工具目录已保存、旧清单尚未同步时失败。已将普通0A/0B与精确版本验收分开：默认完整读取并采用稳定的已保存正文，清单旧预期指纹只作维护提示；指定版本、同内容广播、正式交接/封条及发布仍严格核验，不能自动降级。
+- 新增只读检查入口 `Inspect-RuleRefresh.mjs`：正文与实际摘要来自同一字节，逐文件输出可绑定同一基线，终点重核实际来源；拒绝坏清单、缺文件、重复路径、链接/越界和漂移。它不写规则/清单，不替模型声明已读，也不观察编辑器未保存缓冲。漂移最多由AI重读一次，仍变化则保留原规则。
+- 普通广播不再冻结到所有回执，逐目标登记实际读取截点，不能将不同内容汇总为同一版本通过。操作者不填写指纹、状态字段或未保存证明；成功说明采用情况，待同步时不冒称旧编号正式版本通过。
+- 同步00/01/02/09/10、刷新包与回执、外部工具对接/接入模板及检查契约，规则更新为 `2026-10-04.18`。复盘主记录在06。验证：刷新回归18项、刷新契约53项、入口8文档、manifest23项、本地普通/精确模式与同基线正文输出、PowerShell7全仓质量检查及diff检查通过；独立复核两项建议已修正并回读。真实接收窗口复测未执行，不代签多窗口行为。未广播、未修改来源产品、未Commit或远端写入。
+- English: Ordinary refresh now adopts stable saved local text, treating stale manifest expectations as maintenance diagnostics. Exact-version verification, identical-content broadcasts, handoffs, seals, and release checks stay strict. Added a read-only byte-bound capture and verification helper with path and completeness guards. Receivers record individual snapshots without holding ordinary broadcasts frozen until all acknowledgments arrive. Editor buffers and model comprehension are not attested; live receiver retesting remains pending.
+
+## 2026-10-04：单角色共享安装与任务绑定续接
+
+- 经操作者限定授权，只共享安装 Workflow Architect；保留上游正文，以 TOML 解析和安装/正文指纹回读验证。一个独立实例实际加载角色并完成一轮只读审查，未安装其他角色、未改产品代码或全局配置、未执行远端操作。
+- 根据审查补齐首次名称或专业审查意图触发、授权安装后的连续调用、03/10 的私有绑定指针及启动/恢复步骤。角色职责叠加原身份，绑定与本轮结果分开；完成后待命，恢复不重跑、不清零预算。
+- 同步工具中英文入口、内部指南和通用接入模板；规则版本升至 `2026-10-04.17`。共享登记只维护角色实物，业务绑定留在项目私有记录，下一项目自行核验、加载和绑定。
+- 验证结果：共享TOML三字段解析及安装/正文指纹匹配；manifest全部22项、入口8份文档、刷新契约53项、PowerShell7仓库质量检查与diff检查通过。限定角色审查已完成；原生自动注册、跨项目首次调用、压缩后自动恢复及实际体验收益未验证，不以文档通过代替运行证据。未 Commit、未广播、未 Push。
+- English: Installed only Workflow Architect under explicit authorization and verified its TOML and instruction hashes. An independent instance actually loaded it for one bounded read-only review. Added continuous invocation after authorized installation, private task bindings, and recovery pointers in 03/10; binding lifetime and review results are separate, completed reviews are not rerun, and used budgets persist. Updated bilingual entries and rule version to `2026-10-04.17`. Native discovery, cross-project cold starts, recovered execution, and user benefits remain unverified. No product code or global configuration changes, other role installations, commit, broadcast, or remote writes.
+
+## 2026-10-04：外部工具跨项目自动对接修复
+
+- 针对已通知规则后仍找不到 EXT-001 的实际调用，补齐“已核验规则根 → 正式工具目录 → 唯一 README → 来源、共享状态与内部指南”的名称路由；不要求操作者重复提供已登记地址或配置。
+- 刷新 manifest 纳入工具目录和共同对接规范，版本更新为 `2026-10-04.16`；广播、0A、检查及交接生成器统一按声明的仓库根前缀解析。交接生成器现在核验 manifest 全部条目，防止新依赖未被检查。
+- 明确正文必须实际呈现给模型，字节统计不能冒充理解；任一必需失配不允许部分采用后报告刷新完成。默认共享安装、项目独立激活，安装许可与中央登记写权分开。
+- 详细复盘保存于 `引用的外部工具/角色经验与反馈记录.md`；接入模板加入跨项目验收矩阵，后续 EXT-002/003 使用同一门禁。英文入口同步更新。
+- 验证结果：交接生成器 25 项、规则刷新契约 53 项通过；新增实际 manifest 解析、失配、缺失和越界回归，以及入口文档检查。PowerShell 7 仓库质量检查（含新增规范）通过；Windows PowerShell 5.1 因 UTF-8 解码产生解析失败，不用于本次有效验收。真实来源窗口复测尚未执行，不声明模型自动调用效果已验证。本轮未安装角色、未联系来源窗口、未修改来源产品、未提交或远端写入。
+- English: Added registry-first discovery from the verified workflow root, included the registry and common discovery contract in refresh scope, and made handoff verification cover every manifest entry. Separated file-byte reads from model-visible reading and prohibited successful refresh claims after required failures. Standardized shared installation with per-project activation, added reusable cross-project acceptance cases, and recorded the incident without source-project details. Live-agent retesting remains pending; no installation, source-project change, cross-thread send, commit, or remote write was performed.
+
 ## 2026-10-04：外部工具新手入口与工作区跟踪安全门禁
 
 - 已统一外部工具入口：每个工具提供自然语言入口或固定复制模板，AI 自动判断适用性、选择角色、核对安装状态并组合正式提示词，操作者不需要知道内部编号、安装命令或手工拼接提示词。
@@ -8,6 +49,19 @@
 
 - English: Standardized beginner-friendly external-tool entry points with natural-language routing or copyable templates; AI now selects roles, checks installation state, and composes formal prompts internally. Added shared Agency Agents state, activation cards, feedback routing, and explicit `DOCUMENTED_ONLY / NOT_INSTALLED` boundaries. Added a read-only workspace tracker with explicit reviewed-path staging and symlink/path-traversal rejection. Handoff tooling now uses a read-only public GitHub API fallback and one live seal verification command. Full repository checks passed; no Agency Agents installation or remote write was performed.
 # 变更日志
+## 2026-10-04
+
+- 重新定义 EXT-001 的入口层级：01 操作者手册只保留功能简介、边界和相对路径索引；每个外部工具子目录的 `README.md` 作为该工具唯一的操作者入口，集中维护标准入口模板和工具说明。
+- 将“ 小白固定入口（推荐直接复制）”改为“标准入口模板”，并统一外部工具目录中的相关标题，避免口语化表达。
+- 明确新增外部工具的扩展规则：主手册负责索引，工具 README 负责操作，AI 内部文件负责安装、激活、维护和反馈，减少多入口漂移。
+
+## 2026-10-04
+
+- 更新模型推荐到 GPT-6.1 Sol、GPT-6 Luna、GPT-6 Astra 的性价比优先分层：低风险重复任务优先 Luna，常规工程和复杂审查优先 6.1 Sol，高影响难例只有在代表性验收证明能力不足时才评估 Astra；保留 GPT-6 Sol 作为 6.1 不可用时的兼容回退。
+- 将 01 手册的模型建议统一为“适配范围 + 升级条件 + 实际可用性待确认”，避免把型号写成永久硬编码。
+- 修正场景 0B 操作者模板的中英混杂，复制提示词现在使用“全部子任务 / 指定子任务”等纯中文表达；英文枚举仅保留在内部机器规则中。
+- 完成阶段性双语审查，为高可见工具、外部工具入口、经验库和故障经验库补充或优化 `README.en.md`；后续故障案例子目录仍按优先级逐步补齐。
+
 ## 2026-10-04：工作区未跟踪成果自动分流
 
 - 已新增：`Inspect-WorkspaceTracking.mjs` 自动检查未跟踪文件，将普通成果、待确认对象和受保护对象分别标记为 `SAFE_CANDIDATE`、`REVIEW`、`PROTECTED`。

@@ -6,7 +6,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { detectUnicodeCollisions, prepareFormalHandoff, readGitWorkspaceBaseline, readLiveRemoteBaseline, REQUIRED_RULES, verifyWorkspaceBaseline } from './Prepare-Handoff.mjs';
+import { detectUnicodeCollisions, prepareFormalHandoff, readGitWorkspaceBaseline, readLiveRemoteBaseline, REQUIRED_RULES, verifyWorkspaceBaseline, verifyRuleManifest } from './Prepare-Handoff.mjs';
 
 const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'prepare-handoff-'));
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
@@ -107,6 +107,32 @@ try {
   const workflowFilesRoot = path.join(workflowRoot, '总指挥工作流', '第二代总指挥的工作模式');
   const ruleFilePath = path_ref => path.join(path_ref.startsWith('.github/') || path_ref.startsWith('总指挥工作流/') ? workflowRoot : workflowFilesRoot, path_ref);
   writeJson(path.join(temp, 'rule-manifest.json'), { schema_version: 1, rule_version: '2026-09-28.4', rules: REQUIRED_RULES.map(path_ref => ({ path_ref, sha256: sha256(fs.readFileSync(ruleFilePath(path_ref))) })) });
+
+  const extendedManifestPath = path.join(temp, 'external-rule-manifest.json');
+  const extendedManifest = readJsonForTest(path.join(temp, 'rule-manifest.json'));
+  extendedManifest.repository_root_ref = '../..';
+  extendedManifest.repository_root_prefixes = ['.github/', '引用的外部工具/'];
+  const externalRule = '引用的外部工具/外部工具自动对接规范.md';
+  extendedManifest.rules.push({ path_ref: externalRule, sha256: sha256(fs.readFileSync(path.join(workflowRoot, externalRule))) });
+  writeJson(extendedManifestPath, extendedManifest);
+  check('manifest verifies registered external dependencies from the workflow repository root', () => {
+    assert.equal(verifyRuleManifest(workflowFilesRoot, extendedManifestPath).rules.length, REQUIRED_RULES.length + 1);
+  });
+  extendedManifest.rules.at(-1).sha256 = '0'.repeat(64);
+  writeJson(extendedManifestPath, extendedManifest);
+  check('external dependency digest mismatch fails the real handoff manifest verifier', () => {
+    assert.throws(() => verifyRuleManifest(workflowFilesRoot, extendedManifestPath), /rule digest mismatch/);
+  });
+  extendedManifest.rules.at(-1).path_ref = '引用的外部工具/missing-rule.md';
+  writeJson(extendedManifestPath, extendedManifest);
+  check('missing external dependency fails instead of silently checking only legacy entries', () => {
+    assert.throws(() => verifyRuleManifest(workflowFilesRoot, extendedManifestPath), /ENOENT/);
+  });
+  extendedManifest.rules.at(-1).path_ref = '引用的外部工具/../../outside.md';
+  writeJson(extendedManifestPath, extendedManifest);
+  check('external dependency path traversal is rejected before reading outside the repository', () => {
+    assert.throws(() => verifyRuleManifest(workflowFilesRoot, extendedManifestPath), /invalid entry/);
+  });
 
   check('Unicode NFC/NFD collisions are rejected without renaming', () => assert.throws(() => detectUnicodeCollisions(['资料/é.md', '资料/e\u0301.md']), /Unicode normalization collision/));
   const cli = spawnSync(process.execPath, ['./Prepare-Handoff.mjs'], { cwd: scriptDir, encoding: 'utf8' });

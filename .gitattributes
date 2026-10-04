@@ -1,3 +1,11 @@
 # Rule manifest hashes depend on stable checkout bytes.
 总指挥工作流/第二代总指挥的工作模式/*.md text eol=lf
 总指挥工作流/第二代总指挥的工作模式/规则刷新manifest.json text eol=lf
+.github/scripts/HandoffSeal.mjs text eol=lf
+.github/scripts/Prepare-Handoff.mjs text eol=lf
+.github/scripts/Inspect-WorkspaceTracking.mjs text eol=lf
+.github/scripts/Inspect-RuleRefresh.mjs text eol=lf
+.github/scripts/Mark-Handoff-Delivered.mjs text eol=lf
+总指挥工作流/第二代总指挥的工作模式/templates/HANDOFF_STATE.schema.json text eol=lf
+引用的外部工具/外部工具目录.md text eol=lf
+引用的外部工具/外部工具自动对接规范.md text eol=lf
