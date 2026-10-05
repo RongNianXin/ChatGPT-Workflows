@@ -1,3 +1,102 @@
+## 2026-10-05：交接控制面扫描的最小边界修复
+
+- 交接脚本在进入目录前跳过两个明确受保护的目录组件；保留其他位置的递归、重复活动索引检测及历史登记验证。不按Git忽略状态或近似目录名扩大排除，不跟随目录别名。
+- 新增隔离回归核对禁区未列未读、深层忽略/未跟踪及近似名称目录仍检出、联接不进入禁区；正式交接仍须独立执行1C预检。
+- English: Fixed protected-directory boundaries in the handoff control-plane scan. Legal directories remain in scope, including ignored and untracked paths. Isolated tests check protected subtrees, duplicate detection, and directory aliases.
+- 验证：28项交接隔离回归、全仓质量、严格manifest及diff检查通过，独立实例两轮只读审查完成，未发现扫描遗漏或新增阻断；实际合法范围扫描无重复活动索引。未生成正式交接材料、Commit或执行远端操作，正式交接仍需1C预检。
+
+## 2026-10-05：Goal到限后继续的操作入口
+
+- 01 Gen1.3补充正常恢复、到限后有界续跑与再次到限的三步流程及准备提示词，通常不用重写整份Goal。05明确当前生效周期与原模板旧预算的关系，保留历史与专项累计限制，平台状态和硬限额单独核验。
+- English: Added a bounded continuation procedure after a Goal work cycle reaches its limit. Each new cycle requires approval and a saved budget; historical usage and cumulative limits remain intact. Platform resume controls are checked separately.
+- 验证：全仓质量检查通过；独立只读审查发现并修正“恢复沿用原预算”的旧措辞，最终定点契约与指纹复核通过。静态检查不能证明真实客户端恢复或模型持续遵守。未启动来源业务、Commit或执行远端操作。
+
+## 2026-10-05：同应用回复预授权与操作者反馈
+
+- 09新增操作者直接授予的同应用回复预授权：明确要求直接回执，未说明自主判断，明示无需回复及纯确认不互答；不逐消息重复询问。根AGENTS、02入口、01接入/恢复模板与10恢复记录同步。
+- 始终向操作者反馈实际处理、来源回复状态与下一步；实际发送、来源确认和业务完成分开。来源须由可信宿主事件定位，预授权不覆盖新增业务、远端、敏感载荷或第三方联系；通信缺口局部处理。
+- English: Added reusable user authorization for replies to incoming tasks within the same app. Explicit requests receive a reply; unspecified requests are assessed for value. Every event still produces an operator-facing report. Business permissions, sensitive data, and external communication remain separately controlled.
+- 验证：两轮独立只读审查定位并修正逐消息许可、失效及纯确认互答冲突；全仓质量检查通过，末次场景五修正再核相关契约与指纹。静态检查不能证明模型持续遵守；未向其他窗口广播、Commit或执行远端操作，真实跨窗恢复尚未测试。
+
+## 2026-10-05：Goal高资源授权说明与范围内复用
+
+- 01明确常规本地授权不包含高资源运行；Gen1.2由AI提前准备必要的有界授权候选，并给出模板版本、项目填充与实质改动说明。待确认草稿不冒充有效授权，验收附录按需提供。
+- 09维护已有有效授权的复用与差额确认，05同步引用；阶段、批次编号或脚本名称变化本身不重新索权。实际范围、资源风险、剩余专项限额及项目逐次确认要求仍核验，不将单次授权扩大为整个Goal许可。
+- English: Clarified that routine local permission excludes resource-intensive runs. Review prepares bounded permission candidates and identifies substantive template changes. Valid permissions are reused within scope; project-specific confirmations and resource limits remain in force.
+- 验证：两轮独立只读审查关闭候选问题，最新全仓质量、72项规则契约、23项严格manifest及24项LF检查通过。文本契约不能证明真实运行不再提问；未运行来源业务或测量长任务中断率，未Commit或执行远端操作。
+
+## 2026-10-05：复杂指令提前澄清与自主选择
+
+- 02新增启动前必要只读预检，集中当前可预见的必问事项；已有事实/权限及低风险可回滚选择由AI解决，没有必问项不再索取开始确认。01 Goal正文与审查提示同步，09规定有依据的选项标“（推荐）”并说明取舍。
+- 项目精确授权、远端最终载荷、费用和专业验收等门禁保留；运行中新问题只处理差额，未答复不阻断无关已授权工作。推荐、沉默与跳过不产生授权，不承诺未来无中断。
+- English: Added scoped preflight checks and grouped known questions before long-task execution. AI resolves authorized low-risk choices and labels supported recommendations; later discoveries and final approval gates remain separate.
+- 验证：两轮独立只读审查无剩余问题，新增3项文档契约及最新全仓检查通过；真实长任务中断频率尚未验证。
+
+## 2026-10-05：Agency 普通对话持续适配
+
+- 工具唯一README增加普通对话项目周期入口及英文对应说明；项目适配约定独立于业务绑定，按任务与风险选择少量当前角色，恢复依赖真实入口和实际正文读取，不依赖Goal或永久聊天记忆。
+- 内部指南、激活卡和跨项目引用同步配置、切换、撤销、恢复与验收；共同规范仅补两层生命周期边界。关键歧义有限追问，新增角色或权限只处理差额，自换角色不代替独立审查/人工验收，质量用原主任务证据评价。
+- 本批未安装角色、改全局配置或调用产品；真实跨阶段切换、跨窗恢复和质量收益未执行，不以文档检查代签。
+- 验证：独立实例两轮审查及暂停边界定点复核无剩余阻断；全仓质量、双语、工具入口契约与受管指纹检查通过。
+- English: Added optional project-wide role adaptation for ordinary chats. Project policy survives individual tasks, while task bindings retain separate permissions, budgets, and recovery evidence. No permanent-memory or accuracy guarantee is claimed.
+
+## 2026-10-05：精简 Goal 子场景
+
+- 删除独立的启动子场景及启动核验提示词，将必要提交说明并入Gen1.2末尾；原Gen1.4暂停恢复与交接收口改为Gen1.3。同步编号总表、前向指针及检查，手动进入Goal后粘贴正文的操作保持明确。
+- English: Removed the separate launch scenario and extra verification prompt. Launch instructions now follow the review step; pause and recovery are renumbered as Gen1.3.
+
+## 2026-10-05：Goal 启动命令与正文分离
+
+- 根据操作者当前桌面版反馈，移除可复制Goal模板的 `/goal` 首行；启动说明改为手动输入命令、确认进入目标模式、再粘贴完整正文。审查提示也要求只返回正文，避免修改后重新加回命令。
+- 截图支持命令仍在普通正文中，手动输入有效由操作者报告；未独立复现客户端触发机制，不推广为所有版本的行为。失败时不提交正文，先核对客户端入口。
+- English: Keep the Goal activation command separate from the copied prompt body. Enter Goal mode first, then paste the reviewed text; client behavior may vary by version.
+
+## 2026-10-05：Goal 准备与正式启动分步
+
+- Gen1按填写模板、普通聊天审查与角色准备、确认并启动、暂停恢复与收口拆为四个二级子场景，嵌入审查、启动核验和收口提示词。“角色配置”兼容旧“身份赋予”，外部工具安装与调用细节仍由工具唯一入口维护。
+- 准备不使用草稿授权执行业务，不安装或启动Goal；核验当前必要角色，区分候选、安装、绑定与实际加载。平台启动/暂停/恢复以实际能力及状态回读为准，不承诺恢复命令跨版本可用；旧预算和其他门禁保持有效。
+- English: Split Goal preparation, review, launch, and pause/recovery into explicit steps. Optional role configuration is verified before use; draft permissions do not authorize execution during review.
+- 验证：两轮独立只读审查未发现阻断，最新全仓检查通过；最后栏目名称统一后定点回读。真实客户端启动、恢复与角色续接未在本轮执行。
+
+## 2026-10-05：交接身份与导航一致性
+
+- 统一五份必读控制面来源，身份只登记在状态索引CURRENT，其他来源保存导航；实时封条验证新增身份结果，未核身份不再返回可交接。旧链和封条原件保留，不补造历史；缺外部根仍为输入缺口。正式准备及带新导航的直接追加均验证身份，防止摘要通过被误当整体完成。
+- 新增18项身份与导航回归，包括旧入口、启用残留、重复未知状态、历史身份、封条不一致、未知平台映射及半切换；既有封条55项、正式准备25项及全仓检查通过。独立审查意见已定点关闭；静态检查不代表来源项目已修复或已核实编号映射。
+- English: Added live identity and navigation checks for handoff readiness. Legacy seals remain readable, but byte integrity alone no longer establishes readiness. No historical takeover events are fabricated.
+
+## 2026-10-05：公开反馈的证据与语言检查
+
+- 根AGENTS的现有公开反馈规则加入发布前必做的证据、适用范围、语法、标点、文风、隐私和授权核对；无需操作者另行提醒，不新增审批层。审查不能把操作者报告冒充独立复现，也不能为润色改变技术含义。
+- 验证：新增条款人工回读及差异空白检查；公开反馈另按实际发布回读核验。未验证未来任务是否始终遵守，不改变平台权限或Goal工具能力。
+- English: Required evidence, scope, language, style, privacy, and authorization checks before public feedback. Operator reports must remain distinct from independently reproduced results.
+
+## 2026-10-05：无法读取额度时的明确豁免
+
+- Gen1增补操作者许可：无法查看额度时可跳过依赖额度读数的停止项，记录未知及无法监控；旧任务未获该许可仍按原约定。05同步真实耗尽/硬预算、时间、轮次、费用与高资源门禁，以及读数恢复时的累计未知处理。不根据登录方式假定能力或授权，不伪造额度。
+- 规则版本 `2026-10-05.7`；全仓质量、65项规则契约、18项刷新回归、23项严格manifest及24项LF检查通过。静态验证不代表真实API计费或额度读取测试，本批不执行远端或付费操作。
+- English: Added explicit permission to skip stop conditions that require unavailable quota readings. Unknown usage is recorded, while actual exhaustion, hard budgets, time, iterations, and spending permissions remain enforceable. Authentication mode alone does not authorize the exception; recovered readings cannot erase unknown earlier usage.
+
+## 2026-10-05：提示词指代、语法与文档质量检查
+
+- 完整审查01的55个复制块及其他公开提示词，修正0A省略对象、续接窗口指代、协作约定与载体迁移混用、重复词及内部契约的压缩表达；外部工具英文入口同步。权限、停止条件和验证义务保持。
+- 将句子主体/动作/对象/条件、操作者角度回读及语言与规则语义复核并入06现有修改审查清单，不新建审批层。脚本只核已知文本/结构问题，不证明语法正确或模型永久遵守。
+- 规则版本 `2026-10-05.6`；两轮独立语言/语义复核通过，全仓质量、64项规则契约、18项刷新回归、8份入口、23项严格manifest及24项LF检查通过。已知旧语句断言按新等义表述同步，未降低角色与权限检查。本批不启动来源业务或执行远端写入，不宣称脚本验证了全部自然语言。
+- English: Reviewed public copyable prompts and clarified recipients, handoff roles, collaboration updates, and compressed internal wording. Added language and semantic checks to the existing document review checklist without adding an approval layer. Script checks do not attest natural-language correctness or future model behavior.
+
+## 2026-10-05：Goal授权入口与工作周期预算
+
+- Gen1以明确的常规本地授权句替换待选菜单，特殊权限仍按项目门禁；停止条件直接说明局部暂停及全停例外。旧菜单未选择不视为全选，删除授权栏目只沿用已有授权。
+- 05统一周期计数：默认累计实际执行时间，暂停不清零；恢复/换窗不重置，明确批准新周期目标与预算才重算周期时间和总迭代。失败证据与同问题、重型运行、独立审查累计限制保留，平台预算/状态独立核验。04/09/10短引用与既有记录同步，不新增账本。
+- 规则版本 `2026-10-05.5`；两轮独立只读审查通过，无阻断或必修问题；全仓质量、63项规则契约（含新增四类）、18项刷新回归、23项严格manifest及24项LF检查通过。真实Goal运行与计时可靠性未验证。本批不启动业务或远端写入。
+- English: Replaced the permission menu with explicit scoped authorization for routine local work while preserving special gates. Clarified partial pauses and hard stops. New cycle budgets require explicit approval; recovery does not reset counters, and failed-method, heavy-run, and review limits remain cumulative. Timing, handoff records, and platform state remain distinct.
+
+## 2026-10-05：EXT-001标准准备与节点调用
+
+- 区分常规使用和首次试验准备，用户沿用原 Goal 业务模板；AI 保存唯一绑定并生成必要短引用，不再要求拼接长追加提示词。未启动 Goal 可准备，真实目标待启动后核验；准备不创建或恢复 Goal。
+- 明确专项自身写者、中央指针、获准传递及执行者实际加载证据。准备不消费正式尝试，成本及预检角色读取仍记录；到约定节点先持久消费并回读再执行，原预算、停止与续接门保持。
+- 规则版本 `2026-10-05.4`；与实际使用方两轮讨论及独立静态审查通过，无功能阻断。按审查建议将双语复制入口改为独立文本框；全仓质量、59项规则契约、18项刷新回归、8份入口、23项严格manifest及24项LF检查通过。真实首次试验、压缩后自动发现及效果收益仍待验证；本批不启动来源业务、不安装角色、不执行远端写入。
+- English: Added routine-use and first-trial preparation entries. AI maintains one canonical binding and a short reference while preserving the original business Goal template. Preparation before Goal starts does not create or resume it or consume a formal attempt; costs and prior role exposure remain recorded. Specialist write ownership, authorized delivery, recipient loading evidence, and consumption at the agreed stage are explicit. Live recovery and effectiveness remain unverified.
+
 ## 2026-10-05：0A直接更新、0B项目转达与对话身份消歧
 
 - 0A只作用于直接接收指令的AI，无论总指挥、普通任务或专项身份；已接入就更新，未接入就核对最小条件，不盘点、联系或替其他对话更新。0B仅由已核验的本项目现任总指挥向本项目全部或指定子任务转达，指定范围可只有一个专项；名称由AI核对唯一编号，不让操作者填技术表。
@@ -1703,3 +1802,15 @@ The roadmap items above are candidates only. Before every commit, update this ch
 - 中文：修复规则刷新 manifest 将仓库根 `.github/scripts/` 与规则根文件混用时的路径歧义；广播和回归检查现在明确 `.github/` 条目按仓库根、其他条目按规则根解析，并记录了仓库根相对路径。
 - English: Clarified the rule-refresh manifest's dual-root path contract: `.github/` entries resolve from the repository root while other entries resolve from the rule root, with the repository-root reference recorded and regression-checked.
 - 状态 / Status：本地已修改，待验证；未 Commit，未 Push / Modified locally, verification pending; not committed or pushed.
+## 2026-10-05：规则升级与旧项目适配闭环
+
+- 06维护流程区分正文调整与状态/校验契约升级，既有迁移清单补充旧格式识别、授权内最小适配、历史保留和实际预检；01C及04同步入口。
+- 缺字段不直接否定可核验身份，不重复索取已有范围内授权；真实冲突仍局部停止。规则加载不自动迁移其他项目，模拟通过不能代替当前项目可交接证明。
+- English: Added migration guidance for state and validation changes. Existing authority must be verified before filling missing fields; formal handoff requires a preflight against the actual project, not only synthetic tests.
+- 当前项目导航迁移和真实交接预检结果记录在本地交接证据中；不宣称其他项目已迁移。未Commit或执行远端写入。
+
+## 2026-10-05：规则刷新结果与正文分段读取门禁修正
+
+- 修正规则刷新广播包与回执模板中“处理已收口”和“加载成功”的状态混淆，最终结果统一使用 `result：PASS/FAIL`，并把 `RULE_REFRESH`、`PROJECT_ENROLLMENT`、`IDENTITY_CONTROL_PLANE` 分开记录。
+- 明确单次工具输出截断只要求继续按稳定字节范围分段读取，不等于规则来源损坏；加载记录需保存 `text_reading`、分段范围和终点复核。
+- 增加规则契约断言，防止项目未接入或身份未请求再次阻断普通规则刷新。未执行项目接入、产品修改或远端写入。

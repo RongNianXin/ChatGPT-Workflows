@@ -74,6 +74,67 @@ export function validateControlPlaneRegistry(registry, sourceRoot, canonicalStat
   }
   return errors;
 }
+export const CONTROL_IDENTITY_SOURCES = ['status_index', 'central_work_items', 'current_view', 'central_entry', 'workflow_enablement'];
+
+// Live identity evidence is separate from immutable history and byte integrity.
+export function verifyControlIdentity(seal, { sourceRoot, externalControlPlaneRoot } = {}) {
+  if (!CONTROL_IDENTITY_SOURCES.every(name => seal?.sources?.[name])) {
+    return { status: 'NOT_CHECKED', errors: ['CONTROL_IDENTITY_REQUIRED: missing canonical identity/navigation sources'] };
+  }
+  const errors = [];
+  const bodies = {};
+  let platformMappingStatus = 'NOT_CHECKED';
+  for (const name of CONTROL_IDENTITY_SOURCES) {
+    try {
+      const source = seal.sources[name];
+      const root = source.root_ref === 'external_control_plane' ? externalControlPlaneRoot : sourceRoot;
+      if (!root) throw new Error('INPUT_REQUIRED: missing identity source root');
+      const realRoot = fs.realpathSync(root);
+      const file = fs.realpathSync(path.resolve(realRoot, source.path_ref));
+      if (!insideRoot(realRoot, file)) throw new Error('identity source escapes root');
+      const content = fs.readFileSync(file, 'utf8');
+      const begin = '<!-- CURRENT:BEGIN -->', end = '<!-- CURRENT:END -->';
+      if (name === 'workflow_enablement' && !content.includes(begin) && !content.includes(end)) bodies[name] = content;
+      else {
+        if (content.split(begin).length !== 2 || content.split(end).length !== 2 || content.indexOf(begin) >= content.indexOf(end)) throw new Error('invalid CURRENT boundary');
+        bodies[name] = content.slice(content.indexOf(begin) + begin.length, content.indexOf(end));
+      }
+    } catch (error) { errors.push(`${name}: ${error.message}`); }
+  }
+  const marker = (name, tag) => {
+    const matches = [...(bodies[name] ?? '').matchAll(new RegExp(`<!-- ${tag}: ([\\s\\S]*?) -->`, 'g'))];
+    if (matches.length !== 1) throw new Error(`${name}: requires exactly one ${tag} marker`);
+    return JSON.parse(matches[0][1]);
+  };
+  try {
+    const identity = marker('status_index', 'CONTROL_IDENTITY');
+    if (!exactKeys(identity, ['generation', 'writer_id', 'platform_task_id']) || !Number.isInteger(identity.generation) || identity.generation < 1 || !/^[A-Za-z0-9._-]+$/.test(identity.writer_id ?? '') || !(identity.platform_task_id === 'UNKNOWN' || /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(identity.platform_task_id ?? ''))) throw new Error('invalid canonical identity mapping');
+    platformMappingStatus = identity.platform_task_id === 'UNKNOWN' ? 'UNKNOWN' : 'RECORDED_NOT_PLATFORM_VERIFIED';
+    if (identity.generation !== seal.generation || identity.writer_id !== seal.writer_id) throw new Error('canonical identity does not match seal');
+    for (const name of CONTROL_IDENTITY_SOURCES) {
+      if (name !== 'status_index') {
+        const navigation = marker(name, 'CONTROL_NAVIGATION');
+        if (!exactKeys(navigation, name === 'workflow_enablement' ? ['status_index', 'root_ref', 'central_entry', 'central_entry_root_ref'] : ['status_index', 'root_ref']) || navigation.status_index !== seal.sources.status_index.path_ref || navigation.root_ref !== (seal.sources.status_index.root_ref ?? 'source_root')) throw new Error(`${name}: canonical navigation mismatch`);
+        if (name === 'workflow_enablement') {
+          const states = [...bodies[name].matchAll(/^[\t ]*(?:状态|state)[\t ]*[:：=][\t ]*([^\r\n]*)$/gm)];
+          if (states.length !== 1 || !/^(?:enabled|`enabled`)$/.test(states[0][1].trim())) throw new Error('workflow_enablement: requires an explicit enabled state');
+          if (navigation.central_entry !== seal.sources.central_entry.path_ref || navigation.central_entry_root_ref !== (seal.sources.central_entry.root_ref ?? 'source_root')) throw new Error('workflow_enablement: declared central entry mismatch');
+        }
+        if ((bodies[name] ?? '').includes('<!-- CONTROL_IDENTITY:')) throw new Error(`${name}: identity belongs only in status_index`);
+      }
+      // Recognized current declarations are checked; historical text is excluded.
+      const fields = [
+        [/(?:当前唯一中央写者|唯一当前写者绑定|中央登记唯一写者|唯一中央写者|当前写者|writer_id)\s*[:：=]\s*`?([A-Za-z0-9._-]+)/g, identity.writer_id],
+        [/(?:当前总指挥世代|generation)\s*[:：=]\s*`?(\d+)/g, String(identity.generation)],
+        [/(?:当前任务\s*ID|平台任务\s*ID|platform_task_id)\s*[:：=]\s*`?([A-Za-z0-9-]+)/g, identity.platform_task_id]
+      ];
+      for (const [pattern, expected] of fields) {
+        for (const match of (bodies[name] ?? '').matchAll(pattern)) if (match[1] !== expected) throw new Error(`${name}: conflicting current identity declaration`);
+      }
+    }
+  } catch (error) { errors.push(error.message); }
+  return { status: errors.length ? errors.some(error => error.includes('INPUT_REQUIRED:')) ? 'NOT_CHECKED' : 'FAIL' : 'PASS', errors, platform_mapping_status: platformMappingStatus };
+}
 export function validateSeal(seal, { checkDigest = true, requireExtensions = false } = {}) {
   const errors = [];
   if (!seal || typeof seal !== 'object' || Array.isArray(seal)) return ['seal must be an object'];
@@ -94,7 +155,7 @@ export function validateSeal(seal, { checkDigest = true, requireExtensions = fal
     if (!exactKeys(source, sourceKeys) || typeof source.owner !== 'string' || !source.owner || !relativeRef(source.path_ref) || !HEX.test(source.digest || '') || !iso(source.fact_cutoff)) fail(errors, `invalid source: ${name}`);
     if (!relativeRef(source.path_ref)) fail(errors, `unsafe source path: ${name}`);
     if (seal.schema_version >= 3 && source.root_ref !== undefined && !['source_root', 'external_control_plane'].includes(source.root_ref)) fail(errors, `invalid source root_ref: ${name}`);
-    if (seal.schema_version >= 3 && source.root_ref === 'external_control_plane' && name !== 'control_plane_registry' && !['central_work_items', 'current_view', 'status_index'].includes(name)) fail(errors, `external root is only allowed for control-plane sources: ${name}`);
+    if (seal.schema_version >= 3 && source.root_ref === 'external_control_plane' && name !== 'control_plane_registry' && !CONTROL_IDENTITY_SOURCES.includes(name)) fail(errors, `external root is only allowed for control-plane sources: ${name}`);
     if (Date.parse(source.fact_cutoff) > Date.parse(seal.fact_cutoff)) fail(errors, `source fact_cutoff is after seal fact_cutoff: ${name}`);
   }
   if (!['PASS', 'UNKNOWN', 'FAIL'].includes(seal.source_digest_status)) fail(errors, 'invalid source_digest_status');
@@ -231,9 +292,12 @@ export function verifyChain(dir, options = {}) {
       ? 'PASS'
       : sourceVerificationErrors.some(error => error.includes('INPUT_REQUIRED:')) ? 'NOT_CHECKED' : 'FAIL'
     : 'NOT_CHECKED';
-  const controlStatus = result.errors.length || latest?.switch_status === 'BLOCKED' || latestSourceStatus !== 'PASS' ? 'BLOCKED' : 'READY';
+  const identity = requiresLiveSources && sourceVerificationErrors.length === 0
+    ? verifyControlIdentity(latest, options) : { status: 'NOT_CHECKED', errors: [] };
+  if (identity.status === 'FAIL') result.errors.push(...identity.errors);
+  const controlStatus = result.errors.length || latest?.switch_status === 'BLOCKED' || latestSourceStatus !== 'PASS' || identity.status !== 'PASS' ? 'BLOCKED' : 'READY';
   const handoffReady = controlStatus === 'READY' && latest && ['READY', 'READY_WITH_RESTRICTIONS', 'COMPLETED'].includes(latest.switch_status);
-  return { ...result, latest, latest_source_status: latestSourceStatus, control_status: controlStatus, handoff_ready: Boolean(handoffReady), transition_status: result.pending_intents?.length ? 'PENDING' : 'SETTLED', status: result.errors.length ? 'BLOCKED' : 'PASS' };
+  return { ...result, latest, latest_source_status: latestSourceStatus, control_identity_status: identity.status, control_identity_errors: identity.errors, control_status: controlStatus, handoff_ready: Boolean(handoffReady), transition_status: result.pending_intents?.length ? 'PENDING' : 'SETTLED', status: result.errors.length ? 'BLOCKED' : 'PASS' };
 }
 
 function validateTransitionIntent(intent) {
@@ -336,6 +400,10 @@ export function appendSeal(dir, draft, { expectedPreviousDigest, sourceRoot, ext
     if (seal.control_handoff_confidence === 'HIGH' || ['READY', 'READY_WITH_RESTRICTIONS', 'COMPLETED'].includes(seal.switch_status)) {
       const sourceErrors = verifySourceFiles(seal, sourceRoot, externalControlPlaneRoot);
       if (sourceErrors.length) throw new Error(sourceErrors.join('; '));
+      if (seal.sources.central_entry || seal.sources.workflow_enablement) {
+        const identity = verifyControlIdentity(seal, { sourceRoot, externalControlPlaneRoot });
+        if (identity.status !== 'PASS') throw new Error(`control identity verification failed: ${identity.errors.join('; ')}`);
+      }
     }
     const finalName = `handoff-state.${seal.seal_sequence}.${seal.seal_digest}.json`;
     const tempName = `${finalName}.${process.pid}.tmp`;

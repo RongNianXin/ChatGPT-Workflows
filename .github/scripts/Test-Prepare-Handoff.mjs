@@ -6,7 +6,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { detectUnicodeCollisions, prepareFormalHandoff, readGitWorkspaceBaseline, readLiveRemoteBaseline, REQUIRED_RULES, verifyWorkspaceBaseline, verifyRuleManifest } from './Prepare-Handoff.mjs';
+import { detectUnicodeCollisions, findActiveControlPlaneIndexes, prepareFormalHandoff, readGitWorkspaceBaseline, readLiveRemoteBaseline, REQUIRED_RULES, verifyWorkspaceBaseline, verifyRuleManifest } from './Prepare-Handoff.mjs';
 
 const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'prepare-handoff-'));
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
@@ -22,7 +22,10 @@ const check = (name, fn) => { fn(); passed++; console.log(`PASS: ${name}`); };
 function writeCurrent(relative, body) {
   const absolute = path.join(sourceRoot, relative);
   fs.mkdirSync(path.dirname(absolute), { recursive: true });
-  fs.writeFileSync(absolute, `# ${body}\n\n<!-- CURRENT:BEGIN -->\n${body}\n<!-- CURRENT:END -->\n\n<!-- HISTORY:BEGIN -->\nold\n`, 'utf8');
+  const metadata = relative === LONG_STATUS_PATH
+    ? '<!-- CONTROL_IDENTITY: {"generation":1,"writer_id":"COMMANDER-GEN-1","platform_task_id":"00000000-0000-4000-8000-000000000001"} -->'
+    : `<!-- CONTROL_NAVIGATION: ${JSON.stringify({ status_index: LONG_STATUS_PATH, root_ref: 'source_root', ...(relative === '状态/启用声明.md' ? { central_entry: '状态/入口.md', central_entry_root_ref: 'source_root' } : {}) })} -->`;
+  fs.writeFileSync(absolute, `# ${body}\n\n<!-- CURRENT:BEGIN -->\n${metadata}\n${body}\n<!-- CURRENT:END -->\n\n<!-- HISTORY:BEGIN -->\nold\n`, 'utf8');
   return { owner: body, path_ref: relative.replaceAll('\\', '/'), digest: sha256(fs.readFileSync(absolute)), fact_cutoff: stamp };
 }
 
@@ -39,6 +42,8 @@ function makeDraft(eventId) {
     sealed_at: stamp,
     event_id: eventId,
     sources: {
+      central_entry: writeCurrent('状态/入口.md', 'navigation'),
+      workflow_enablement: writeCurrent('状态/启用声明.md', '状态：enabled'),
       central_work_items: writeCurrent('状态/中央 工作项.md', 'central'),
       current_view: writeCurrent('状态/当前视图-e\u0301.md', 'view'),
       status_index: writeCurrent(LONG_STATUS_PATH, `项目键：synthetic\n远端目标：refs/heads/main\nHEAD=${'b'.repeat(40)}\n规则清单摘要：${'0'.repeat(64)}`)
@@ -273,6 +278,61 @@ try {
     assert.equal(fs.existsSync(staleRules.finalPath), false);
   });
   fs.writeFileSync(sharedManifest, sharedManifestBytes);
+
+  check('control-plane scan does not enumerate or read protected subtrees', () => {
+    const scanRoot = path.join(temp, 'scan-boundary');
+    const protectedRoots = [path.join(scanRoot, '其他资料'), path.join(scanRoot, '普通', '全局提示词（严禁AI自动修改）')];
+    for (const directory of protectedRoots) {
+      fs.mkdirSync(path.join(directory, '子目录'), { recursive: true });
+      fs.writeFileSync(path.join(directory, '子目录', 'AI状态索引.md'), '<!-- CURRENT:BEGIN -->');
+    }
+    const originalRead = fs.readFileSync;
+    const originalList = fs.readdirSync;
+    const assertAllowed = file => {
+      if (typeof file !== 'string') return;
+      const resolved = path.resolve(file);
+      assert.equal(protectedRoots.some(root => resolved === root || resolved.startsWith(root + path.sep)), false, 'accessed protected subtree');
+    };
+    try {
+      fs.readFileSync = (file, ...args) => { assertAllowed(file); return originalRead(file, ...args); };
+      fs.readdirSync = (file, ...args) => { assertAllowed(file); return originalList(file, ...args); };
+      assert.deepEqual(findActiveControlPlaneIndexes(scanRoot, path.join(scanRoot, 'canonical.md')), []);
+    } finally {
+      fs.readFileSync = originalRead;
+      fs.readdirSync = originalList;
+    }
+  });
+  check('control-plane scan still finds deeply nested ignored and untracked indexes', () => {
+    const scanRoot = path.join(temp, 'scan-coverage');
+    fs.mkdirSync(path.join(scanRoot, '.local', '深层'), { recursive: true });
+    fs.writeFileSync(path.join(scanRoot, '.gitignore'), '.local/\n');
+    fs.writeFileSync(path.join(scanRoot, '.local', '深层', 'AI状态索引.md'), '<!-- CURRENT:BEGIN -->');
+    fs.mkdirSync(path.join(scanRoot, '其他资料备份'), { recursive: true });
+    fs.writeFileSync(path.join(scanRoot, '其他资料备份', 'AI状态索引.md'), '<!-- CURRENT:BEGIN -->');
+    assert.deepEqual(findActiveControlPlaneIndexes(scanRoot, path.join(scanRoot, 'canonical.md')).sort(), ['.local/深层/AI状态索引.md', '其他资料备份/AI状态索引.md'].sort());
+  });
+  check('control-plane scan does not follow a directory alias into a protected subtree', () => {
+    const scanRoot = path.join(temp, 'scan-alias');
+    const protectedRoot = path.join(scanRoot, '其他资料');
+    fs.mkdirSync(protectedRoot, { recursive: true });
+    fs.writeFileSync(path.join(protectedRoot, 'AI状态索引.md'), '<!-- CURRENT:BEGIN -->');
+    fs.symlinkSync(protectedRoot, path.join(scanRoot, 'alias'), process.platform === 'win32' ? 'junction' : 'dir');
+    const originalList = fs.readdirSync;
+    const originalRead = fs.readFileSync;
+    const assertAllowed = file => {
+      if (typeof file !== 'string') return;
+      const relative = path.relative(protectedRoot, fs.realpathSync(file));
+      assert.equal(relative === '' || (!relative.startsWith('..' + path.sep) && relative !== '..' && !path.isAbsolute(relative)), false, 'followed protected alias');
+    };
+    try {
+      fs.readdirSync = (file, ...args) => { assertAllowed(file); return originalList(file, ...args); };
+      fs.readFileSync = (file, ...args) => { assertAllowed(file); return originalRead(file, ...args); };
+      assert.deepEqual(findActiveControlPlaneIndexes(scanRoot, path.join(scanRoot, 'canonical.md')), []);
+    } finally {
+      fs.readdirSync = originalList;
+      fs.readFileSync = originalRead;
+    }
+  });
 
   const duplicateBinding = prepareCase(7, 'formal-event-7');
   const duplicateIndex = path.join(sourceRoot, '历史', 'AI状态索引.md');

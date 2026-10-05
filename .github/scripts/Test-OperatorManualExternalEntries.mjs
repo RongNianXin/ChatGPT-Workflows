@@ -94,6 +94,21 @@ if (!failures) {
     if (!text.includes('职责') || !text.includes('阶段')) fail(`responsibility/stage distinction is missing: ${name}`);
   }
   const contract = read(path.join(root, '引用的外部工具', '外部工具自动对接规范.md'));
+  for (const needle of ['### 5.0 准备、传递与实际就绪', '`goal=null` 不阻断准备', '不预造标识', '不并发改写专项卡', '无通信授权只暂停传递', '准备卡不自动创建、启动或恢复 Goal', '准备性读取不消费正式角色尝试', '不能把已读角色后的基线称为干净的无角色对照']) {
+    if (!contract.includes(needle)) fail(`trial preparation boundary is missing: ${needle}`);
+  }
+  const entry = read(path.join(toolDir, 'README.md'));
+  for (const needle of ['### 普通对话中持续使用', '现在只配置，不执行业务', '项目启动或交接入口能够找到它', '不按关键词机械切换', '单个业务任务结束则关闭该任务绑定', '同一个 AI 切换审查角色仍是自查']) {
+    if (!entry.includes(needle)) fail(`ordinary-chat adaptation entry is missing: ${needle}`);
+  }
+  const guide = read(path.join(toolDir, '调用指南.md'));
+  for (const needle of ['external_role_policy', '业务结束关闭任务绑定，项目约定独立保留', '旧卡复活已撤销角色', '真实恢复仍NOT_RUN', '没有可靠对照则UNKNOWN', '主任务无适用预算时提出最小有界计划']) {
+    if (!guide.includes(needle)) fail(`persistent adaptation boundary is missing: ${needle}`);
+  }
+  if (!contract.includes('external_role_policy') || !contract.includes('启动、恢复及新业务适配时先回读该指针')) fail('project policy recovery pointer is missing from the shared contract');
+  for (const needle of ['### 常规使用模板', '### 首次试验准备模板', '现在只准备', '保留原业务目标、额度和停止条件']) {
+    if (!entry.includes(needle)) fail(`operator preparation entry is missing: ${needle}`);
+  }
   for (const needle of ['安装集合、本阶段加载和单次调用分别确认', 'attempts_consumed', '回读成功才开始', '开始后未完成或失败也消费一次', '继续同次', '同一当前行动', '迟到旧卡不覆盖停止/撤销', '未通知并取得实际加载确认时不得称已迁移']) {
     if (!contract.includes(needle)) fail(`role lifecycle contract is missing: ${needle}`);
   }

@@ -1335,6 +1335,8 @@ Test-CommanderContinuityRoutingCases
 if ($LASTEXITCODE -ne 0) { throw '成果连续性虚构检查失败。' }
 & node (Join-Path $PSScriptRoot 'Test-HandoffSeal.mjs')
 if ($LASTEXITCODE -ne 0) { throw '交接封条链合成检查失败。' }
+& node (Join-Path $PSScriptRoot 'Test-ControlIdentity.mjs')
+if ($LASTEXITCODE -ne 0) { throw '交接控制面身份一致性检查失败。' }
 & node (Join-Path $PSScriptRoot 'Test-Prepare-Handoff.mjs')
 if ($LASTEXITCODE -ne 0) { throw '正式交接附件原子生成检查失败。' }
 & node (Join-Path $PSScriptRoot 'Test-Mark-Handoff-Delivered.mjs')

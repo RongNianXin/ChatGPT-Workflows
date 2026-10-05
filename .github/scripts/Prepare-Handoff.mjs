@@ -4,7 +4,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { appendSeal, sealDigest, validateControlPlaneRegistry, verifyChain } from './HandoffSeal.mjs';
+import { appendSeal, sealDigest, validateControlPlaneRegistry, verifyChain, verifyControlIdentity } from './HandoffSeal.mjs';
 
 export const REQUIRED_RULES = [
   '.github/scripts/HandoffSeal.mjs',
@@ -85,12 +85,14 @@ function verifyRuleManifestBinding(statusIndexPath, manifestDigest) {
   if (match[1].toLowerCase() !== manifestDigest.toLowerCase()) throw new Error(`status_index rule manifest digest mismatch: expected ${manifestDigest}, found ${match[1]}`);
 }
 
-function findActiveControlPlaneIndexes(sourceRoot, canonicalStatusIndex, registry = null) {
+export function findActiveControlPlaneIndexes(sourceRoot, canonicalStatusIndex, registry = null) {
   const historical = new Set((registry?.legacy_indexes ?? []).filter(item => item?.status === 'HISTORICAL_ONLY').map(item => item.path));
   const found = [];
   const walk = directory => {
     for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
       if (entry.name === '.git' || entry.name === 'node_modules') continue;
+      // Skip protected subtrees before enumeration; all other real directories remain in scope.
+      if (entry.isDirectory() && ['其他资料', '全局提示词（严禁AI自动修改）'].includes(entry.name)) continue;
       const absolute = path.join(directory, entry.name);
       if (entry.isDirectory()) walk(absolute);
       else if (entry.isFile() && entry.name === 'AI状态索引.md') {
@@ -376,6 +378,8 @@ export function prepareFormalHandoff(configPath) {
     if (Date.parse(source.fact_cutoff) > Date.parse(draft.fact_cutoff)) sourceDigestErrors.push(`${name}: source fact_cutoff is after draft fact_cutoff`);
   }
   if (sourceDigestErrors.length) throw new Error(`preflight source verification failed: ${sourceDigestErrors.join('; ')}`);
+  const identity = verifyControlIdentity(draft, { sourceRoot, externalControlPlaneRoot });
+  if (identity.status !== 'PASS') throw new Error(`control identity preflight failed: ${identity.errors.join('; ')}`);
   const workspaceErrors = verifyWorkspaceBaseline(sourceRoot, draft.workspace);
   if (workspaceErrors.length) throw new Error(`preflight workspace verification failed: ${workspaceErrors.join('; ')}`);
   if (draft.remote?.status === 'PASS') {

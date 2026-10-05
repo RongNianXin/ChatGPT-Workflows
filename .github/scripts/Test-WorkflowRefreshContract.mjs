@@ -22,13 +22,16 @@ const REFRESH_REQUIRED_RULES = [
   '引用的外部工具/外部工具自动对接规范.md'
 ];
 const checks = [
+  ['state upgrades require migration and real project evidence', read('06-复盘与优化规则.md'), ['旧状态识别', '责任与权限', '旧状态兼容验证', '当前项目迁移', '真实使用预检', 'preflight_only', '不能替代', 'SUPERSEDED']],
+  ['missing fields do not manufacture authority or weaken migration gates', read('项目配置迁移清单.md'), ['格式缺项不等于身份冲突', '新注释不能反过来自证身份', '冻结或生成新候选之前', '多文件迁移中断不得宣布完成', '不由规则维护者批量回写']],
+  ['handoff entry executes scoped migration and actual preflight', read('01-操作者操作手册.md'), ['在冻结候选前自动最小补齐并回读', '不重复询问已获授权', '当前真实项目的完整 `preflight_only` 预检']],
   ['matrix separates logical and machine phases', read('交接阶段矩阵.md'), ['逻辑交接阶段', '封条阶段', '附件交付状态', '候选核验状态']],
   ['broadcast is load-only and self-describing', read('规则刷新广播包.md'), ['规则广播只做一件事', '规则更新指令 + 第二代规则路径', '不需要手工填写 `RULE_REFRESH_ID`', '项目问题另列待办', '规则根向上两级得到的仓库根', '以 `.github/` 开头']],
   ['broadcast limits failure to rule-root faults', read('规则刷新广播包.md'), ['路径不可访问', '必需文件缺失', '哈希不一致', '更高优先级规则冲突', '不得触发 `WARN/BLOCKED`']],
   ['ordinary refresh reads saved local text while pinned verification stays strict', read('规则刷新广播包.md'), ['普通本地刷新（默认）', '旧预期指纹或版本标签待同步', '不单独否决普通刷新', '精确版本核验', '不自动降为本地正文模式', '立即取消本批']],
-  ['refresh separates bytes, reading and adoption', read('规则刷新广播包.md'), ['必要正文实际呈现', '补读截断部分', '不能替代正文理解', '任一必需条目核验失败', '不得以“其余文件已读”宣称刷新完成', '外部工具目录与统一自动对接规范也是必需条目']],
+  ['refresh separates bytes, reading and adoption', read('规则刷新广播包.md'), ['必要正文实际呈现', '补读' , '分段范围', 'text_reading=COMPLETE', '单次输出的截断只表示本段需要继续读取', '不能替代正文理解', '任一必需条目核验失败', '不得以“其余文件已读”宣称刷新完成', '外部工具目录与统一自动对接规范也是必需条目']],
   ['manual bootstrap carries saved local adoption and the dual-root rule', read('01-操作者操作手册.md'), ['请完整读取并采用规则目录中已保存的最新本地正文', '规则加载、项目接入、身份确认和控制面写入分开处理', '以 `.github/` 开头的文件，按规则根向上两级得到的仓库根读取', '不要猜测身份、授权或任务清单', '不执行远端写入']],
-  ['receipt is minimal pass or fail', read('规则刷新接收回执模板.md'), ['正常成功只回复', 'result：PASS', 'result：FAIL', '规则加载结果不使用 `WARN/BLOCKED`']],
+  ['receipt is minimal pass or fail', read('规则刷新接收回执模板.md'), ['正常成功只回复', 'result：PASS', 'result：FAIL', 'RULE_REFRESH：PASS/FAIL', 'PROJECT_ENROLLMENT：ENROLLED/NOT_ENROLLED/UNKNOWN', 'IDENTITY_CONTROL_PLANE：VERIFIED/NOT_REQUESTED/UNKNOWN', '规则加载结果不使用 `WARN/BLOCKED`']],
   ['project migration is independent', read('项目配置迁移清单.md'), ['不再随规则广播自动执行', '本清单存在缺口也不得降低规则加载结果']],
   ['project state cannot block rule loading', read('09-自动化授权与风险分级.md'), ['规则刷新是纯规则加载事件', '规则加载只允许两种最终结果：`PASS` 或 `FAIL`', '不得产生 `WARN/BLOCKED`']],
   ['affirmative reply binds the latest unique plan', `${read('02-总指挥核心规则.md')}\n${read('09-自动化授权与风险分级.md')}`, ['最近唯一、范围明确且可恢复的执行方案', '我同意你的做法', '不因缺少固定授权句式', '不得要求操作者改用固定授权口令']],
@@ -47,8 +50,19 @@ checks.push(['diagnosis references resolve to the current section', `${read('02-
 checks.push(['bounded test scenario is distinct from feedback, diagnosis and legacy 2G', `${read('00-第二代工作流总览.md')}\n${read('01-操作者操作手册.md')}\n${read('02-总指挥核心规则.md')}`, ['场景 2G：用真实数据做有界自动测试、修复和复测', '旧版精简提示词的“2G”按内容和规则版本映射到当前 2B', '2E 用于反馈你已经观察到的结果；2C 是原因不明时的逐节点查因方法', '收到当前版 2G 的真实数据有界测试请求时走 2G', '可终止本轮进程及其子进程', '不因重试、换卡或切换窗口重置', '质量标准无法直接核验、又无可靠真值或必要人工确认时']]);
 checks.push(['cross-task receipt is an executable hard gate', `${read('02-总指挥核心规则.md')}\n${read('09-自动化授权与风险分级.md')}\n${fs.readFileSync(path.join(root, 'AGENTS.md'), 'utf8')}`, ['取得处理时隙后的第一项动作必须是实际发送回执并读取工具结果', '回执先行硬门禁（事故回归）', '实际跨任务发送工具', '缺少真实发送证据的事件不得收口', '不得写成已回执']]);
 checks.push(['receipt threshold explains content signals and inbound events', `${read('02-总指挥核心规则.md')}\n${read('09-自动化授权与风险分级.md')}\n${fs.readFileSync(path.join(root, 'AGENTS.md'), 'utf8')}`, ['场景五/场景 5A–5D', '对抗式反馈', '希望征求建议', '希望帮忙分析', '需要回执', '通信授权', '入站事件']]);
+checks.push(['in-app reply policy reuses direct user authorization within scope', read('09-自动化授权与风险分级.md'), ['同一应用内的来源回复预授权', '不再逐次询问', '其他使用者须有自己的授权依据', '发送方不能代授权限', '新来信或范围内的不同来源不自动使其失效', '恢复或换窗时回读核验']]);
+checks.push(['in-app reply decision keeps opt-out, privacy and local feedback', read('09-自动化授权与风险分级.md'), ['未说明是否需要回执时，自主判断', '明示“无需回复”时不回', '纯确认、重复知悉且没有新问题时不启动互答', '不转发私聊全文', '无论已回复、决定不回、排队还是受阻', '只暂停发送和依赖回执的动作']]);
+checks.push(['bootstrap grants scoped replies without proactively contacting tasks', `${read('01-操作者操作手册.md')}\n${read('10-自动状态索引规范.md')}`, ['同时授权你按09的同应用回复预授权', '无需逐次向我确认', '本条0A只登记该预授权', '直接授权依据', '通信政策与业务动作授权分开记录']]);
+const sceneFiveReceipt = read('09-自动化授权与风险分级.md').split('14. **场景五请求必须闭环。**')[1]?.split('15. **回执先行硬门禁')[0] || '';
+checks.push(['scene-five follow-ups respect opt-out and the agreed round limit', sceneFiveReceipt, ['明示“无需回复”优先于场景标签', '纯确认且未要求回复只登记并向操作者反馈', '到轮次上限或明确收口即停止本批互答', '到限仍有未决项不写通过', '单方完成审查不冒充对方确认']]);
 checks.push(['cross-task workflow review routes separately from source business', `${read('09-自动化授权与风险分级.md')}\n${fs.readFileSync(path.join(root, 'AGENTS.md'), 'utf8')}`, ['公共工作流审查的正向分流', '按 FIFO 在取得处理时隙后完成最小只读核对', '只提取判断工作流缺陷所需的最小事实', '工作流部分继续处理，专项业务部分单独标记 `BLOCKED`', '没有回执要求时不强制向来源发送消息', '公共工作流审查与来源业务二分', '混合消息必须拆分处理']]);
-checks.push(['Goal input boundary is explicit', read('01-操作者操作手册.md'), ['Goal 模板怎么用', '整段代码块一次粘贴', '不要重复粘贴', 'Agency Agents', '不是 Goal 启动的前置条件']]);
+checks.push(['Goal input boundary is explicit', read('01-操作者操作手册.md'), ['Goal 模板怎么用', '完整正文并提交', '不要重复粘贴', 'Agency Agents', '不是 Goal 启动的前置条件']]);
+checks.push(['complex preflight groups known questions without expanding authorization', read('02-总指挥核心规则.md'), ['复杂指令的启动前预检与集中询问', '不为预检全仓扫描', '前两类自行解决', '没有必问项时直接按既有授权执行', '只询问差额并暂停受影响动作', '不能靠启动时概括同意替代', '不保证所有问题都能提前发现']]);
+checks.push(['necessary questions include supported recommendations, not implied consent', read('09-自动化授权与风险分级.md'), ['名称末尾标注“（推荐）”', '不虚构最优解', '预选、跳过、未回复和超时都不构成授权', '不能用低风险分类绕过']]);
+checks.push(['Goal review and execution both front-load necessary decisions', read('01-操作者操作手册.md'), ['② 启动预检与路线选择', '将当前可预见且必须由我回答的问题集中提前提出', '已有选择不因阶段变化重复询问', '执行中新发现的问题只询问新增差额']]);
+checks.push(['Goal review distinguishes valid permissions, draft grants and substantive revisions', read('01-操作者操作手册.md'), ['不包含高资源运行授权', '不把草稿候选说成已经授权', '拟随正式正文授予的范围', '对照模板版本（无法核验时写待确认）', '实质改动', '没有特殊权限需求时不生成空授权卡']]);
+checks.push(['bounded resource permission preserves scope, limits and project gates', read('09-自动化授权与风险分级.md'), ['本地高资源运行的有界授权与复用', '预计耗时', '并发/浏览器/模型实例上限', '累计时限上限', '准备事项', '终止方式', '直接确认后才生效', '新脚本仍须核验实际动作和资源风险', '已有明确单次授权不得扩大成整个 Goal 的长期许可', '项目规定每次高资源运行前另行确认时']]);
+checks.push(['Goal resource permission reuse does not reset the resource budget', read('05-模型选择与资源策略.md'), ['准备稿和授权候选不自动生效', '已有范围未变且仍有效时不重复询问', '允许运行与剩余资源限额分别核验', '不以本周期8小时或总迭代预算替代高资源授权']]);
 checks.push(['external tool scenario is operator-facing and path-addressable', read('01-操作者操作手册.md'), ['可选功能场景：外部工具调用', '### 外部工具总体接入规则', '[EXT-001：Agency Agents]', '### EXT-001：Agency Agents', '它是做什么的：', '操作者入口：', '工具子目录的 `README.md` 是该工具唯一的操作者入口', 'agency agents/README.md', 'ChatGPT-Workflows/引用的外部工具/agency agents/README.md']]);
 checks.push(['operator manual defines the natural-language update and path-check contract', read('01-操作者操作手册.md'), ['01 手册的场景编写与路径变更规范', '一个场景只解决一个操作者目标', '正文固定按四段写', '入口必须完整可寻址', '自然语言改手册的固定动作', '路径检查在三处触发']]);
 checks.push(['scenario zero has a unified entry and scoped commander broadcast', `${read('01-操作者操作手册.md')}\n${read('规则刷新广播包.md')}\n${read('09-自动化授权与风险分级.md')}`, ['场景 0A：统一接入与规则更新', '场景 0B：总指挥广播最新工作流', 'broadcast_scope', 'ALL', 'SELECTED', '逐目标', '强制接收', '不保证平台一定送达', '兼容分支']]);
@@ -56,12 +70,12 @@ checks.push(['scenario 0B operator prompt is Chinese-first', read('01-操作者�
 const manual = read('01-操作者操作手册.md');
 const scene0A = manual.split('### 场景 0A：')[1]?.split('### 场景 0B：')[0] || '';
 const scene0B = manual.split('### 场景 0B：')[1]?.split('### 兼容分支：')[0] || '';
-checks.push(['0A acts only on its direct receiver', scene0A, ['本条指令只作用于接收它、正在与我对话的AI', '无论你是总指挥、普通任务还是专项任务', '不要替其他对话更新，不盘点、广播或转达', '无法确认身份只暂停依赖身份的动作，不否决普通规则刷新']]);
+checks.push(['0A acts only on its direct receiver', scene0A, ['这条指令只针对当前正在与我对话的 AI', '无论你是总指挥、普通任务还是专项任务', '不要替其他对话更新，也不要盘点其他对话、向它们广播或转达指令', '只暂停需要确认身份才能执行的动作，仍可完成普通规则刷新']]);
 checks.push(['0B is commander-only and project-scoped', scene0B, ['只发给已核验的本项目现任总指挥', '可以只指定一个专项', '不得跨项目转达', '不是或无法确认时停止转达', '由AI核对唯一对象']]);
 const legacy0C = manual.split('### 兼容分支：把已运行项目的现有窗口接入工作流（原场景 0C）')[1]?.split('```text')[1]?.split('```')[0] || '';
 checks.push(['legacy 0C copy block preserves current 0B gates', legacy0C, ['本旧入口按现行0B处理', '本项目现任总指挥，否则停止转达', '本项目当前清单中全部可核验子任务', '不扩大到其他项目', '不迁移控制面']]);
 checks.push(['identity reference does not confer authority or require manual IDs', read('10-自动状态索引规范.md'), ['接收本条指令的对话', '中央登记的现任总指挥', '原/旧对话', '平台任务ID、逻辑 `writer_id`、总指挥世代和任务标题分别记录', '不能冒充平台ID', '不要求操作者手填技术ID', '不自动产生世代切换、中央写权、旧授权继承或远端权限', 'ID不可见本身不撤销已有中央证据确认的身份或切换状态', '普通规则刷新可以独立PASS', '在旧对话发送', '在新对话发送', '在接收对话发送']]);
-checks.push(['handoff and task continuation distinguish receiver from source', manual, ['本次拟建立或恢复的总指挥是接收本条指令的对话', '这里的当前窗口指接收本条指令、拟移交职责的旧对话', '接收本条指令的对话现在是本项目的新总指挥候选', '调度权切换给接收本条指令的新候选对话', '由接收本条指令、拟移交工作的旧对话', '由接收本条指令的新对话读取', '原对话与接收对话分别定位']]);
+checks.push(['handoff and task continuation distinguish receiver from source', manual, ['本次拟建立或恢复的总指挥是接收本条指令的对话', '这里的当前窗口指接收本条指令、拟移交职责的旧对话', '接收本条指令的对话现在是本项目的新总指挥候选', '调度权移交给当前接收指令的新候选对话', '你是准备移交工作的旧任务窗口', '你是接收续接材料的新任务窗口', '原对话与接收对话分别定位']]);
 checks.push(['4K resolves reversible preparation problems without weakening publish gates', `${read('01-操作者操作手册.md')}\n${read('02-总指挥核心规则.md')}\n${read('09-自动化授权与风险分级.md')}`, ['4K简单问题自主处理', '无法在原范围安全修复的验证失败', '不得以取消测试、降低验收', '同类修复连续两次无改善', '修复改变纳入内容时', '结果未知不重复副作用', '先完成可审阅候选', '最终远端确认仍适用', '已有有效精确确认不重复索权']]);
 checks.push(['cross-project route separates affiliation from operator authorization', `${read('09-自动化授权与风险分级.md')}\n${fs.readFileSync(path.join(root, 'AGENTS.md'), 'utf8')}`, ['跨项目默认路由', '本项目 AI / 其他项目 AI / 归属未知', '当前操作者在接收窗口直接明确要求处理来源业务', '来源归属与通信授权分开核验', '其他项目或归属未知的 AI 来信默认进入 `WORKFLOW_FEEDBACK`']]);
 checks.push(['cross-window feedback reads accessible material before execution gating', `${fs.readFileSync(path.join(root, 'AGENTS.md'), 'utf8')}\n${read('09-自动化授权与风险分级.md')}\n${read('06-复盘与优化规则.md')}`, ['完整取得并阅读当前消息提供的可访问材料', '只读范围内检索互联网', '读取、核验和总结不等于接管来源业务', '来源业务未授权', '缺失材料仍需标为 `INPUT_REQUIRED`']]);
@@ -83,9 +97,20 @@ checks.push(['handoff verification is executable and layered', `${read('07-总�
 checks.push(['handoff candidate reply is human-first', `${read('01-操作者操作手册.md')}\n${read('04-状态、目标变更与交接规范.md')}\n${read('总指挥轻量交接启动配置.md')}\n${read('07-总指挥交接记录模板.md')}`, ['默认先用四句人话回答', '真正阻断', '默认不展示机器字段', '只有操作者明确要求技术细节', '不得把 `NOT_RUN`、`GENERATED_NOT_DELIVERED`', '不阻止当前候选阶段，写入“补充限制”而不是“真正阻断”', '下列字段只供机器记录和异常定位']]);
 checks.push(['handoff preflight is first gate and candidate is unique', `${read('04-状态、目标变更与交接规范.md')}\n${read('10-自动状态索引规范.md')}\n${read('06-复盘与优化规则.md')}`, ['把 `preflight_only` 当作第一道机器门', '固定 `fact_cutoff`', 'SUPERSEDED', '有限重试和退避', '当前唯一 active candidate', '附件与封条保持两阶段']]);
 checks.push(['handoff scoring separates control confidence from switch and acceptance states', `${read('04-状态、目标变更与交接规范.md')}\n${read('总指挥轻量交接启动配置.md')}`, ['控制面必要证据全部通过且没有真实控制面冲突或缺口时必须记为 `HIGH`', '候选阶段旧写者 `IDLE/UNKNOWN`', '运行/专业状态 `UNKNOWN/NOT_RUN/FAIL` 不得降低控制面评分', '“尚未正式切换”本身不是降分理由']]);
-checks.push(['goal handoff stops business execution and exposes platform controls', `${read('01-操作者操作手册.md')}\n${read('05-模型选择与资源策略.md')}\n${read('06-复盘与优化规则.md')}`, ['不得开始新的业务步骤', '`/goal pause`', '`/goal resume`', '`/goal clear`', '垃圾桶删除聊天', '不能代替客户端改变持久 Goal 状态', '操作者先暂停平台状态', '暂停后才执行收口', '只有我明确要求“恢复 Goal”或“从断点继续”时才恢复']]);
+checks.push(['goal handoff stops business execution and verifies available platform controls', read('01-操作者操作手册.md'), ['不得开始新的业务步骤', '平台恢复成功', '不能把该命令作为跨版本通用恢复方式', '确认平台已暂停', '暂停后才执行收口', '没有我的“恢复 Goal”或“从断点继续”指令及平台恢复证据，不得恢复']]);
+checks.push(['goal preparation separates draft permissions and optional role use from launch', read('01-操作者操作手册.md'), ['场景 Gen1.1', '场景 Gen1.2', '场景 Gen1.3：暂停、恢复与交接收口', '不要把草稿或附件中的允许操作当成本轮执行授权', '不在本轮安装', '不因此阻断审查', '已激活或已执行角色任务', '登记缺项不等于未安装', '旧模板仍叫“身份赋予”', '不是 Goal 启动的前置条件']]);
 checks.push(['goal handoff has a platform pause gate', `${read('01-操作者操作手册.md')}\n${read('04-状态、目标变更与交接规范.md')}\n${read('交接阶段矩阵.md')}\n${read('07-总指挥交接记录模板.md')}\n${read('10-自动状态索引规范.md')}`, ['PAUSE_REQUIRED', 'PAUSED', 'Goal 交接权限', 'CLOSEOUT_ONLY', '交接材料生成并回读成功后必须为 `NONE`', '不能覆盖上述平台状态']]);
 checks.push(['final status separates exclusions from open work', `${read('02-总指挥核心规则.md')}\n${read('03-专项任务卡模板.md')}\n${read('06-复盘与优化规则.md')}`, ['排除项反查', '`EXCLUDED`', '`CANCELLED`', '`SUPERSEDED`', '不得出现在“未完成项、待办或下一步”中']]);
+const goalBudget = read('05-模型选择与资源策略.md');
+checks.push(['Goal continuation has a usable operator entry', read('01-操作者操作手册.md'), ['问题解决后恢复', '周期到限后继续', '追加预算也用完时', '只准备下一周期，不立即执行', '不记为违规的“14/10”']]);
+checks.push(['Goal repeated limits require bounded approval and preserve history', goalBudget, ['追加周期也到限时重复审查与批准流程', '不混用两种记账方式', '执行前在既有获准记录保存批准依据', '最新明确批准的新周期预算约束当前执行']]);
+checks.push(['Goal approval and platform recovery are separate', read('01-操作者操作手册.md'), ['文本批准不保证平台自动恢复', '客户端独立硬限额', '只说“继续”或点击恢复按钮，不自动增加预算', '状态未知时不声称已恢复']]);
+checks.push(['unselected permission menu is not an authorization', goalBudget, ['旧权限菜单未选择而原样发送时', '不视为全选', '删除整个栏目仍只沿用已有授权']]);
+checks.push(['Goal recovery or window change does not reset a cycle', goalBudget, ['都不自动开始新工作周期', '不默认归零', '明确暂停不计时但不清零', '不能修改平台 Goal 的持久预算']]);
+checks.push(['new cycle cannot repeat exhausted failed methods', goalBudget, ['操作者明确批准新工作周期的目标与预算后', '保留上周期记录及关联', '不因周期预算更新获准重复旧失败方法', '硬上限不得绕过']]);
+checks.push(['manual step pauses only dependent work', read('01-操作者操作手册.md'), ['只暂停依赖该问题的步骤', '没有安全且有意义的已授权工作可继续时才收口', '总预算到限按各自规则停止']]);
+checks.push(['prompt language review stays in the existing workflow', read('06-复盘与优化规则.md'), ['文档质量检查并入现有生成、验证和审查流程，不新增审批层', '谁执行、执行什么、针对什么对象、在什么条件下执行', '作者从操作者角度完整读一遍实际复制块', '润色没有改变权限、停止条件和验证义务', '不能证明语言正确']]);
+checks.push(['unavailable quota opt-out is explicit and scoped', `${read('01-操作者操作手册.md')}\n${read('05-模型选择与资源策略.md')}`, ['当无法查看额度时，允许忽略依赖额度读数的停止项', '不能仅因API登录或读取失败推定已有许可', '没有这项许可时，按原额度保护约定安全收口', '不新增费用或高资源权限', '不把缺失期间的用量记为零', '额度读取失败时按上面的明确许可处理，不因此单独停止']]);
 let failed = 0;
 for (const [name, text, needles] of checks) {
   const missing = needles.filter(needle => !text.includes(needle));
