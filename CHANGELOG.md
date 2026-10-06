@@ -1,3 +1,10 @@
+## 2026-10-06：场景五来源确认状态与本地完成状态分离
+
+- 修正“本地审查已完成、等待来源确认”却把场景状态写成 `COMPLETED` 的语义冲突。
+- 09/02/04 现在要求分别记录 `local_processing_status` 与 `source_delivery_status`：发送工具成功但没有匹配来源文本时只能是 `SENT_PENDING_CONFIRMATION`；来源确认后才是 `RECEIVED_CONFIRMED`；双方要求均满足后才能登记事件 `COMPLETED`。
+- 增加规则契约断言，覆盖状态分离、待确认出口和正式场景五回执字段；不改变正式交接封条的 `switch_status` 枚举。
+- 版本升至 `2026-10-06.27`；未执行来源项目业务、远端写入或新的跨窗口发送。
+
 ## 2026-10-06：跨任务工具结果入站解析与回执顺序修正
 
 - 明确 `functionCallOutput`、工具结果和 `<codex_delegation>` 载荷必须先规范化为独立 `INBOUND_EVENT`，重新绑定发送方、接收方和消息标识，不得继承上一事件的项目或结论。

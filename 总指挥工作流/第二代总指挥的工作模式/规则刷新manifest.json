@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "rule_version": "2026-10-06.26",
+  "rule_version": "2026-10-06.27",
   "scope": "core_workflow_full",
   "path_base": "rule_root",
   "repository_root_ref": "../..",
@@ -27,7 +27,7 @@
     },
     {
       "path_ref": "00-第二代工作流总览.md",
-      "sha256": "F6E4B552AFF8578419F6118A4B6B441688C0BF40D14D698A3DE4311DCC29A6E8"
+      "sha256": "DFEBCD60A0549125C2570185463FE7B75225C72602BBE8861AE992A0F2991AEB"
     },
     {
       "path_ref": "01-操作者操作手册.md",
@@ -35,7 +35,7 @@
     },
     {
       "path_ref": "02-总指挥核心规则.md",
-      "sha256": "722D316B14186920EAB5CCB1DB296493FC41040D0C225A12F1AC40FFAE9A82CC"
+      "sha256": "02A3978B7FAC49997B216A8870ED3ECE1345C5A250B255F02C3C17B402555749"
     },
     {
       "path_ref": "03-专项任务卡模板.md",
@@ -43,7 +43,7 @@
     },
     {
       "path_ref": "04-状态、目标变更与交接规范.md",
-      "sha256": "68B3DB8327A36C07C432C27084D48A0D8F9348649C262FD3B63D85EA240F6B9E"
+      "sha256": "6BB535513A7BA148C2F0E7753B856C38E7EF1CCE93FD8A1C0662DE403058481B"
     },
     {
       "path_ref": "05-模型选择与资源策略.md",
@@ -63,11 +63,11 @@
     },
     {
       "path_ref": "09-自动化授权与风险分级.md",
-      "sha256": "BD397164B921C442A98DEA6F64E554156DD31C0A912592D195B1E20C3980C1C4"
+      "sha256": "430E9B21DD151AE61B340499415C38EC89CB9A7C83433A51F7D42EAC051D61A4"
     },
     {
       "path_ref": "10-自动状态索引规范.md",
-      "sha256": "DAD771D817C3B218E2ECF593F0CE75E374217E4916470B3EDDB01C7677633292"
+      "sha256": "1A63E1675361E89F212B9DE341F9C9DB3769394D40FDB19CEC476C713A030B58"
     },
     {
       "path_ref": "11-操作者协作画像规范.md",
@@ -83,7 +83,7 @@
     },
     {
       "path_ref": "总指挥轻量交接启动配置.md",
-      "sha256": "6FF55ECA5A7D3FDBDB21ECDDCB4258225770F4FCD0F28AE3778D940080065D03"
+      "sha256": "511027CBA68B09FCE626AEC31A12AC59C3271454782FBCE2D4D3D743638D52C7"
     },
     {
       "path_ref": "templates/HANDOFF_STATE.schema.json",
