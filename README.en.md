@@ -2,9 +2,9 @@
 
 # ChatGPT Workflows
 
-**Usage tips, workflows, troubleshooting notes, and local tools for ChatGPT on the web and Codex work in the ChatGPT desktop app.**
+**Usage tips, workflows, external-tool integration, troubleshooting notes, and local tools for ChatGPT on the web and Codex work in the ChatGPT desktop app.**
 
-Connect natural-language goals, execution evidence, and resumable checkpoints, alongside ChatGPT web enhancements and local tools.
+Connect natural-language goals, execution evidence, and resumable checkpoints, alongside ChatGPT web enhancements, controlled external-tool integration, and local tools.
 
 [简体中文](README.md) | **English**
 
@@ -31,17 +31,18 @@ Connect natural-language goals, execution evidence, and resumable checkpoints, a
 
 ## Why this repository exists
 
-The public content currently falls into five groups: ChatGPT web enhancements, the Codex commander workflow, reusable prompts, troubleshooting and recovery notes, and local helper tools. It brings practical material that would otherwise be scattered across conversations into files that can be downloaded, inspected, tested, and reused.
+The public content currently falls into six groups: ChatGPT web enhancements, the Codex commander workflow, reusable prompts, external-tool integration, troubleshooting and recovery notes, and local helper tools. It brings practical material that would otherwise be scattered across conversations into files that can be downloaded, inspected, tested, and reused.
 
 Most of the repository is Markdown and PowerShell rather than a hosted service or opaque automation layer. Public files are designed not to contain local identities, real task IDs, credentials, or private prompts.
 
-## What's new: evolving assessment, interface, and recovery capabilities
+## What's new: evolving assessment, interface, recovery, and external-tool capabilities
 
 - **Handoff and remote-sync flow are now tighter:** handoff preflight checks seal sources, worktree content fingerprints, and the remote baseline together. Candidate windows start with four plain-language lines, while remote-sync requests pass through local inventory, verification, and authorization gates.
 - **The session handoff evaluator keeps growing:** what began as task lookup and saving now includes a Windows desk, historical results and reports, handoff scoring, tiered reminders, and legacy-data compatibility. Its algorithm and visual style have both been revised.
 - **More recovery and troubleshooting capability:** an archive-path repair tool was added, while cross-window handoff, automation-result association, long sessions, and client failures were organized into searchable troubleshooting material.
 - **A more complete delivery surface:** offline Markdown reading, redacted real-run previews, a Chinese source of truth, and an English entry now let rules, tools, and showcase material evolve separately.
 - **Tighter evidence boundaries:** handoff checks separate the Git baseline, uncommitted changes, dependencies and builds, runtime identity, and input acceptance; the rules also distinguish research notes from verified results.
+- **External-tool integration is now documented:** `引用的外部工具/` provides one place to discover third-party roles, CLIs, and services with explicit status and permission boundaries. `EXT-001 Agency Agents` supplies specialist methods, while `EXT-002 CLI-Anything` exposes real software through agent-usable CLIs. Registration does not mean installation or activation; each first use starts with a read-only suitability check and evidence-based validation.
 
 This is a concise synthesis of the visible history and current files. See the [changelog](CHANGELOG.md) for exact status, unverified limits, and candidate roadmap items.
 
@@ -80,6 +81,7 @@ Specific model names, prices, and reasoning levels are not permanent prerequisit
 | Understand the rule architecture | [Workflow overview (Chinese)](总指挥工作流/第二代总指挥的工作模式/00-第二代工作流总览.md) |
 | Troubleshoot Codex or CC Switch | [Troubleshooting notes](故障排查与解决经验/) |
 | Reuse a focused prompt | [Prompt collection](其他%20Codex%20技巧性提示词/) |
+| Discover external tools | [External-tool integration](引用的外部工具/README.md) |
 | Try a local helper | [Local utilities](实用小工具/) |
 | Save tasks and query Codex session snapshots (Windows dev.10) | [Session handoff assessment](实用小工具/Codex会话交接评估/README.en.md) |
 | See real-world results | [Showcase](SHOWCASE.md) |
@@ -115,6 +117,7 @@ The detailed rules remain canonical in Chinese. Use the [English entry](总指�
 - [ChatGPT-Web](ChatGPT-Web/README.en.md): reviewable userscripts, installation steps, and browser-permission notes for ChatGPT on the web.
 - [Second-generation commander workflow](总指挥工作流/第二代总指挥的工作模式/): task intake, authorization, delegation, validation, state recovery, and handoff for Codex work.
 - [Prompt collection](其他%20Codex%20技巧性提示词/): reusable prompts for first-principles reviews, complex tasks, image work, automated testing, and text flowcharts.
+- [External-tool integration](引用的外部工具/README.md): registration, suitability checks, permission boundaries, validation, and maintenance records for third-party roles, CLIs, and services.
 - [Troubleshooting and recovery](故障排查与解决经验/): sanitized records and recovery tools for reproduced Codex Desktop and CC Switch issues.
 - [Local utilities](实用小工具/): read-only or reversible helpers, including the Codex session handoff assessment.
 - [Showcase](SHOWCASE.md): privacy-reviewed screenshots of real runs so visitors can see what the workflows and tools produce.
@@ -124,6 +127,21 @@ The detailed rules remain canonical in Chinese. Use the [English entry](总指�
 The repository uses **ChatGPT Workflows** as its public umbrella title so visitors can enter through familiar ChatGPT use cases. **Codex** remains the accurate name for coding and local-project work, the CLI, session formats, and modules that only apply to Codex.
 
 For that reason, product-specific directory names, script names, commands, and technical documentation are not renamed merely for branding consistency. The ChatGPT title also does not imply that every module runs in an ordinary web chat; each module README defines its audience, prerequisites, and limitations.
+
+## External-tool integration
+
+`引用的外部工具/` is the workflow's auditable directory for third-party capabilities. It separates three states that are easy to confuse:
+
+1. **Registration:** official source, purpose, scope, permissions, validation, and rollback are documented. This does not prove installation.
+2. **Installation:** actual files are placed in a shared or project scope and their version is checked. The target path and write permission are separate decisions.
+3. **Project activation:** the commander selects the smallest tool set for the current goal and binds it to the task. It does not load every tool or change the Goal, single-writer, or remote-write rules.
+
+Current entries include:
+
+- **EXT-001 Agency Agents:** specialist viewpoints such as game design, technical art, and code review.
+- **EXT-002 CLI-Anything:** a framework for exposing real software or codebases through discoverable, composable, verifiable CLIs. It can consume existing CLI-Hub harnesses or generate a new harness, but still depends on the real software, environment, and human acceptance.
+
+Operators do not need to remember internal identifiers or install commands. Say what you want to accomplish and ask the commander for a read-only suitability check. The AI should explain dependencies, read/write scope, verification, and rollback before any installation or execution. The selected tool's `README.md` and maintenance record remain authoritative for its current status.
 
 ## Bilingual README contract
 
@@ -151,6 +169,7 @@ The privacy claims are auditable: the real profile stays in an exact `.gitignore
 
 - Userscripts and usage notes for ChatGPT on the web are included.
 - Codex coverage includes desktop and local-project workflows, handoffs, validation, troubleshooting, and recovery.
+- External-tool coverage includes documented discovery and bounded activation for third-party roles, CLIs, and services; installation and live compatibility remain per-tool checks.
 - Tools and reproduced tests are currently Windows-first, and the detailed rule manuals are primarily in Chinese.
 - It is a personal project, not an official standard or a guarantee of professional, legal, security, or business acceptance.
 - Product behavior and third-party tooling can change; re-check time-sensitive instructions before relying on them.
@@ -163,4 +182,4 @@ Released under the [MIT License](LICENSE).
 
 This project acknowledges the [LINUX DO](https://linux.do/) community and supports sincere, friendly knowledge sharing and exchange.
 
-<!-- README-SOURCE-SHA256: 7685f3b6b97ce41bb9f48ffaea6c203458061eb30302076df0dd0208eb917172 -->
+<!-- README-SOURCE-SHA256: 8a6c26174be5e8604dd02221d14e5a80655c2925084c36b49f98a9c66179c12b -->

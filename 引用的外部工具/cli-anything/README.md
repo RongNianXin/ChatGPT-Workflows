@@ -1,5 +1,7 @@
 # EXT-002：CLI-Anything
 
+[English](README.en.md)
+
 ## 一句话
 
 CLI-Anything 把真实软件或代码库包装成 Agent 可发现、可组合、可验证的命令行工具。它不是“自动替你操作所有软件”的万能权限层，而是提供两条能力：从 CLI-Hub 查找并安装已有 harness；或按方法论为目标软件生成、测试和迭代新的 harness。
