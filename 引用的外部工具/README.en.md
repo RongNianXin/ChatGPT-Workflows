@@ -1,4 +1,4 @@
-<!-- README-SOURCE-SHA256: 727b0f51cf6884266e228277e5539304fc0b4c06cc44891fed45f08984712f0c -->
+<!-- README-SOURCE-SHA256: 4e2563bfad90a210e0c53ba75c3093a7401ae231f6e3d1e9ad7276832671508f -->
 
 # External tool entry
 
@@ -33,6 +33,7 @@ Map relevant responsibilities from the goal, deliverables, stage, and technical 
 - [`外部工具目录.md`](外部工具目录.md): the single index for identifiers, status, and document entry points.
 - [`外部工具接入模板.md`](外部工具接入模板.md): the template for registering a new external tool.
 - [`agency agents/README.md`](agency%20agents/README.md): the Chinese entry for `EXT-001: Agency Agents`.
+- [`cli-anything/README.md`](cli-anything/README.md): the Chinese entry for `EXT-002: CLI-Anything`.
 
 AI also reads the shared [JSON registry](角色共享状态.json), [reuse rules](角色共享状态.md), and [experience record](角色经验与反馈记录.md) when needed. These are not operator forms.
 

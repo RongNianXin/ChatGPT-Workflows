@@ -31,6 +31,7 @@ AI 先按目标、交付物、阶段和技术约束覆盖相关职责，做轻�
 - [`外部工具目录.md`](外部工具目录.md)：工具编号、当前状态和正文入口的唯一索引。
 - [`外部工具接入模板.md`](外部工具接入模板.md)：新增外部工具时复制的登记模板。
 - [`agency agents/README.md`](agency%20agents/README.md)：`EXT-001：Agency Agents` 的中文入口。
+- [`cli-anything/README.md`](cli-anything/README.md)：`EXT-002：CLI-Anything` 的中文入口。
 
 AI 还会读取 [`角色共享状态.json`](角色共享状态.json)、[`角色共享状态.md`](角色共享状态.md) 和 [`角色经验与反馈记录.md`](角色经验与反馈记录.md)，用于跨项目复用安装、去重版本和汇总经验；这些不是操作者的必填材料。
 
