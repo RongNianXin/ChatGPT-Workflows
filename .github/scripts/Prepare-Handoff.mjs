@@ -18,7 +18,7 @@ export const REQUIRED_RULES = [
   '总指挥工作流/第二代总指挥的工作模式/10-自动状态索引规范.md',
   '总指挥工作流/第二代总指挥的工作模式/总指挥轻量交接启动配置.md'
 ];
-const CONFIG_KEYS = new Set(['seal_directory', 'source_root', 'external_control_plane_root', 'draft_path', 'snapshot_template_path', 'final_output_path', 'receipt_output_path', 'rule_manifest_path', 'expected_previous_digest', 'transition_ticket', 'project_key', 'preflight_only']);
+const CONFIG_KEYS = new Set(['seal_directory', 'source_root', 'external_control_plane_root', 'draft_path', 'snapshot_template_path', 'final_output_path', 'receipt_output_path', 'rule_manifest_path', 'live_rule_manifest_path', 'expected_previous_digest', 'transition_ticket', 'project_key', 'preflight_only']);
 const sha256 = value => crypto.createHash('sha256').update(value).digest('hex');
 const resolveFrom = (base, value) => path.resolve(base, value);
 const isInside = (root, candidate) => {
@@ -37,6 +37,15 @@ const physicalTarget = target => {
   return path.join(fs.realpathSync(cursor), ...suffix);
 };
 const verificationCommandPattern = /node\s+"[^"]*HandoffSeal\.mjs"\s+verify\s+"[^"]+"\s+"[^"]+"(?:\s+"[^"]+")?/;
+
+const RULE_CRITICAL_PATHS = new Set(['01-操作者操作手册.md', '02-总指挥核心规则.md', '04-状态、目标变更与交接规范.md', '07-总指挥交接记录模板.md', '09-自动化授权与风险分级.md', '10-自动状态索引规范.md', '总指挥轻量交接启动配置.md', 'templates/HANDOFF_STATE.schema.json', '.github/scripts/HandoffSeal.mjs', '.github/scripts/Prepare-Handoff.mjs']);
+export function classifyRuleDrift({ pinned, live, changedPaths = null } = {}) {
+  if (!pinned || !live) return { status: 'UNAVAILABLE', action: 'STOP_AFFECTED' };
+  if (String(pinned.rule_version) === String(live.rule_version) && String(pinned.manifest_sha256).toLowerCase() === String(live.manifest_sha256).toLowerCase()) return { status: 'SAME', action: 'CONTINUE' };
+  const normalized = Array.isArray(changedPaths) ? changedPaths.map(value => String(value).replaceAll('\\', '/')) : null;
+  const affected = normalized === null || normalized.some(value => RULE_CRITICAL_PATHS.has(value) || RULE_CRITICAL_PATHS.has(path.basename(value)) || value.includes('/templates/'));
+  return affected ? { status: 'AFFECTED_RECHECK', action: 'REBASE' } : { status: 'NEWER_COMPATIBLE', action: 'CONTINUE' };
+}
 
 function readJson(file) {
   return JSON.parse(fs.readFileSync(file, 'utf8'));
@@ -328,8 +337,16 @@ export function prepareFormalHandoff(configPath) {
 
   const ruleManifestDigest = sha256(fs.readFileSync(manifestPath));
   const ruleManifest = verifyRuleManifest(ruleRoot, manifestPath);
+  const liveManifestPath = config.live_rule_manifest_path ? resolveFrom(configDir, config.live_rule_manifest_path) : null;
+  const liveRuleManifest = liveManifestPath ? verifyRuleManifest(ruleRoot, liveManifestPath) : null;
+  const liveRuleManifestDigest = liveManifestPath ? sha256(fs.readFileSync(liveManifestPath)) : ruleManifestDigest;
   const draft = readJson(draftPath);
-  if (draft.rule_baseline?.manifest_sha256?.toLowerCase() !== ruleManifestDigest.toLowerCase() || draft.rule_baseline?.rule_version !== ruleManifest.rule_version) throw new Error('rule baseline is stale: candidate was prepared under a different rule manifest');
+  if (draft.rule_baseline?.manifest_sha256?.toLowerCase() !== ruleManifestDigest.toLowerCase() || draft.rule_baseline?.rule_version !== ruleManifest.rule_version) throw new Error('RULE_REBASE_REQUIRED: candidate rule baseline is stale; rerun 1C/1D from the same breakpoint and current stable manifest');
+  if (liveRuleManifest) {
+    const drift = classifyRuleDrift({ pinned: { rule_version: ruleManifest.rule_version, manifest_sha256: ruleManifestDigest }, live: { rule_version: liveRuleManifest.rule_version, manifest_sha256: liveRuleManifestDigest } });
+    const declared = draft.rule_baseline?.compatibility ?? 'SAME';
+    if (drift.status !== declared && !(drift.status === 'SAME' && declared === 'NEWER_COMPATIBLE')) throw new Error(`RULE_REBASE_REQUIRED: live rule epoch is ${drift.status}; candidate declared ${declared}`);
+  }
   const existingSealState = verifyChain(realSealDirectory, { sourceRoot, externalControlPlaneRoot, verifyLatestSources: false });
   const hasLegacySealRecords = existingSealState.records.some(record => record.schema_version < 3);
   if (draft.handoff_phase === 'CURRENT_MIGRATION' && hasLegacySealRecords) {
@@ -467,7 +484,7 @@ export function prepareFormalHandoff(configPath) {
   const tempFd = fs.openSync(tempSnapshot, 'wx');
   try { fs.writeFileSync(tempFd, finalBytes); fs.fsyncSync(tempFd); } finally { fs.closeSync(tempFd); }
   try {
-    if (sha256(fs.readFileSync(manifestPath)) !== ruleManifestDigest) throw new Error('rule manifest drifted while preparing the attachment');
+    if (sha256(fs.readFileSync(manifestPath)) !== ruleManifestDigest) throw new Error('RULE_SOURCE_DRIFTED: rule manifest changed while preparing the attachment; mark candidate RULE_REBASE_PENDING and rerun from the same breakpoint');
     verifyRuleManifest(ruleRoot, manifestPath);
     const finalVerification = verifyChain(realSealDirectory, { sourceRoot, externalControlPlaneRoot });
     if (finalVerification.status !== 'PASS' || !finalVerification.handoff_ready || finalVerification.latest?.seal_digest !== seal.seal_digest || finalVerification.latest_source_status !== 'PASS') throw new Error(`facts drifted while rendering the attachment: ${finalVerification.errors.join('; ')}`);
@@ -485,6 +502,9 @@ export function prepareFormalHandoff(configPath) {
       fact_cutoff: seal.fact_cutoff,
       event_id: seal.event_id,
       rule_manifest_sha256: ruleManifestDigest,
+      rule_baseline: draft.rule_baseline ?? { rule_version: ruleManifest.rule_version, manifest_sha256: ruleManifestDigest, mode: 'LIVE', source_role: 'PUBLIC_RULE_SOURCE', compatibility: 'SAME', action: 'CONTINUE' },
+      rule_drift_status: draft.rule_baseline?.compatibility ?? 'SAME',
+      live_rule_manifest_sha256: liveRuleManifestDigest,
       unicode_inventory: inventory,
       verification: {
         tool: 'HandoffSeal.mjs',

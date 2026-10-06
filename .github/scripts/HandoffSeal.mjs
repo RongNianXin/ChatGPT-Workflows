@@ -24,6 +24,23 @@ export const sealDigest = seal => digest(canonicalJson(Object.fromEntries(Object
 export const transitionDigest = intent => digest(canonicalJson(Object.fromEntries(Object.entries(intent).filter(([key]) => key !== 'transition_digest'))));
 
 const fail = (errors, message) => errors.push(message);
+const RULE_BASELINE_KEYS = ['rule_version', 'manifest_sha256', 'mode', 'source_role', 'snapshot_ref', 'snapshot_sha256', 'observed_live_rule_version', 'observed_live_manifest_sha256', 'compatibility', 'action'];
+function validateRuleBaseline(value, errors) {
+  if (!value || typeof value !== 'object' || Array.isArray(value) || !exactKeys(value, RULE_BASELINE_KEYS) || typeof value.rule_version !== 'string' || !value.rule_version || !HEX.test(value.manifest_sha256 || '')) {
+    fail(errors, 'invalid rule baseline');
+    return;
+  }
+  if (value.mode !== undefined && !['LIVE', 'PINNED_SNAPSHOT'].includes(value.mode)) fail(errors, 'invalid rule baseline mode');
+  if (value.source_role !== undefined && !['PUBLIC_RULE_SOURCE', 'CANDIDATE_PINNED_BASELINE', 'PROJECT_ADOPTION_RECORD'].includes(value.source_role)) fail(errors, 'invalid rule baseline source_role');
+  if (value.snapshot_ref !== undefined && !relativeRef(value.snapshot_ref)) fail(errors, 'invalid rule baseline snapshot_ref');
+  if (value.snapshot_sha256 !== undefined && !HEX.test(value.snapshot_sha256 || '')) fail(errors, 'invalid rule baseline snapshot_sha256');
+  if (value.observed_live_rule_version !== undefined && (typeof value.observed_live_rule_version !== 'string' || !value.observed_live_rule_version)) fail(errors, 'invalid observed live rule version');
+  if (value.observed_live_manifest_sha256 !== undefined && !HEX.test(value.observed_live_manifest_sha256 || '')) fail(errors, 'invalid observed live manifest digest');
+  if (value.compatibility !== undefined && !['SAME', 'NEWER_COMPATIBLE', 'AFFECTED_RECHECK', 'INCOMPATIBLE', 'UNAVAILABLE'].includes(value.compatibility)) fail(errors, 'invalid rule compatibility');
+  if (value.action !== undefined && !['CONTINUE', 'REBASE', 'STOP_AFFECTED'].includes(value.action)) fail(errors, 'invalid rule action');
+  if (value.mode === 'PINNED_SNAPSHOT' && value.source_role !== 'CANDIDATE_PINNED_BASELINE') fail(errors, 'pinned rule baseline must identify candidate source role');
+  if (value.mode === 'PINNED_SNAPSHOT' && (!value.snapshot_ref || !value.snapshot_sha256)) fail(errors, 'pinned rule baseline requires snapshot reference and digest');
+}
 function verifySourceFiles(seal, sourceRoot, externalControlPlaneRoot) {
   if (!sourceRoot) return ['INPUT_REQUIRED: provide <source-root> to verify the code source'];
   let internalRoot;
@@ -49,6 +66,14 @@ function verifySourceFiles(seal, sourceRoot, externalControlPlaneRoot) {
         if (registryErrors.length) throw new Error(registryErrors.join('; '));
       }
     } catch (error) { errors.push(`source verification failed: ${name}: ${error.message}`); }
+  }
+  const baseline = seal.rule_baseline;
+  if (baseline?.mode === 'PINNED_SNAPSHOT') {
+    try {
+      const snapshot = fs.realpathSync(path.resolve(internalRoot, baseline.snapshot_ref));
+      if (!insideRoot(internalRoot, snapshot)) throw new Error('snapshot path escapes source root');
+      if (digest(fs.readFileSync(snapshot)) !== baseline.snapshot_sha256) throw new Error('snapshot digest mismatch');
+    } catch (error) { errors.push(`rule snapshot verification failed: ${error.message}`); }
   }
   return errors;
 }
@@ -162,7 +187,7 @@ export function validateSeal(seal, { checkDigest = true, requireExtensions = fal
   const rules = seal.rule_baseline;
   if (!rules && !requireExtensions) {
     // v3 records written before the rule-baseline extension remain readable history.
-  } else if (!exactKeys(rules, ['rule_version', 'manifest_sha256']) || typeof rules.rule_version !== 'string' || !rules.rule_version || !HEX.test(rules.manifest_sha256 || '')) fail(errors, 'invalid rule baseline');
+  } else validateRuleBaseline(rules, errors);
   if (!exactKeys(seal.objective, ['summary', 'breakpoint']) || typeof seal.objective.summary !== 'string' || typeof seal.objective.breakpoint !== 'string') fail(errors, 'objective summary/breakpoint required');
   if (!Array.isArray(seal.prohibitions) || seal.prohibitions.some(value => typeof value !== 'string')) fail(errors, 'prohibitions must be an array of strings');
   if (!exactKeys(seal.communications, ['status']) || !['NONE', 'AUTHORIZED', 'PENDING_CONFIRMATION', 'BLOCKED'].includes(seal.communications.status)) fail(errors, 'invalid communications status');

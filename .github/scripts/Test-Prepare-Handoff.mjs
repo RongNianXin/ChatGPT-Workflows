@@ -6,7 +6,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { detectUnicodeCollisions, findActiveControlPlaneIndexes, prepareFormalHandoff, readGitWorkspaceBaseline, readLiveRemoteBaseline, REQUIRED_RULES, verifyWorkspaceBaseline, verifyRuleManifest } from './Prepare-Handoff.mjs';
+import { classifyRuleDrift, detectUnicodeCollisions, findActiveControlPlaneIndexes, prepareFormalHandoff, readGitWorkspaceBaseline, readLiveRemoteBaseline, REQUIRED_RULES, verifyWorkspaceBaseline, verifyRuleManifest } from './Prepare-Handoff.mjs';
 
 const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'prepare-handoff-'));
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
@@ -18,6 +18,14 @@ const stamp = '2026-09-21T02:00:00.000Z';
 const LONG_STATUS_PATH = `状态/${'长目录'.repeat(30)}/${'嵌套'.repeat(30)}/索引.md`;
 let passed = 0;
 const check = (name, fn) => { fn(); passed++; console.log(`PASS: ${name}`); };
+
+check('rule drift classifier separates same, compatible, affected and unavailable epochs', () => {
+  const pinned = { rule_version: '2026-10-05.21', manifest_sha256: 'a'.repeat(64) };
+  assert.deepEqual(classifyRuleDrift({ pinned, live: pinned }), { status: 'SAME', action: 'CONTINUE' });
+  assert.deepEqual(classifyRuleDrift({ pinned, live: { rule_version: '2026-10-05.22', manifest_sha256: 'b'.repeat(64) }, changedPaths: ['06-复盘与优化规则.md'] }), { status: 'NEWER_COMPATIBLE', action: 'CONTINUE' });
+  assert.deepEqual(classifyRuleDrift({ pinned, live: { rule_version: '2026-10-05.22', manifest_sha256: 'b'.repeat(64) }, changedPaths: ['02-总指挥核心规则.md'] }), { status: 'AFFECTED_RECHECK', action: 'REBASE' });
+  assert.deepEqual(classifyRuleDrift({ pinned, live: null }), { status: 'UNAVAILABLE', action: 'STOP_AFFECTED' });
+});
 
 function writeCurrent(relative, body) {
   const absolute = path.join(sourceRoot, relative);
@@ -274,7 +282,7 @@ try {
   const sharedManifestBytes = fs.readFileSync(sharedManifest);
   fs.writeFileSync(sharedManifest, Buffer.concat([sharedManifestBytes, Buffer.from('\n')]));
   check('rule baseline drift supersedes a candidate', () => {
-    assert.throws(() => prepareFormalHandoff(staleRules.configPath), /rule baseline is stale/);
+    assert.throws(() => prepareFormalHandoff(staleRules.configPath), /RULE_REBASE_REQUIRED/);
     assert.equal(fs.existsSync(staleRules.finalPath), false);
   });
   fs.writeFileSync(sharedManifest, sharedManifestBytes);

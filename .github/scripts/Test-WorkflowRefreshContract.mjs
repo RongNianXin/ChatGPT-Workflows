@@ -43,6 +43,13 @@ const checks = [
 ];
 checks.push(['local-to-remote route keeps release separate', `${read('01-操作者操作手册.md')}\n${read('02-总指挥核心规则.md')}`, ['场景 4K：将本地最新成果同步到远端', '不必先决定是否提 PR', '同步源码不会自动生成下载页中的新 Release', '精确纳入/排除范围']]);
 checks.push(['PR scope and local sync follow project rules', `${read('01-操作者操作手册.md')}\n${read('02-总指挥核心规则.md')}`, ['操作者不必先划定可验收范围', '个人项目可以建议直接 Push', '团队项目必须先遵守团队规则', '多个功能不自动合成一个 PR', '不能绕过隐私、验证和远端最终确认']]);
+checks.push(['handoff identity conflict has migration split', read('项目配置迁移清单.md'), ['CONTROL_PLANE_MIGRATION_REQUIRED', 'CONTROL_IDENTITY_CONFLICT', '操作者称呼或确认本身不能替代', '不覆盖旧记录、不生成新封条']]);
+checks.push(['platform thread failure freezes handoff writes', read('04-状态、目标变更与交接规范.md'), ['thread not found', '暂停控制面写入、封条追加和正式切换', '不能据此证明或否定', '重新读取状态索引']]);
+checks.push(['empty cross-task output is an explicit failure', read('09-自动化授权与风险分级.md'), ['目标任务完成但最终文本为空', '不得写成 `RECEIVED`、`COMPLETED`', '非空的 `BLOCKED` 或 `FAILED`', '空输出不能作为成功回执']]);
+checks.push(['operator-visible receipt precedes tools and blocks empty closeout', `${read('09-自动化授权与风险分级.md')}\n${fs.readFileSync(path.join(root, 'AGENTS.md'), 'utf8')}`, ['第一项可观察动作必须是当前窗口向操作者输出非空的收件状态', '只能记为 `OUTPUT_UNVERIFIED/BLOCKED`', '暂停恢复原主线', '本地反馈不产生对外发送权限']]);
+checks.push(['core rules carry the cross-project closeout hard gate', read('02-总指挥核心规则.md'), ['总指挥核心收口硬门', '无对外回执授权', '必须先向当前操作者输出非空的收件状态', '所有启用本工作流的项目均适用', '`AGENTS.md` 只能作为本项目附加护栏']]);
+checks.push(['rule refresh separates adoption record from identity control', `${read('规则刷新广播包.md')}\n${read('09-自动化授权与风险分级.md')}`, ['规则采用记录', 'RULE_ADOPTION=PASS', 'PROJECT_REGISTRATION=SYNC_PENDING', '不得修改总指挥、唯一写者、CURRENT', '正式交接前必须由项目唯一写者处理']]);
+checks.push(['rule drift has automatic rebase without operator version choice', `${read('规则刷新广播包.md')}\n${read('01-操作者操作手册.md')}\n${read('02-总指挥核心规则.md')}\n${read('04-状态、目标变更与交接规范.md')}\n${read('10-自动状态索引规范.md')}`, ['rule_baseline', 'RULE_REBASE_PENDING', 'SUPERSEDED_BY_RULE_REBASE', '不要求操作者选择版本', '只暂停受影响阶段', 'PINNED_CURRENT / RULE_REBASE_PENDING / REBASED / REBASE_BLOCKED']]);
 checks.push(['feedback triages before costly 2C and repairs within scope', `${read('01-操作者操作手册.md')}\n${read('docs/PIPELINE_DIAGNOSIS_AND_ALGORITHM_TUNING_STANDARD.md')}`, ['先描述现象；AI 定点核对后决定是否进入 2C', '最小定点核对后仍无法定位', '原因及修复边界已有可靠证据的，在现有授权内局部修复与回归', '已有同一问题的修复授权时直接修复与回归', '仅报结果且没有开放目标', '一次列明拟改范围、影响和验证以请求差额授权']]);
 checks.push(['workflow entry points load triage before full diagnosis', `${read('00-第二代工作流总览.md')}\n${read('02-总指挥核心规则.md')}\n${read('docs/WORKFLOW_OVERVIEW.md')}`, ['先读 `docs/PIPELINE_DIAGNOSIS_AND_ALGORITHM_TUNING_STANDARD.md` 的 2.1 做最小分流', '先读取 `docs/PIPELINE_DIAGNOSIS_AND_ALGORITHM_TUNING_STANDARD.md` 的 2.1 并完成最小定点核对', '2E 失败反馈先按 2.1 最小分流']]);
 checks.push(['diagnosis keeps node-level evidence while reporting results first', `${read('00-第二代工作流总览.md')}\n${read('01-操作者操作手册.md')}\n${read('docs/PIPELINE_DIAGNOSIS_AND_ALGORITHM_TUNING_STANDARD.md')}`, ['逐项核对输入、处理、输出、不变量、观测证据和失败信号', '可证伪对照验证根因', '默认先报告复现和版本', '完整节点和证据留在工作项中供回查', '复杂分叉、证据争议']]);
@@ -70,7 +77,7 @@ checks.push(['scenario 0B operator prompt is Chinese-first', read('01-操作者�
 const manual = read('01-操作者操作手册.md');
 const scene0A = manual.split('### 场景 0A：')[1]?.split('### 场景 0B：')[0] || '';
 const scene0B = manual.split('### 场景 0B：')[1]?.split('### 兼容分支：')[0] || '';
-checks.push(['0A acts only on its direct receiver', scene0A, ['这条指令只针对当前正在与我对话的 AI', '无论你是总指挥、普通任务还是专项任务', '不要替其他对话更新，也不要盘点其他对话、向它们广播或转达指令', '只暂停需要确认身份才能执行的动作，仍可完成普通规则刷新']]);
+checks.push(['0A acts only on its direct receiver', scene0A, ['这条指令只针对当前正在与我对话的 AI', '无论你是总指挥、普通任务还是专项任务', '不要替其他对话更新，也不要盘点其他对话、向它们广播或转达指令', '只暂停需要确认身份才能执行的动作，仍可完成普通规则刷新', 'RULE_SOURCE_STATUS', 'PROJECT_ADOPTION_RECORD', 'live_rule_epoch', '不要让我在版本之间选择']]);
 checks.push(['0B is commander-only and project-scoped', scene0B, ['只发给已核验的本项目现任总指挥', '可以只指定一个专项', '不得跨项目转达', '不是或无法确认时停止转达', '由AI核对唯一对象']]);
 const legacy0C = manual.split('### 兼容分支：把已运行项目的现有窗口接入工作流（原场景 0C）')[1]?.split('```text')[1]?.split('```')[0] || '';
 checks.push(['legacy 0C copy block preserves current 0B gates', legacy0C, ['本旧入口按现行0B处理', '本项目现任总指挥，否则停止转达', '本项目当前清单中全部可核验子任务', '不扩大到其他项目', '不迁移控制面']]);
@@ -92,7 +99,8 @@ checks.push(['handoff content reconciles before sealing', `${read('01-操作者�
 checks.push(['handoff preflight closes before snapshot', `${read('01-操作者操作手册.md')}\n${read('02-总指挥核心规则.md')}\n${read('总指挥轻量交接启动配置.md')}`, ['场景 1B：交接预处理与收口判断', '不生成 `final-*`', '不存在“场景 EC”', '1B→1C', '本地与远端尚未同步', '低风险、可回滚']]);
 checks.push(['handoff identity gate rejects mis-sent commander prompt', `${read('00-第二代工作流总览.md')}\n${read('01-操作者操作手册.md')}\n${read('02-总指挥核心规则.md')}`, ['1C 是总指挥必经入口并自带最小可行性预检和身份硬门禁', '当前窗口不是总指挥，可能误发了场景 1C', '不得生成、覆盖、删除 `final-*`', '普通或专项任务即使收到 1C 提示词，也不得升级身份', '改用场景 1E/1F']]);
 checks.push(['handoff continuation and scoped automation', `${read('01-操作者操作手册.md')}\n${read('02-总指挥核心规则.md')}`, ['“继续”只有在上一轮明确给出可进入下一阶段且当前基线未漂移时才沿用', '只记录与本任务或项目有明确绑定证据的自动化', '不得扫描或列出账户级、其他项目或无绑定证据的自动化', '无；未扫描账户级任务']]);
-checks.push(['handoff baseline is frozen only until takeover', `${read('01-操作者操作手册.md')}\n${read('04-状态、目标变更与交接规范.md')}\n${read('总指挥轻量交接启动配置.md')}`, ['规则版本和 manifest 必须保持冻结', '当前候选标为 `SUPERSEDED`', '普通进度更新不要求重新生成候选附件', '只有新规则明确改变当前授权、单写者、安全边界或正在进行的高影响动作时']]);
+checks.push(['handoff baseline separates pinned snapshot, live epoch and adoption record', `${read('01-操作者操作手册.md')}\n${read('04-状态、目标变更与交接规范.md')}\n${read('总指挥轻量交接启动配置.md')}\n${read('交接阶段矩阵.md')}\n${read('07-总指挥交接记录模板.md')}`, ['候选 `rule_baseline` 快照', '公共规则源 `live_rule_epoch`', '项目登记采用记录', '`RULE_REBASE_PENDING`', '`NEWER_COMPATIBLE`', '`AFFECTED_RECHECK`', '`SUPERSEDED_BY_RULE_REBASE`', '不要求操作者选择旧/新版本']]);
+checks.push(['workflow enablement does not confuse rule source with project adoption', `${read('../工作流启用声明.md')}\n${fs.readFileSync(path.join(root, 'AGENTS.md'), 'utf8')}\n${read('规则刷新广播包.md')}\n${read('规则刷新接收回执模板.md')}`, ['RULE_SOURCE_STATUS', 'PROJECT_ADOPTION_RECORD', '项目登记旧指纹或待同步不否定规则刷新', 'RULE_ADOPTION_RECORD：SYNCED / SYNC_PENDING', '只有依赖控制面的动作标记 `UNKNOWN/BLOCKED`']]);
 checks.push(['handoff verification is executable and layered', `${read('07-总指挥交接记录模板.md')}\n${read('01-操作者操作手册.md')}`, ['封条验证入口', '直接使用其中的完整命令', '`INPUT_REQUIRED`', '不得把调用缺参写成来源损坏']]);
 checks.push(['handoff candidate reply is human-first', `${read('01-操作者操作手册.md')}\n${read('04-状态、目标变更与交接规范.md')}\n${read('总指挥轻量交接启动配置.md')}\n${read('07-总指挥交接记录模板.md')}`, ['默认先用四句人话回答', '真正阻断', '默认不展示机器字段', '只有操作者明确要求技术细节', '不得把 `NOT_RUN`、`GENERATED_NOT_DELIVERED`', '不阻止当前候选阶段，写入“补充限制”而不是“真正阻断”', '下列字段只供机器记录和异常定位']]);
 checks.push(['handoff preflight is first gate and candidate is unique', `${read('04-状态、目标变更与交接规范.md')}\n${read('10-自动状态索引规范.md')}\n${read('06-复盘与优化规则.md')}`, ['把 `preflight_only` 当作第一道机器门', '固定 `fact_cutoff`', 'SUPERSEDED', '有限重试和退避', '当前唯一 active candidate', '附件与封条保持两阶段']]);
@@ -136,6 +144,42 @@ for (const [name, input, expected] of routeCases) {
   } else console.log(`PASS: synthetic cross-task route ${name}`);
 }
 if (!failed) console.log('PASS: cross-task route cases are synthetic contract checks, not live Agent behavior');
+const receiptOutcome = ({ operatorFeedback, sourceReplyAuth, sourceReplyResult, finalText }) => {
+  if (!operatorFeedback || !finalText?.trim()) return 'OUTPUT_UNVERIFIED/BLOCKED';
+  if (sourceReplyAuth && !sourceReplyResult) return 'BLOCKED';
+  if (!sourceReplyAuth) return 'LOCAL_FEEDBACK_ONLY';
+  return sourceReplyResult;
+};
+const receiptCases = [
+  ['no source authorization still reports locally', { operatorFeedback: true, sourceReplyAuth: false, finalText: '已收到，未向来源回执。' }, 'LOCAL_FEEDBACK_ONLY'],
+  ['missing operator feedback blocks even with tool success', { operatorFeedback: false, sourceReplyAuth: true, sourceReplyResult: 'COMPLETED', finalText: '' }, 'OUTPUT_UNVERIFIED/BLOCKED'],
+  ['blank final text cannot close a successful tool call', { operatorFeedback: true, sourceReplyAuth: true, sourceReplyResult: 'COMPLETED', finalText: '   ' }, 'OUTPUT_UNVERIFIED/BLOCKED'],
+  ['send tool failure remains a failed source route', { operatorFeedback: true, sourceReplyAuth: true, sourceReplyResult: 'FAILED', finalText: '已收到，向来源回执失败。' }, 'FAILED'],
+  ['valid two-channel completion remains reportable', { operatorFeedback: true, sourceReplyAuth: true, sourceReplyResult: 'COMPLETED', finalText: '已收到并完成处理。' }, 'COMPLETED']
+];
+for (const [name, input, expected] of receiptCases) {
+  const actual = receiptOutcome(input);
+  if (actual !== expected) { failed += 1; console.error(`FAIL: synthetic cross-task receipt ${name}: ${actual} <> ${expected}`); }
+  else console.log(`PASS: synthetic cross-task receipt ${name}`);
+}
+if (!failed) console.log('PASS: cross-task receipt cases are synthetic contract checks, not live Agent behavior');
+const rebaseOutcome = ({ sourceStable, impact, rebasePass }) => {
+  if (!sourceStable) return 'REBASE_BLOCKED';
+  if (!rebasePass) return 'REBASE_BLOCKED';
+  return impact === 'identity-permission-security' ? 'REBASE_REQUIRED' : 'REBASED';
+};
+const rebaseCases = [
+  ['stable compatible update rebases automatically', { sourceStable: true, impact: 'documentation', rebasePass: true }, 'REBASED'],
+  ['identity or security change requires affected-stage recheck', { sourceStable: true, impact: 'identity-permission-security', rebasePass: true }, 'REBASE_REQUIRED'],
+  ['unstable source blocks only rebase-dependent stage', { sourceStable: false, impact: 'documentation', rebasePass: false }, 'REBASE_BLOCKED'],
+  ['failed rebase never preserves old ready state', { sourceStable: true, impact: 'documentation', rebasePass: false }, 'REBASE_BLOCKED']
+];
+for (const [name, input, expected] of rebaseCases) {
+  const actual = rebaseOutcome(input);
+  if (actual !== expected) { failed += 1; console.error(`FAIL: synthetic rule rebase ${name}: ${actual} <> ${expected}`); }
+  else console.log(`PASS: synthetic rule rebase ${name}`);
+}
+if (!failed) console.log('PASS: rule rebase cases are synthetic contract checks, not live Agent behavior');
 if (failed) process.exit(1);
 const scoreControlConfidence = ({ controlEvidence, switchStatus, oldWriterStatus, editorBuffer, runtime, professional }) => {
   if (controlEvidence !== 'PASS') return 'MEDIUM';
