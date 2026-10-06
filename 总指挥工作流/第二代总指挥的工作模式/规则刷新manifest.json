@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "rule_version": "2026-10-06.34",
+  "rule_version": "2026-10-06.35",
   "scope": "core_workflow_full",
   "path_base": "rule_root",
   "repository_root_ref": "../..",
@@ -27,7 +27,7 @@
     },
     {
       "path_ref": "00-第二代工作流总览.md",
-      "sha256": "354C11D618D13B30C49DB793A7D8F5E3CAFADCEC1891C1C6A4081C4807CD1F4A"
+      "sha256": "06C5886490BEE5A71C09EA43C23CBA6E9B714E003BF17B2800ABB092E89A9D3F"
     },
     {
       "path_ref": "01-操作者操作手册.md",
@@ -35,7 +35,7 @@
     },
     {
       "path_ref": "02-总指挥核心规则.md",
-      "sha256": "C85433DC6251A65A4D4BD88C4C4318D3FE06AB13E7880A8AA0909145CD9ACC8A"
+      "sha256": "36A6C50EC76BC56954C75A0F33714366C01DF8A5410D57CCC5B7C96A72073C07"
     },
     {
       "path_ref": "03-专项任务卡模板.md",
@@ -51,7 +51,7 @@
     },
     {
       "path_ref": "06-复盘与优化规则.md",
-      "sha256": "9E0178E5735DF4E1262046C0A006DC6E60A951B245C71400BEACD5947A640149"
+      "sha256": "0B80D18083705DF2345D0FAF1E7D8122E326FFAE0FC9D3DD7F59FDEE0D310A10"
     },
     {
       "path_ref": "07-总指挥交接记录模板.md",
@@ -63,11 +63,11 @@
     },
     {
       "path_ref": "09-自动化授权与风险分级.md",
-      "sha256": "573C74E020A22541523AAE4ADE926B34C16CCFC915DE287003A2138F58C2AF94"
+      "sha256": "73C45DEB741F6F96516100D736A01718FBFD2F97F62C24DF7797D5CEE1DF95BD"
     },
     {
       "path_ref": "10-自动状态索引规范.md",
-      "sha256": "B892BF2635F08182CF8B90072E8011456C717A8489E8B8F8A1419A0541370237"
+      "sha256": "2E2B1E207899DCD27A258990EE5E232A78644E4377113EC4396F103D0D87FC84"
     },
     {
       "path_ref": "11-操作者协作画像规范.md",
@@ -83,7 +83,7 @@
     },
     {
       "path_ref": "总指挥轻量交接启动配置.md",
-      "sha256": "FA87069C0A0902EA81EFCB13DDEC4657C7A2A37895065158C61E66EEF67AC5FE"
+      "sha256": "49D8B455105232670AEEF96389E9A9A8F7169E5351F640B3CD85D1857615E40D"
     },
     {
       "path_ref": "templates/HANDOFF_STATE.schema.json",
