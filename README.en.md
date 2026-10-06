@@ -35,29 +35,14 @@ The public content currently falls into six groups: ChatGPT web enhancements, th
 
 Most of the repository is Markdown and PowerShell rather than a hosted service or opaque automation layer. Public files are designed not to contain local identities, real task IDs, credentials, or private prompts.
 
-## What's new: evolving assessment, interface, recovery, and external-tool capabilities
+## What this update does for you
 
-- **Handoff and remote-sync flow are now tighter:** handoff preflight checks seal sources, worktree content fingerprints, and the remote baseline together. Candidate windows start with four plain-language lines, while remote-sync requests pass through local inventory, verification, and authorization gates.
-- **The session handoff evaluator keeps growing:** what began as task lookup and saving now includes a Windows desk, historical results and reports, handoff scoring, tiered reminders, and legacy-data compatibility. Its algorithm and visual style have both been revised.
-- **More recovery and troubleshooting capability:** an archive-path repair tool was added, while cross-window handoff, automation-result association, long sessions, and client failures were organized into searchable troubleshooting material.
-- **A more complete delivery surface:** offline Markdown reading, redacted real-run previews, a Chinese source of truth, and an English entry now let rules, tools, and showcase material evolve separately.
-- **Tighter evidence boundaries:** handoff checks separate the Git baseline, uncommitted changes, dependencies and builds, runtime identity, and input acceptance; the rules also distinguish research notes from verified results.
-- **External-tool integration is now documented:** `引用的外部工具/` provides one place to discover third-party roles, CLIs, and services with explicit status and permission boundaries. `EXT-001 Agency Agents` supplies specialist methods, while `EXT-002 CLI-Anything` exposes real software through agent-usable CLIs. Registration does not mean installation or activation; each first use starts with a read-only suitability check and evidence-based validation.
+- **Safer handoffs:** before moving to a new task, the workflow checks the current state, unsaved work, and remote version so work is less likely to be mixed up or overwritten.
+- **Clearer cross-task messages:** it distinguishes “sent,” “received,” and “confirmed,” so you can see how far a request has actually progressed.
+- **Easier troubleshooting:** common problems are grouped by what you see, with a clear distinction between verified fixes and open leads.
+- **Safer external-tool trials:** the workflow checks whether a tool fits the goal first, then explains installation, permissions, verification, and rollback instead of installing a tool just because its name appears.
 
 This is a concise synthesis of the visible history and current files. See the [changelog](CHANGELOG.md) for exact status, unverified limits, and candidate roadmap items.
-
-## Earlier improvements: evidence-backed simplification and reproducible delivery
-
-Establish the current baseline before deciding what to simplify, how to verify it, and how to hand it over. This update strengthens four capabilities:
-
-| Improvement | What it means for users |
-| --- | --- |
-| [Code simplification: scenario 2B (legacy 2G)](总指挥工作流/第二代总指挥的工作模式/01-操作者操作手册.md#场景-2b保持功能不变精简现有代码) | Establish that code can safely be removed or consolidated, then demonstrate a practical benefit while meeting non-regression requirements. Fewer lines are not enough; a higher aggregate score cannot hide worse results on critical cases. Leaving code unchanged is valid when the benefit is insufficient. |
-| [PR descriptions and delivery](总指挥工作流/第二代总指挥的工作模式/docs/PR_SUBMISSION_AND_REVIEW_STANDARD.md) | Explain why the change is needed, what changed, and which inputs, steps, and expected results verify it. Standard test commands remain useful but do not replace evidence specific to the change. |
-| [Cross-machine reproduction and performance diagnosis](总指挥工作流/第二代总指挥的工作模式/docs/PIPELINE_DIAGNOSIS_AND_ALGORITHM_TUNING_STANDARD.md#跨机器效果与速度差异对照) | Check the actual code, configuration, models, inputs, and access to required resources. Separate output differences from timing differences, and verify the actual delivered result after merging rather than relying on “it works on my machine.” |
-| [Natural-language entry](总指挥工作流/第二代总指挥的工作模式/01-操作者操作手册.md#统一入口描述目标由-ai-核对场景) | Once the rule directory is registered, describe your goal without memorizing scenario numbers or fixed phrases. The AI selects the workflow using the goal, current state, and permissions. Publishing requests load delivery checks without forcing a PR when none is needed. |
-
-Scene 2 is the ordinary target entry; 2B covers behavior-preserving code simplification, and Scene 5 covers execution with independent review. Legacy numbering remains only as compatibility aliases and grants no new authorization. These rules do not guarantee equal speed on arbitrary machines or correct execution by every AI; actual outcomes require verification, and team rules and authorization boundaries still take precedence. See the [bilingual changelog](CHANGELOG.md). The linked detailed guides are currently in Chinese.
 
 ## What the commander workflow provides
 
@@ -99,7 +84,7 @@ The detailed manuals are currently written in Chinese. This page is an evaluatio
 ### Use the Codex commander workflow
 
 1. Download or clone this repository.
-2. Open the [operator manual](总指挥工作流/第二代总指挥的工作模式/01-操作者操作手册.md). The bundled Markdown reader exposes a left sidebar tree; expand Scene 1–6 and click a child scene to jump directly to its prompt.
+2. Open the [operator manual](总指挥工作流/第二代总指挥的工作模式/01-操作者操作手册.md). The bundled Markdown reader exposes a left sidebar tree; expand Scene 1–6 and click a child scene to jump directly to its prompt. “Register the rule directory” simply tells the current project's AI where to read these rules; it does not mean that you are developing this repository.
 3. In the project you actually want Codex to work on, start a new Codex task and adapt this instruction:
 
    ```text
@@ -182,4 +167,4 @@ Released under the [MIT License](LICENSE).
 
 This project acknowledges the [LINUX DO](https://linux.do/) community and supports sincere, friendly knowledge sharing and exchange.
 
-<!-- README-SOURCE-SHA256: 8a6c26174be5e8604dd02221d14e5a80655c2925084c36b49f98a9c66179c12b -->
+<!-- README-SOURCE-SHA256: b9bf031052c229c74dc1139c488e15e79b365ffc62cda4e43c0fef1407c9384e -->
