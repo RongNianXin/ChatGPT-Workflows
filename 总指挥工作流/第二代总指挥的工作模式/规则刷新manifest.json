@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "rule_version": "2026-10-06.24",
+  "rule_version": "2026-10-06.25",
   "scope": "core_workflow_full",
   "path_base": "rule_root",
   "repository_root_ref": "../..",
@@ -27,15 +27,15 @@
     },
     {
       "path_ref": "00-第二代工作流总览.md",
-      "sha256": "AA22C4D80A1588E07B10F557507809B19CF1BB3A8BB4C8C39F04AEA06C3C2206"
+      "sha256": "3C1CD643A2F1B7779442EA59AD04462A9AE83ADBC2B8C29B6DAB28C7F44BFDB2"
     },
     {
       "path_ref": "01-操作者操作手册.md",
-      "sha256": "2DC821A965F19D9664C07FA62722BA2A79E7FF89D5733414237FCBD1AF49B67C"
+      "sha256": "04839A8CA457AEDF345C772DA47868914F20731100F4CFFE11DD31044D98F3E1"
     },
     {
       "path_ref": "02-总指挥核心规则.md",
-      "sha256": "D4580179C2723C109ED25A28F2B0D3F8308F4145ADD6D71174D4E25702369106"
+      "sha256": "A34699D1FCE26C9CD002F695D7F77DD846431B32E1437F235EAF52B518745DB8"
     },
     {
       "path_ref": "03-专项任务卡模板.md",
@@ -63,11 +63,11 @@
     },
     {
       "path_ref": "09-自动化授权与风险分级.md",
-      "sha256": "EEC3109C565E0919018A22220E5BCF919287E4E09C6A0C7ED8D7BFBF3EAAFB5F"
+      "sha256": "F3F914A53C5FDAE0754B7688CAED2F8D19B961EB2814AC4CA6E59A3BBB0EA420"
     },
     {
       "path_ref": "10-自动状态索引规范.md",
-      "sha256": "77B8D5BAE1E6370ED15074F65C69DA69D441CBA8EDE79BDC6FA000EB01654248"
+      "sha256": "0EDE5965180853D3891837C31575FD66666B3B3B5FB9B2048DB146395556E2C6"
     },
     {
       "path_ref": "11-操作者协作画像规范.md",
@@ -83,7 +83,7 @@
     },
     {
       "path_ref": "总指挥轻量交接启动配置.md",
-      "sha256": "AEAE1140C0374F4155B35B08A348D2CCD9E8027AECBF0C63824726A98C5E922C"
+      "sha256": "947842943099A38267798D3BEDE9EBB9D4EAFEB38E356B25A495FFACA58EE19F"
     },
     {
       "path_ref": "templates/HANDOFF_STATE.schema.json",
