@@ -1908,3 +1908,9 @@ The roadmap items above are candidates only. Before every commit, update this ch
 - 修正规则刷新广播包与回执模板中“处理已收口”和“加载成功”的状态混淆，最终结果统一使用 `result：PASS/FAIL`，并把 `RULE_REFRESH`、`PROJECT_ENROLLMENT`、`IDENTITY_CONTROL_PLANE` 分开记录。
 - 明确单次工具输出截断只要求继续按稳定字节范围分段读取，不等于规则来源损坏；加载记录需保存 `text_reading`、分段范围和终点复核。
 - 增加规则契约断言，防止项目未接入或身份未请求再次阻断普通规则刷新。未执行项目接入、产品修改或远端写入。
+## 2026-10-06：补充 Goal 阶段收口回执与完成判定
+
+- Goal 现在区分 `PLAN_ONLY`、`IMPLEMENT_AND_VERIFY` 和 `HYBRID`，方案阶段完成不能自动代替产品实现或验证。
+- 每次业务波次或周期停止时，必须汇报本轮完成目标、停止条件及证据、剩余目标和精确断点，并分开说明业务状态与平台 Goal 状态。
+- 明确 `CYCLE_STOPPED`、`PAUSE_REQUIRED`、`BLOCKED` 不等于 Goal 完成、取消或清除；只有操作者明确取消/替换且平台回读已清除，才可这样报告。
+- 规则版本升至 `2026-10-06.34`；契约测试和仓库质量检查通过。
