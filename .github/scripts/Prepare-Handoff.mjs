@@ -298,6 +298,46 @@ function atomicWriteExclusive(finalPath, bytes) {
   fs.unlinkSync(tempPath);
 }
 
+function hydrateSnapshotTemplate(template, { draft, sourceRoot, externalControlPlaneRoot, ruleRoot, ruleManifest, ruleManifestDigest, sealDirectory, receiptPath }) {
+  const machineRecord = draft.sources?.handoff_inventory?.path_ref
+    ? resolveSource(draft.sources.handoff_inventory, sourceRoot, externalControlPlaneRoot, 'handoff_inventory')
+    : '待见机器记录';
+  const rows = [
+    ['总指挥轻量交接启动配置.md', ruleManifest.rules.find(item => item.path_ref === '总指挥轻量交接启动配置.md')?.sha256],
+    ...['02-总指挥核心规则.md', '04-状态、目标变更与交接规范.md', '07-总指挥交接记录模板.md', '09-自动化授权与风险分级.md', '10-自动状态索引规范.md']
+      .map(name => [name, ruleManifest.rules.find(item => item.path_ref === name)?.sha256])
+  ];
+  // Synthetic unit-test manifests may intentionally contain only a minimal rule set;
+  // production manifests are checked by Inspect-RuleRefresh before this path.
+  if (rows.some(([, digest]) => !digest)) return template;
+  const baseline = [
+    '## 轻量加载基线', '',
+    `完整读取“总指挥轻量交接启动配置.md”（版本${ruleManifest.rule_version}），自行建立加载记录。以下路径均相对规则根；指纹一致时候选不全文读取02/04/07/09/10，冲突或下一动作依赖才展开受影响正文。`, '',
+    '| 文件 | SHA-256 |', '|---|---|',
+    ...rows.map(([name, digest]) => `| ${name} | ${digest} |`), '',
+    `规则总清单：规则刷新manifest.json，SHA-256=${ruleManifestDigest}。必要未提交测试为${draft.workspace?.required_untracked?.map(item => item.path_ref).join('、') || '无'}；全部保留清单及工作区聚合指纹见机器记录与封条。`, ''
+  ].join('\n');
+  let rendered = template.replace(/## 轻量加载基线[\s\S]*?(?=\n## 使用边界)/, baseline);
+  const replacements = new Map([
+    ['{{SOURCE_ROOT}}', sourceRoot],
+    ['{{RULE_ROOT}}', ruleRoot],
+    ['{{SEAL_DIRECTORY}}', sealDirectory],
+    ['{{MACHINE_RECORD}}', machineRecord],
+    ['{{RECEIPT_PATH}}', receiptPath],
+  ]);
+  for (const [token, value] of replacements) rendered = rendered.replaceAll(token, value);
+  rendered = rendered.replace(/^- 项目根：.*$/m, `- 项目根：${sourceRoot}`)
+    .replace(/^- 规则根：.*$/m, `- 规则根：${ruleRoot}`)
+    .replace(/^- 本轮规则版本：.*$/m, `- 本轮规则版本：${ruleManifest.rule_version}`)
+    .replace(/^- 机器记录：.*$/m, `- 机器记录：${machineRecord}`)
+    .replace(/^- 当前封条目录：.*$/m, `- 当前封条目录：${sealDirectory}`)
+    .replace(/^- 独立生成回执：.*$/m, `- 独立生成回执：${receiptPath}；生成未发送是正常状态，本附件实际收到才构成送达，不继承旧回执。`);
+  if (rendered.includes('2534edaee5ebf7e06111e662a0f99b73c75419795a49c242c0f04a880b138e8c') || rendered.includes('230eb69c68b8b5bc346564dd4c6104f460d3a6cea7822f1f563bde8d1ec01525')) {
+    throw new Error('snapshot template contains a stale rule fingerprint');
+  }
+  return rendered;
+}
+
 export function prepareFormalHandoff(configPath) {
   const absoluteConfig = path.resolve(configPath);
   const configDir = path.dirname(absoluteConfig);
@@ -383,7 +423,9 @@ export function prepareFormalHandoff(configPath) {
 
   // Validate and render the template before appending an immutable seal. A malformed
   // delivery template must not advance the seal chain without producing an artifact.
-  let rendered = fs.readFileSync(templatePath, 'utf8');
+  let rendered = hydrateSnapshotTemplate(fs.readFileSync(templatePath, 'utf8'), {
+    draft, sourceRoot, externalControlPlaneRoot, ruleRoot, ruleManifest, ruleManifestDigest, sealDirectory, receiptPath
+  });
   const snapshotId = path.basename(finalPath, '.md');
   const templateTokens = ['{{SNAPSHOT_ID}}', '{{SEAL_DIGEST}}', '{{FACT_CUTOFF}}', '{{EVENT_ID}}'];
   for (const token of templateTokens) if (!rendered.includes(token)) throw new Error(`snapshot template is missing placeholder: ${token}`);
@@ -400,22 +442,40 @@ export function prepareFormalHandoff(configPath) {
   const workspaceErrors = verifyWorkspaceBaseline(sourceRoot, draft.workspace);
   if (workspaceErrors.length) throw new Error(`preflight workspace verification failed: ${workspaceErrors.join('; ')}`);
   if (draft.remote?.status === 'PASS') {
-    const liveRemote = readLiveRemoteBaseline(sourceRoot, draft.remote.default_ref);
+    let liveRemote;
+    try {
+      liveRemote = readLiveRemoteBaseline(sourceRoot, draft.remote.default_ref);
+    } catch (error) {
+      // Only failed observation may be downgraded. An observed HEAD conflict
+      // remains a drift error even for a restricted candidate.
+      if (draft.switch_status !== 'READY_WITH_RESTRICTIONS') throw error;
+      draft.remote = { status: 'UNKNOWN', default_ref: draft.remote.default_ref, head: null, observed_at: null };
+      draft.control_handoff_confidence = 'MEDIUM';
+      draft.candidate_verification_status = 'PASS_WITH_RESTRICTIONS';
+    }
     if (liveRemote) {
-      if (liveRemote.head !== String(draft.remote.head || '').toLowerCase()) {
-        throw new Error(`preflight remote baseline drift: expected ${draft.remote.head}, found ${liveRemote.head}`);
-      }
-      // Bind the seal to the same observation that passed the final probe.
-      // The draft is an input; do not rewrite it on disk or create a second
-      // central state source.
-      draft.remote.head = liveRemote.head;
-      draft.remote.observed_at = liveRemote.observed_at;
-      draft.fact_cutoff = liveRemote.observed_at;
-      draft.sealed_at = liveRemote.observed_at;
+        if (liveRemote.head !== String(draft.remote.head || '').toLowerCase()) {
+          throw new Error(`preflight remote baseline drift: expected ${draft.remote.head}, found ${liveRemote.head}`);
+        }
+        // A retry for the same event must reuse the immutable observation that
+        // already belongs to its seal.  Replacing only the timestamp on every
+        // retry would make an otherwise reusable seal look different.
+        const prior = existingSealState.latest;
+        if (prior?.event_id === draft.event_id && prior.remote?.head === liveRemote.head) {
+          draft.remote.head = prior.remote.head;
+          draft.remote.observed_at = prior.remote.observed_at;
+          draft.fact_cutoff = prior.fact_cutoff;
+          draft.sealed_at = prior.sealed_at;
+        } else {
+          draft.remote.head = liveRemote.head;
+          draft.remote.observed_at = liveRemote.observed_at;
+          draft.fact_cutoff = liveRemote.observed_at;
+          draft.sealed_at = liveRemote.observed_at;
+        }
     }
   }
   if (preflightOnly) return {
-    status: 'READY',
+    status: draft.switch_status === 'READY_WITH_RESTRICTIONS' ? 'READY_WITH_RESTRICTIONS' : 'READY',
     mode: 'PREFLIGHT_ONLY',
     project_key: config.project_key,
     source_root: sourceRoot,

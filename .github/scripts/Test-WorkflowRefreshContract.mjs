@@ -18,6 +18,7 @@ const REFRESH_REQUIRED_RULES = [
   '总指挥轻量交接启动配置.md',
   '规则刷新广播包.md',
   '规则刷新接收回执模板.md',
+  'docs/EXECUTION_AND_INDEPENDENT_REVIEW.md',
   '引用的外部工具/外部工具目录.md',
   '引用的外部工具/外部工具自动对接规范.md'
 ];
@@ -112,7 +113,7 @@ checks.push(['handoff candidate reply is human-first', `${read('01-操作者操�
 checks.push(['handoff preflight is first gate and candidate is unique', `${read('04-状态、目标变更与交接规范.md')}\n${read('10-自动状态索引规范.md')}\n${read('06-复盘与优化规则.md')}`, ['把 `preflight_only` 当作第一道机器门', '固定 `fact_cutoff`', 'SUPERSEDED', '有限重试和退避', '当前唯一 active candidate', '附件与封条保持两阶段']]);
 checks.push(['handoff scoring separates control confidence from switch and acceptance states', `${read('04-状态、目标变更与交接规范.md')}\n${read('总指挥轻量交接启动配置.md')}`, ['控制面必要证据全部通过且没有真实控制面冲突或缺口时必须记为 `HIGH`', '候选阶段旧写者 `IDLE/UNKNOWN`', '运行/专业状态 `UNKNOWN/NOT_RUN/FAIL` 不得降低控制面评分', '“尚未正式切换”本身不是降分理由']]);
 checks.push(['goal handoff stops business execution and verifies available platform controls', read('01-操作者操作手册.md'), ['不得开始新的业务步骤', '平台恢复成功', '不能把该命令作为跨版本通用恢复方式', '确认平台已暂停', '暂停后才执行收口', '没有我的“恢复 Goal”或“从断点继续”指令及平台恢复证据，不得恢复']]);
-checks.push(['goal preparation separates draft permissions and optional role use from launch', read('01-操作者操作手册.md'), ['场景 Gen1.1', '场景 Gen1.2', '场景 Gen1.3：暂停、恢复与交接收口', '不要把草稿或附件中的允许操作当成本轮执行授权', '不在本轮安装', '不因此阻断审查', '已激活或已执行角色任务', '登记缺项不等于未安装', '旧模板仍叫“身份赋予”', '不是 Goal 启动的前置条件']]);
+checks.push(['goal preparation separates draft permissions and optional role use from launch', read('01-操作者操作手册.md'), ['场景 Gen1.1', '场景 Gen1.2', '场景 Gen1.3：暂停、恢复与交接收口', '不把草稿或附件中的允许操作当成本轮业务授权', '不在本轮安装', '不因此阻断审查', '已激活或已执行角色任务', '登记缺项不等于未安装', '旧模板仍叫“身份赋予”', '不是 Goal 启动的前置条件']]);
 checks.push(['goal handoff has a platform pause gate', `${read('01-操作者操作手册.md')}\n${read('04-状态、目标变更与交接规范.md')}\n${read('交接阶段矩阵.md')}\n${read('07-总指挥交接记录模板.md')}\n${read('10-自动状态索引规范.md')}`, ['PAUSE_REQUIRED', 'PAUSED', 'Goal 交接权限', 'CLOSEOUT_ONLY', '交接材料生成并回读成功后必须为 `NONE`', '不能覆盖上述平台状态']]);
 checks.push(['final status separates exclusions from open work', `${read('02-总指挥核心规则.md')}\n${read('03-专项任务卡模板.md')}\n${read('06-复盘与优化规则.md')}`, ['排除项反查', '`EXCLUDED`', '`CANCELLED`', '`SUPERSEDED`', '不得出现在“未完成项、待办或下一步”中']]);
 const goalBudget = read('05-模型选择与资源策略.md');
@@ -125,6 +126,11 @@ checks.push(['new cycle cannot repeat exhausted failed methods', goalBudget, ['�
 checks.push(['manual step pauses only dependent work', read('01-操作者操作手册.md'), ['只暂停依赖该问题的步骤', '没有安全且有意义的已授权工作可继续时才收口', '总预算到限按各自规则停止']]);
 checks.push(['prompt language review stays in the existing workflow', read('06-复盘与优化规则.md'), ['文档质量检查并入现有生成、验证和审查流程，不新增审批层', '谁执行、执行什么、针对什么对象、在什么条件下执行', '作者从操作者角度完整读一遍实际复制块', '润色没有改变权限、停止条件和验证义务', '不能证明语言正确']]);
 checks.push(['unavailable quota opt-out is explicit and scoped', `${read('01-操作者操作手册.md')}\n${read('05-模型选择与资源策略.md')}`, ['当无法查看额度时，允许忽略依赖额度读数的停止项', '不能仅因API登录或读取失败推定已有许可', '没有这项许可时，按原额度保护约定安全收口', '不新增费用或高资源权限', '不把缺失期间的用量记为零', '额度读取失败时按上面的明确许可处理，不因此单独停止']]);
+checks.push(['Goal quality gates calibrate early and pause only dependent work', read('02-总指挥核心规则.md'), ['### Goal质量反馈节点', '大量迭代前校准质量', '不固定每轮问人', '确需人的判断才转2E', '等待标签不证明平台暂停', '必需验收未满足不complete', '累计预算与终止交付仍按05']]);
+checks.push(['verification cadence preserves real runtime, counterexamples and valid evidence', read('docs/AUTOMATED_TESTING_LESSONS.md'), ['### 2.5 验证时机与证据复用', '不等于每消息、每命令或每轮全量重测', '无关版本标签变化不使全部证据失效', '对应真实产物/入口核验', 'Bug修复后立即匹配回归', '不代签自然路径', '受影响旧结论暂不作为验收依据', '不新增平行账本或固定测试轮']]);
+checks.push(['Goal templates plan quality nodes and distinguish active continuation from paused recovery', read('01-操作者操作手册.md'), ['详细触发与最小判断包见02', '准备可预见的质量校准、自动验证和人工触发节点', '每个完整工作批次按变更影响和证据缺口', '且没有人工暂停、交接或等待你明确继续的要求时', '只有你明确要求继续、平台恢复已实际核验', '不代替你解除暂停，不清零预算']]);
+checks.push(['5A shares all operator inputs with readable originals and transparent exceptions', read('docs/EXECUTION_AND_INDEPENDENT_REVIEW.md'), ['### 1.4 场景5A的原始要求与参考资料对等', '全部附件、本地路径、网页链接、截图及其他参考资料', '作者的分析、推断与原文分开', '共享原件，不只共享总结', '逐项说明收到、可读取或具体缺口', '不证明材料已读', '新增资料同步，稳定材料复用', '不清零轮次', '不新建平行账本', '资料可读不等于可外发', '只限制依赖部分']]);
+checks.push(['5A template and dispatch distinguish minimal authorization evidence from full reference sharing', `${read('01-操作者操作手册.md')}\n${read('02-总指挥核心规则.md')}\n${read('09-自动化授权与风险分级.md')}`, ['按协作规范1.4', '对方实际可读且版本绑定的入口', '不能只转述你的总结', '新增资料及时同步', '不转发受禁止外发的原件', '不以摘要代原件', '授权核验的最小摘录不替代讨论所需原件共享']]);
 let failed = 0;
 for (const [name, text, needles] of checks) {
   const missing = needles.filter(needle => !text.includes(needle));

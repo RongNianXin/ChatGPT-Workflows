@@ -217,7 +217,11 @@ export function validateSeal(seal, { checkDigest = true, requireExtensions = fal
   if (requiresReadyEvidence && !['central_work_items', 'current_view', 'status_index'].every(key => seal.sources?.[key])) fail(errors, 'control handoff requires all canonical sources');
   if (requiresReadyEvidence && r?.observed_at !== null && Date.parse(r.observed_at) > Date.parse(seal.fact_cutoff)) fail(errors, 'remote observed_at must not be after fact_cutoff');
   if (seal.control_handoff_confidence === 'HIGH' && (r?.status !== 'PASS' || seal.source_digest_status !== 'PASS')) fail(errors, 'HIGH control handoff requires remote PASS and source digest PASS');
-  if (['READY', 'READY_WITH_RESTRICTIONS', 'COMPLETED'].includes(seal.switch_status) && (r?.status !== 'PASS' || seal.source_digest_status !== 'PASS')) fail(errors, 'READY status requires remote PASS and source digest PASS');
+  // A restricted candidate may be handed off when the remote is temporarily
+  // unobservable, provided all local/control-plane evidence is current.  A
+  // fully READY or COMPLETED record still requires a live remote baseline.
+  if (['READY', 'COMPLETED'].includes(seal.switch_status) && (r?.status !== 'PASS' || seal.source_digest_status !== 'PASS')) fail(errors, 'READY status requires remote PASS and source digest PASS');
+  if (seal.switch_status === 'READY_WITH_RESTRICTIONS' && seal.source_digest_status !== 'PASS') fail(errors, 'READY_WITH_RESTRICTIONS requires source digest PASS');
   // READY describes candidate material readiness, not a transfer of authority.
   if (seal.switch_status === 'COMPLETED' && !['STOPPED_DISPATCH', 'ARCHIVED'].includes(seal.old_writer_status)) fail(errors, 'COMPLETED requires old writer stopped or archived');
   if (seal.switch_status === 'COMPLETED' && seal.control_handoff_confidence !== 'HIGH') fail(errors, 'COMPLETED requires control_handoff_confidence HIGH');

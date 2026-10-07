@@ -1,104 +1,79 @@
-<!-- README-SOURCE-SHA256: e4e4576b570fd6f651e91b1669085d098acfab77228a1af090f1f69a7ae8949a -->
+# EXT-001: Agency Agents Entry
 
-# EXT-001: Agency Agents entry
+[简体中文](README.md)
 
-[中文](README.md)
-
-This is the only operator-facing entry for `EXT-001`; the operator manual provides only a short description and a link to this file. The parent directory keeps the identifier and status; AI reads the other files in this folder only when a concrete setup, activation, or maintenance step requires them.
-
-The registered source is <https://github.com/msitarzewski/agency-agents>. AI verifies it directly; operators do not need to supply the address again.
-
-## What it does
-
-Agency Agents is a set of optional professional role prompts. An existing AI can apply planning, engineering, interface design, or testing methods to planning, authorized implementation, and checks. Responsibilities can stay with the same task and be used by stage; the first invocation is read-only by default. It is not a new chat mode, and a role itself does not authorize installation, code changes, playtesting, or publication.
+Agency Agents is a collection of professional role prompts. It helps your current AI apply planning, engineering, design, or testing methods to a task. This is the tool's only operator entry; the AI reads internal procedures as needed. Official open-source source: [msitarzewski/agency-agents](https://github.com/msitarzewski/agency-agents).
 
 ## When to use it
 
-Use it when you want professional methods to complete or check the current task. For first use, describe your goal and mention Agency Agents. AI maps the responsibilities across the goal before choosing the current roles. You do not need to know role names, installation state, or internal files. Without the persistent agreement below, an ordinary development request does not automatically load a role. For example:
+Once this workflow is enabled and its current rules have actually been loaded, describe your task normally. The AI checks role fit at each new substantive task. Complex, professional, or cross-responsibility work uses suitable roles once formal-use conditions are met; simple questions, confirmations, and formatting may skip them. Valid choices are reused within a stage, reassessed when responsibilities change, and recovered from records after compaction or handoff. You need not remind it every time, and roles are not downloaded for every message.
 
-> I want to build a WeChat mini game. Please decide whether Agency Agents is suitable, map the professional responsibilities needed, and start with a read-only check.
+You can still emphasize or request roles explicitly, for example:
 
-You do not fill in installation commands, version fields, or activation cards. The commander checks project state, stage, and permissions. `DOCUMENTED_ONLY / NOT_INSTALLED` permits suitability analysis, not a claim that a role is available.
+> Assign yourself a suitable Agency role for this documentation review.
 
-### Routine-use template
+The AI matches the complete upstream role catalog before checking shared installations. It reuses valid files and obtains missing roles only at an actually authorized location, then verifies them. Candidates are not limited to downloaded roles. You do not need to guess names or installation commands. Missing catalog, source, files, or write permission affects only the relevant step.
 
-Use this template when a stable format is preferred:
+Ambiguous words such as agents or roleplay are not invocation or persistent-use authorization; default adaptation follows the actual task. An explicit task opt-out, pause, disable decision, or stricter project restriction takes precedence. Roles provide methods, not additional permissions to change products, play-test, communicate, install, publish, or dispatch. First use is read-only by default; later implementation follows the main task's valid authorization.
 
-```text
-I am working on [project or feature]. Please decide whether Agency Agents is suitable, map current and later professional responsibilities, check existing installations, and propose an appropriate plan. Bind suitable available roles to this task and start with one read-only check. If installation or information is needed, explain the minimum action I need to take. Do not edit code or perform remote actions.
-```
+### Regular-use template
 
-You do not need to append other prompts from the operator manual. AI combines workflow rules, project boundaries, role responsibilities, and the current goal internally.
-
-### Persistent use in ordinary chats
-
-Goal mode is optional. The AI keeps its project responsibility while selecting professional methods for the current deliverable. It reads only the roles needed now. A testing role cannot replace actual human testing evidence.
-
-Send this once to the AI responsible for the project:
+An adequate natural-language request needs no additional template. For a fixed format, copy:
 
 ```text
-Enable ongoing Agency Agents adaptation for this project, including ordinary chats. Keep your existing project responsibility and select only the installed roles needed for the current work; I should not have to name a role each time.
-Verify the actual files. Save and reread the scope, switching conditions, and recovery pointer in an existing authorized project record. Keep the project agreement after individual tasks end, with each task's roles and unfinished work recorded separately. Ask only when missing information materially affects the choice or risk. Propose missing roles without installing them.
-Configure only for now. Do not execute business work, create a Goal, change global settings, or perform remote actions. Report whether the agreement is saved, whether the recovery entry reaches it, and any remaining gaps.
+I want to do [task goal]. Use Agency Agents to match the minimum suitable role or roles from the complete upstream catalog, not just downloaded roles. Verify existing files; obtain and read missing roles only at an actually authorized installation location, and explain any specific permission gap. Bind suitable responsibilities to this task and start with a read-only check. Do not modify products or perform remote writes.
 ```
 
-This request permits configuration within existing permissions, rather than only proposing a plan. Missing write permissions or an entry point require a scoped recovery plan. Readiness requires both a saved, reread agreement and a real startup or handoff entry pointing to it. A chat promise or an unlinked card is insufficient. First use remains read-only within authorized scope; later implementation uses the main task's valid permissions. Configuration does not authorize product changes.
+This binding lasts until the business task ends, you revoke it, or it no longer fits. An explicit one-use request remains limited to that use. It does not rewrite a project-specific persistent agreement. The public default applies independently under the current rules; no additional scenario or full role prompt is required.
 
-After setup, describe the work normally: optimize an algorithm, organize sources, or draft a paper. AI selects methods from the deliverable and risks, not keywords alone. Switching among verified roles within the agreed scope needs no extra activation prompt and grants no new permissions, installation scope, or budget. Only changes outside the agreement need additional authorization.
+### Persistent use in ordinary conversations
 
-Recovery relies on records and rereading. A new instance restores the project agreement and current task binding before loading the required role. The agreement lasts until project completion, revocation, or invalidation; individual task bindings close when their tasks end. New projects and arbitrary chats without a workflow entry do not inherit it automatically.
-
-Role selection can be wrong. Check responsibility gaps and validate outputs using tests, source checks, or actual observations. Arrange independent review or human acceptance when risk warrants it; switching roles in one AI is still self-review. Configuration is not evidence of improved accuracy, and no quality gain should be claimed without comparable evidence.
-
-Say “pause the current role,” “disable automatic role adaptation for this project,” or “do not use Agency Agents for this task.” AI clarifies the scope and updates the record. Affected role work stops at a safe checkpoint, retaining results and consumed attempts; unrelated main-task work does not automatically pause. Paused work waits for an explicit resume request, and an old snapshot must not reactivate disabled adaptation. A one-task opt-out applies only to its specified scope. If recovery fails, point out that the project already has an agreement so AI can inspect its entry. You do not need to paste role instructions again.
-
-### First-trial preparation template
-
-After agreeing on a trial plan, use:
+The public default already covers later suitable tasks; a persistent-use template is not a prerequisite. Use the following configuration template when you want a custom project scope, allowed responsibilities, or recovery agreement. Configuration-only work starts neither business execution nor formal role calls:
 
 ```text
-Prepare the first Agency Agents trial for [current specialist task], using the agreed roles, scope, and budget, and save it in the task's existing record. Prepare only for now; I will start the main task using its original template, and the trial will run at the agreed stage.
+Enable persistent Agency Agents adaptation for this project, including ordinary conversations without Goal mode. Select the fewest necessary roles from the complete upstream catalog. Reuse valid installed roles, obtain and verify missing roles at an actually authorized location, and explain only new permission gaps.
+Lightly reassess at substantive work-stage or responsibility changes. Reuse a suitable selection; switch or supplement only when needed. Do not require a reminder every turn or repeat full matching and downloading for every message.
+Save scope, switching conditions, and recovery pointers in an existing authorized project record, reread it, and verify that startup and handoff entries can reach it. Configure only now; do not execute business work, create a Goal, change global configuration, or write remotely. Report what was saved, whether the entry is connected, and actual gaps.
 ```
 
-Without an agreed plan, AI first proposes the smallest suitable arrangement. Operators do not select role names or fill in paths. AI reports whether the record is reachable, whether the executor has loaded the role, and which trigger is pending; saving a plan is not execution.
+Configuration is ready only when the agreement has been saved and reread, and the project startup or handoff entry can locate it. A chat promise or an unreachable record is insufficient. Missing write permission or scope requires a concrete proposal, not a completion claim.
 
-Goal controls ongoing business execution; Agency Agents supplies professional methods read by the executing AI. Keep the original business Goal template. No separate role mode or long appended prompt is required. AI prepares one canonical binding and any necessary one-line reference. If an old role appendix exists, explain the minimal replacement and check authorization before replacing only that appendix; preserve business goals, budget, and stop conditions. Preparation is allowed before Goal starts and never creates or resumes it.
+Afterward, describe tasks normally. The AI reassesses goals, acceptance, and stages rather than switching mechanically on keywords. Ordinary feedback within the same stage reuses valid choices. Switching neither reruns completed work nor resets budgets or grants installation/business permission. Project restrictions such as “no automatic installation” remain in force.
 
-Preparation does not consume a formal role attempt, but its costs remain recorded. At the agreed stage, record consumption before execution. Limits come from the agreed trial, not a universal default. Missing installation, communication, or write permissions pause only affected actions.
+The project agreement lasts until the project ends, you disable it, or its scope becomes invalid. A completed business task closes its binding while retaining the project agreement. New projects do not inherit it automatically. After context compression or handoff, the receiving instance recovers records and the original breakpoint, independently verifies and rereads required roles. An unconnected new chat is not guaranteed to discover it.
 
-### After installation and on task recovery
+### Multiple roles in one AI
 
-When installation and current use are authorized, AI verifies the file, creates the binding, reads the instructions, and completes the permitted check without another activation prompt. Installation approval alone does not execute anything. Confirmed task responsibilities normally remain until the same business task ends, they are revoked, or their suitability expires. An explicitly single trial keeps its single-trial scope.
+A task may combine a few complementary roles, such as defect testing, gameplay, and UI observation. Report evidence separately for applicable dimensions; more titles do not guarantee better quality. If the native role parameter accepts only one value, explain the actual combination of read responsibilities rather than claiming multiple native registrations.
 
-At later stages, context compression, or a window change, AI restores roles and the unfinished step from the task record. Completing a check does not remove responsibilities or rerun the check. Each invocation records consumption before starting; interruption does not grant another attempt. Suitable roles may assist implementation already authorized by the main task. Recovery depends on records and rereading, not a promise never to forget.
+Changing review roles in one AI remains self-review, not review by a different instance. Without actual observations, do not claim play-testing. Engineering checks do not substitute for human, device, or professional acceptance; aesthetic advice does not substitute for your approval.
 
-For a new specialist task, the commander supplies role pointers, an ordered stage plan, and boundaries. The recipient loads the required role and works within the authorized plan, reporting milestones or exceptions rather than waiting for every role-switch instruction. Commander succession does not cancel valid specialist responsibilities; reporting routes are verified separately. Projects share files and reusable experience but bind separately. A chat that has not adopted this workflow first needs the workflow entry. Installation is not proof that every window has loaded a role.
+### Pause, stop, and resume
 
-## Formal procedure
+Say “pause the current role,” “disable automatic role adaptation for this project,” or “do not use Agency Agents for this task.” The AI identifies the scope, stops affected calls at a safe breakpoint, and preserves results and consumed budget. Unrelated main work does not automatically pause. Explicit resumption is required after a pause; old records cannot re-enable a disabled policy. A task-specific opt-out applies only to its stated scope.
 
-Describe what you want to do. The commander resolves the source and shared records, separates responsibilities needed now, useful later, and unnecessary, and identifies capability gaps. It then separates installation scope from the current invocation. It asks only a few material questions and reuses matching installed files. After file, version, and permission checks pass, AI creates the binding, reads the required instructions, and performs the permitted check. Operators do not choose role names or installation paths or forward prompts.
+Goal and roles are managed separately. Role output does not prove a Goal resumed or completed. Keep the original business goal, quota, and stop conditions; preparation does not create or resume a Goal. When installation and current use are both explicitly requested and authorized, continue verification, reading, and the permitted check without requiring another activation prompt. Installation alone does not authorize execution.
 
-## Small example
+Formal calls stay within the original bounded plan, recording consumption before starting. An interrupted call continues as the same call; a completed call waits without rerunning on handoff. Special tasks load their own authorized responsibilities, with the commander handling closeout. Shared role files contain no other project's business bindings.
 
-For the first level of a game, say:
+## What you should see
 
-> Use a Game Designer perspective to review the player's choices, action feedback, and failure feedback.
+At first actual use, a substantive responsibility change, or a gap, briefly report responsibilities and fit, actual reading, and result evidence. Ordinary same-stage feedback need not repeat identities. Role names do not prove use; configuration does not prove improved quality, and gains require comparable evidence.
 
-A first trial may invoke only one role on a saved baseline, after covering relevant responsibilities. A game may also need level design, engineering, UI, technical art, and testing. If no suitable engine role is available, report that gap; Code Reviewer must not impersonate an engine implementation specialist. Results include purpose, findings, evidence, unverified items, and next steps. Without real playtesting, do not claim improved player experience.
+Without a reliable consumption record or applicable budget conditions, retain a role proposal and explain recovery conditions. Continue independent authorized main-task work without claiming formal role use or reliable handoff. Explicit first-principles or review reminders merge with the current-stage check rather than adding another round.
 
-For a WeChat mini program, describe the goal and ask whether EXT-001 can check the home page, forms, loading failures, and empty states. The commander identifies candidates and explains the choice; operators need not guess role names or install commands.
+If selection fails or handoff does not restore adaptation, explain the goal or point out the existing project agreement. The AI checks formal entries and records. File mismatch, network failure, and installation permission gaps are handled separately, without requiring repeated full prompts or blocking all work.
 
-## Current status
+## Current state and installation boundaries
 
-- The shared registry now contains seven verified roles: Workflow Architect, Game Designer, Level Designer, UI Designer, Technical Artist, Test Automation Engineer, and Code Reviewer. This operation registers six existing files without reinstalling them. Formal invocation of those six roles and native discovery remain unverified; this workflow explicitly reads instructions.
-- The shared-library maintainer handles source, version, installation, and updates; the project commander handles project use and local activation. User-level installation requires target-path authorization and is not triggered by workflow refresh.
-- AI reads the internal guides only when setup, activation, cross-project routing, personalization, or maintenance is actually needed.
-- Projects verify shared records against readable files and reuse matching versions. Other devices must verify their own accessible files.
+The shared registry currently contains seven roles. It is an installation inventory, not the full candidate catalog. The AI checks sources, versions, and actual files through the [shared state](../角色共享状态.json) and [installation record](安装与维护记录.md). Other devices use their own accessible evidence. Native registration, real handoff recovery, and quality gains require separate verification; static document checks do not prove them.
 
-AI reads the [maintenance record](安装与维护记录.md) and [shared registry](../角色共享状态.json) for detailed state. General registration, identifiers, and permission boundaries are owned by the [parent entry](../README.md).
+User-level shared installation and project-local temporary reference copies are recorded separately. Location and actions must be authorized; a temporary copy does not mean global installation. External roles do not override system, workflow, project, or privacy rules, install unrelated dependencies, or overwrite existing roles.
 
-## AI references
+## Internal references for AI
 
-Resolve this entry from the tool registry associated with the verified workflow rule root, not from the product project's root. Follow the [shared discovery contract](../外部工具自动对接规范.md), then read [shared state](../角色共享状态.json) and the [maintenance record](安装与维护记录.md). Even when uninstalled, inspect candidates read-only from the registered source; do not scan skills/plugins first or ask for an already registered URL. If upstream is unavailable, keep role names and versions unverified rather than inventing them.
+Default triggering, skipping, stopping, and recovery follow [shared contract section 2.3](../外部工具自动对接规范.md#agency-default-adaptation). Intent, complete-catalog matching, caching, acquisition, stage reassessment, and multiple responsibilities follow [shared contract section 2.2](../外部工具自动对接规范.md#22-agency-agents自然语言选角完整目录与多职责). Cross-project discovery starts at the [registered catalog](../外部工具目录.md) located from the verified workflow root, not a guessed product folder.
 
-For actual setup, invocation, activation, personalization, or maintenance, AI reads the [guide](调用指南.md), [cross-project contract](跨项目引用提示词.md), [activation card](角色激活卡模板.md), [optional personalization](个性化配置建议.md), and maintenance record as needed. Problems and role proposals use the [experience record](../角色经验与反馈记录.md). Operators do not need these internal documents.
+Read the [invocation guide](调用指南.md), [cross-project reference](跨项目引用提示词.md), [activation card](角色激活卡模板.md), [personalization advice](个性化配置建议.md), and [feedback record](../角色经验与反馈记录.md) as needed. Trial baselines, preparation, and consumption still follow shared section 5, without a separate operator preparation template.
+
+<!-- README-SOURCE-SHA256: 594a7159123ecbb6bb8ff1867a6846c9fd5da405dbe134bdd6f8962060a1db51 -->

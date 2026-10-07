@@ -15,11 +15,15 @@
       "then": { "properties": { "sources": { "required": ["central_work_items", "current_view", "status_index"] }, "source_digest_status": { "const": "PASS" }, "remote": { "properties": { "status": { "const": "PASS" } } } } }
     },
     {
-      "if": { "properties": { "switch_status": { "enum": ["READY", "READY_WITH_RESTRICTIONS", "COMPLETED"] } } },
+      "if": { "properties": { "switch_status": { "const": "READY_WITH_RESTRICTIONS" } } },
+      "then": { "properties": { "sources": { "required": ["central_work_items", "current_view", "status_index"] }, "source_digest_status": { "const": "PASS" } } }
+    },
+    {
+      "if": { "properties": { "switch_status": { "enum": ["READY", "COMPLETED"] } } },
       "then": { "properties": { "sources": { "required": ["central_work_items", "current_view", "status_index"] }, "source_digest_status": { "const": "PASS" }, "remote": { "properties": { "status": { "const": "PASS" } } } } }
     },
     {
-      "if": { "properties": { "switch_status": { "enum": ["READY", "READY_WITH_RESTRICTIONS", "COMPLETED"] } } },
+      "if": { "properties": { "switch_status": { "enum": ["READY", "COMPLETED"] } } },
       "then": { "properties": { "old_writer_status": { "enum": ["IDLE", "STOPPED_DISPATCH", "ARCHIVED", "UNKNOWN"] } } }
     },
     {

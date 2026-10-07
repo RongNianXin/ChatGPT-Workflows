@@ -106,8 +106,60 @@ if (!failures) {
     if (!guide.includes(needle)) fail(`persistent adaptation boundary is missing: ${needle}`);
   }
   if (!contract.includes('external_role_policy') || !contract.includes('启动、恢复及新业务适配时先回读该指针')) fail('project policy recovery pointer is missing from the shared contract');
-  for (const needle of ['### 常规使用模板', '### 首次试验准备模板', '现在只准备', '保留原业务目标、额度和停止条件']) {
+  for (const needle of ['### 常规使用模板', '### 普通对话中持续使用', '完整上游角色目录', '实际获准位置', '保留原业务目标、额度和停止条件']) {
     if (!entry.includes(needle)) fail(`operator preparation entry is missing: ${needle}`);
+  }
+  if (entry.includes('### 首次试验准备模板')) fail('operator entry retains the removed trial-preparation template');
+  for (const needle of ['先匹配完整上游角色目录，再核对本地安装', '确认目录未截断', '必要时补齐分页', '目录版本/获取时间', '不每条消息联网', '已有精确安装授权则直接取得并使用', '项目临时副本与用户级共享安装分别登记', '同一阶段的普通反馈、短消息和逐条命令不重跑完整匹配', '不能强制调用或当持续授权', '不算多个独立审查者', '不伪称原生多角色同时注册', '不覆盖项目“不自动安装”等门禁']) {
+    if (!contract.includes(needle)) fail(`Agency full-catalog, permission or stage contract is missing: ${needle}`);
+  }
+  for (const needle of ['原始索引到候选索引的提取覆盖', '保留任意目录深度的角色', '排除 README、模板等辅助文件须有上游索引或文件内容依据', '分类未知项保留待核', '`truncated=false` 只证明接口未截断，不证明过滤无遗漏', '发现遗漏先补齐再匹配', '已安装集合不缩小全集', '所用目录覆盖证据与当前任务匹配理由', '可引用有效旧证据，不新增平行账本']) {
+    if (!contract.includes(needle)) fail(`Agency catalog-projection evidence contract is missing: ${needle}`);
+  }
+  const defaultStart = contract.indexOf('### 2.3 Agency 默认适配与执行核验');
+  const defaultEnd = contract.indexOf('## 3. 规则刷新', defaultStart);
+  const defaults = contract.slice(defaultStart, defaultEnd);
+  const defaultCases = [
+    ['new professional task without a keyword', ['每个新实质任务先轻量检查专业职责', '不等操作者补 Agency 口令']],
+    ['simple task and explicit request', ['纯确认、简单事实问答、纯格式', '不用复杂度门槛忽略请求']],
+    ['opt-out and stricter project limits', ['明确暂停、关闭、本次不用和项目更严格', '缺政策指针不推翻可核验的关闭记录']],
+    ['preparation and formal-use distinction', ['候选核验、只配置及已暂停业务', '正式调用仍须第5.1节持久消费并回读']],
+    ['missing record stays local', ['保留候选与具体恢复条件', '独立且获准的主任务继续']],
+    ['stage reuse and transition', ['同阶段有效选择复用', '验收变化时重评']],
+    ['recovery preserves consumption and stop state', ['接收实例独立读取所需正文', '不借恢复清零或重跑完成部分']],
+    ['review reminder merges', ['显式提醒与该阶段已有检查合并', '角色名称和“已自检”声明不能代替']],
+    ['actual evidence and honest validation', ['首次实际采用、职责实质变化或出现缺口时', '真实可靠性须观察无显式提示的触发']]
+  ];
+  if (defaultStart === -1 || defaultEnd === -1 || (contract.match(/id="agency-default-adaptation"/g) || []).length !== 1) fail('Agency default contract must have one reachable authoritative anchor');
+  for (const [name, needles] of defaultCases) {
+    for (const needle of needles) if (!defaults.includes(needle)) fail(`Agency default branch (${name}) is missing: ${needle}`);
+  }
+  for (const obsolete of ['除此之外，没有指定工具的普通任务不自动加载工具', '项目持续模式须有明确启用依据', '未启用该政策时，首次可用工具请求']) {
+    if (contract.includes(obsolete)) fail(`Agency default retains a conflicting explicit-only condition: ${obsolete}`);
+  }
+  const routeFiles = ['AGENTS.md', ...['00-第二代工作流总览.md', '02-总指挥核心规则.md', '03-专项任务卡模板.md', '10-自动状态索引规范.md', '总指挥轻量交接启动配置.md'].map(name => path.join('总指挥工作流', '第二代总指挥的工作模式', name))];
+  for (const file of routeFiles) {
+    const routed = read(path.join(root, file));
+    if (!routed.includes('#agency-default-adaptation')) fail(`Agency default startup/recovery route is missing: ${file}`);
+    if (routed.includes('普通开发目标不自动加载工具')) fail(`Agency default startup route has a conflicting exclusion: ${file}`);
+  }
+  for (const needle of ['无需先发持续模板', '角色名字不能证明已经使用', '只继续独立且获准的主任务']) {
+    if (!entry.includes(needle)) fail(`Agency operator default boundary is missing: ${needle}`);
+  }
+  const english = read(path.join(toolDir, 'README.en.md'));
+  for (const needle of ['a persistent-use template is not a prerequisite', 'stricter project restriction takes precedence', 'Without a reliable consumption record', '#agency-default-adaptation']) {
+    if (!english.includes(needle)) fail(`English Agency default boundary is missing: ${needle}`);
+  }
+  console.log(`Agency default route contracts: ${defaultCases.length} branches, ${routeFiles.length} entries (static; live triggering NOT_VERIFIED)`);
+  for (const needle of ['或 Agency 按第2.3节已有适用依据时', '或 Agency 按第2.3节在有效业务授权与正式条件内建立绑定时', 'Agency 默认入口按第2.3节']) {
+    if (!contract.includes(needle)) fail(`Agency default formal-use lifecycle is missing: ${needle}`);
+  }
+  const agencyGuide = read(path.join(toolDir, '调用指南.md'));
+  for (const needle of ['显式定制项目持续模式时', '交接材料始终引用当前任务绑定', '有定制约定再回读其政策', '不因缺定制约定判默认恢复失败']) {
+    if (!agencyGuide.includes(needle)) fail(`Agency default recovery without custom policy is missing: ${needle}`);
+  }
+  for (const obsolete of ['交接材料至少引用项目约定及当前任务绑定', '必须自行定位两层记录']) {
+    if (agencyGuide.includes(obsolete)) fail(`Agency default recovery requires an unnecessary custom policy: ${obsolete}`);
   }
   for (const needle of ['安装集合、本阶段加载和单次调用分别确认', 'attempts_consumed', '回读成功才开始', '开始后未完成或失败也消费一次', '继续同次', '同一当前行动', '迟到旧卡不覆盖停止/撤销', '未通知并取得实际加载确认时不得称已迁移']) {
     if (!contract.includes(needle)) fail(`role lifecycle contract is missing: ${needle}`);
@@ -139,6 +191,49 @@ if (!failures) {
       if (!names.has(`EXT-001/${slug}`)) fail(`verified role is absent from shared registry: ${slug}`);
     }
   }
+}
+
+// Synthetic path fixtures verify the coverage oracle, not a live catalog extractor
+// or whether future agents follow the prose. Expected roles are explicit;
+// no purportedly correct extraction function creates its own expected answer.
+{
+  const roles = ['engineering/frontend.md', 'specialized/workflow.md',
+    'game-development/unity/architect.md', 'game-development/godot/systems.md',
+    'game-development/unreal/rendering/technical-artist.md'];
+  const auxiliary = ['README.md', 'engineering/README.md', 'templates/role-template.md'];
+  const original = [...roles, ...auxiliary];
+  const exclusions = auxiliary.map(file => ({ path: file, evidence: `synthetic fixture classification: ${file}` }));
+  const diff = (expected, observed) => expected.filter(file => !observed.includes(file));
+  const audit = (candidates, excluded) => {
+    const excludedPaths = excluded.map(item => item.path);
+    return {
+      missingRoles: diff(roles, candidates), unexpectedCandidates: diff(candidates, roles),
+      unaccounted: diff(original, [...candidates, ...excludedPaths]),
+      invalidExclusions: excluded.filter(item => !auxiliary.includes(item.path) || !item.evidence?.trim()),
+      overlap: candidates.filter(file => excludedPaths.includes(file)),
+      duplicateCandidates: candidates.length !== new Set(candidates).size,
+      duplicateExclusions: excludedPaths.length !== new Set(excludedPaths).size
+    };
+  };
+  const valid = result => Object.values(result).every(value => Array.isArray(value) ? value.length === 0 : value === false);
+  const legacy = roles.filter(file => /^[^/]+\/[^/]+\.md$/u.test(file));
+  const cases = [
+    ['complete multilevel projection', audit([...roles], exclusions), true],
+    ['legacy two-level projection', audit(legacy, exclusions), false],
+    ['auxiliary Markdown used as role', audit([...roles, auxiliary[0]], exclusions.slice(1)), false],
+    ['exclusion without evidence', audit([...roles], exclusions.map(item => ({ ...item, evidence: '' }))), false],
+    ['deep role mislabeled auxiliary', audit(roles.slice(0, -1), [...exclusions, { path: roles.at(-1), evidence: 'synthetic wrong classification' }]), false],
+    ['installed shallow set used as universe', audit(roles.slice(0, 1), exclusions), false],
+    ['valid cached projection reused', audit([...roles], exclusions), true],
+    ['unknown classification dropped', audit([...roles], exclusions.slice(1)), false],
+    ['duplicate candidate', audit([...roles, roles[0]], exclusions), false]
+  ];
+  for (const [name, result, expected] of cases) {
+    if (valid(result) !== expected) fail(`synthetic projection coverage: ${name}`);
+  }
+  const missingDeep = audit(legacy, exclusions).missingRoles;
+  if (missingDeep.length !== 3 || missingDeep.some(file => !roles.slice(2).includes(file))) fail('synthetic legacy projection must expose the independently enumerated deep-role difference');
+  console.log(`Synthetic catalog-projection checks: ${cases.length} cases (offline; live role classification NOT_VERIFIED)`);
 }
 
 for (const file of files) {

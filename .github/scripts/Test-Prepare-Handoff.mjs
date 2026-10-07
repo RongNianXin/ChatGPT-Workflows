@@ -422,6 +422,107 @@ try {
     const secondRemote = readLiveRemoteBaseline(remoteWork, 'origin/main');
     assert.notEqual(secondRemote.head, staleHead);
   });
+  const rebaseScript = path.join(scriptDir, 'Rebase-Handoff-Draft.mjs');
+  check('rebase CLI executes its usage gate from a Unicode Windows path', () => {
+    const result = spawnSync(process.execPath, [rebaseScript], { cwd: temp, encoding: 'utf8' });
+    assert.equal(result.status, 2);
+    assert.match(result.stderr, /usage:/);
+  });
+  const fixtureGit = args => {
+    const result = spawnSync('git', ['-C', sourceRoot, ...args], { encoding: 'utf8' });
+    assert.equal(result.status, 0, result.stderr);
+    return result.stdout.trim();
+  };
+  // The earlier legacy-drift rejection deliberately left an invalid index.
+  // Retire only that synthetic file before exercising unrelated remote gates.
+  fs.unlinkSync(legacyPath);
+  fixtureGit(['add', '--', '.gitignore']);
+  fixtureGit(['-c', 'user.name=Test', '-c', 'user.email=test@example.invalid', 'commit', '--quiet', '-m', 'synthetic baseline']);
+  fixtureGit(['branch', '-M', 'main']);
+  fixtureGit(['remote', 'add', 'origin', sourceRoot]);
+  const restrictedCase = number => {
+    const input = prepareCase(number, `restricted-event-${number}`);
+    const config = readJsonForTest(input.configPath);
+    const draft = readJsonForTest(config.draft_path);
+    const indexPath = path.join(sourceRoot, draft.sources.status_index.path_ref);
+    fs.writeFileSync(indexPath, fs.readFileSync(indexPath, 'utf8').replaceAll('b'.repeat(40), fixtureGit(['rev-parse', 'HEAD'])));
+    draft.sources.status_index.digest = sha256(fs.readFileSync(indexPath));
+    draft.workspace = { ...draft.workspace, ...readGitWorkspaceBaseline(sourceRoot) };
+    draft.remote.head = fixtureGit(['rev-parse', 'HEAD']);
+    draft.switch_status = 'READY_WITH_RESTRICTIONS';
+    draft.control_handoff_confidence = 'MEDIUM';
+    draft.candidate_verification_status = 'PASS_WITH_RESTRICTIONS';
+    config.preflight_only = true;
+    writeJson(config.draft_path, draft);
+    writeJson(input.configPath, config);
+    return { ...input, config, draft };
+  };
+  check('restricted preflight still rejects an observed remote HEAD conflict', () => {
+    const input = restrictedCase(401);
+    input.draft.remote.head = 'd'.repeat(40);
+    writeJson(input.config.draft_path, input.draft);
+    assert.throws(() => prepareFormalHandoff(input.configPath), /preflight remote baseline drift/);
+    assert.equal(fs.existsSync(input.finalPath), false);
+    assert.equal(fs.existsSync(input.config.seal_directory), false);
+  });
+  check('restricted preflight permits an unobservable remote without writing artifacts', () => {
+    const input = restrictedCase(402);
+    fixtureGit(['remote', 'remove', 'origin']);
+    try {
+      assert.equal(prepareFormalHandoff(input.configPath).status, 'READY_WITH_RESTRICTIONS');
+      assert.equal(fs.existsSync(input.finalPath), false);
+      assert.equal(fs.existsSync(input.config.seal_directory), false);
+    } finally { fixtureGit(['remote', 'add', 'origin', sourceRoot]); }
+  });
+  check('hydrated snapshot uses the verified public rule root and resolved receipt and source inventory', () => {
+    const input = restrictedCase(403);
+    const manifestPath = path.join(workflowFilesRoot, '规则刷新manifest.json');
+    const liveManifest = readJsonForTest(manifestPath);
+    const oldDigest = input.draft.rule_baseline.manifest_sha256;
+    const manifestDigest = sha256(fs.readFileSync(manifestPath));
+    input.draft.rule_baseline = { rule_version: liveManifest.rule_version, manifest_sha256: manifestDigest };
+    const indexPath = path.join(sourceRoot, input.draft.sources.status_index.path_ref);
+    fs.writeFileSync(indexPath, fs.readFileSync(indexPath, 'utf8').replaceAll(oldDigest, manifestDigest));
+    input.draft.sources.status_index.digest = sha256(fs.readFileSync(indexPath));
+    const externalRoot = path.join(temp, '外部 中央');
+    fs.mkdirSync(externalRoot);
+    const inventoryPath = path.join(sourceRoot, 'inventory.json');
+    fs.writeFileSync(inventoryPath, '{}\n');
+    input.draft.sources.handoff_inventory = { owner: 'synthetic', root_ref: 'source_root', path_ref: 'inventory.json', digest: sha256(fs.readFileSync(inventoryPath)), fact_cutoff: stamp };
+    input.draft.workspace = { ...input.draft.workspace, ...readGitWorkspaceBaseline(sourceRoot) };
+    const templatePath = path.join(path.dirname(input.configPath), 'hydration-template.md');
+    fs.writeFileSync(templatePath, '# {{SNAPSHOT_ID}}\nseal={{SEAL_DIGEST}}\ncutoff={{FACT_CUTOFF}}\nevent={{EVENT_ID}}\nverify={{VERIFICATION_COMMAND}}\n- 规则根：{{RULE_ROOT}}\n- 机器记录：{{MACHINE_RECORD}}\n- 独立生成回执：{{RECEIPT_PATH}}\n## 轻量加载基线\nstale baseline\n## 使用边界\nread only\n');
+    input.config.preflight_only = false;
+    input.config.external_control_plane_root = externalRoot;
+    input.config.rule_manifest_path = manifestPath;
+    input.config.snapshot_template_path = templatePath;
+    input.config.receipt_output_path = path.relative(path.dirname(input.configPath), input.receiptPath);
+    writeJson(input.config.draft_path, input.draft);
+    writeJson(input.configPath, input.config);
+    prepareFormalHandoff(input.configPath);
+    const body = fs.readFileSync(input.finalPath, 'utf8');
+    assert.ok(body.includes(`- 规则根：${workflowFilesRoot}`));
+    assert.ok(body.includes(`- 机器记录：${inventoryPath}`));
+    assert.ok(body.includes(`- 独立生成回执：${input.receiptPath}`));
+    assert.doesNotMatch(body, /stale baseline|{{[A-Z_]+}}/);
+  });
+  check('rebase CLI resolves relative configuration from a separate source repository and unrelated cwd', () => {
+    const input = restrictedCase(404);
+    const configDir = path.dirname(input.configPath);
+    input.config.source_root = path.relative(configDir, sourceRoot);
+    input.config.draft_path = 'draft.json';
+    input.config.rule_manifest_path = path.relative(configDir, path.join(temp, 'rule-manifest.json'));
+    writeJson(input.configPath, input.config);
+    const originalDigest = sha256(fs.readFileSync(path.join(configDir, 'draft.json')));
+    const output = path.join(configDir, 'rebased.json');
+    const result = spawnSync(process.execPath, [rebaseScript, input.configPath, output], { cwd: outputRoot, encoding: 'utf8' });
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(JSON.parse(result.stdout).workspace_head, fixtureGit(['rev-parse', 'HEAD']));
+    assert.equal(readJsonForTest(output).objective.breakpoint, input.draft.objective.breakpoint);
+    assert.equal(sha256(fs.readFileSync(path.join(configDir, 'draft.json'))), originalDigest);
+    const retry = spawnSync(process.execPath, [rebaseScript, input.configPath, output], { cwd: outputRoot, encoding: 'utf8' });
+    assert.equal(retry.status, 1); assert.match(retry.stderr, /refusing to overwrite/);
+  });
   console.log(`Prepare handoff: PASS (${passed} cases)`);
 } finally {
   fs.rmSync(temp, { recursive: true, force: true });
