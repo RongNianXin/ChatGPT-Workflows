@@ -40,7 +40,7 @@ if (!failures) {
     '不重复放置第三方工具的详细提示词',
   ];
   for (const needle of required) if (!externalSection.includes(needle)) fail(`operator manual is missing: ${needle}`);
-  for (const needle of ['[EXT-001：Agency Agents]', '[EXT-001：Agency Agents](#ext-001agency-agents)', '自然语言改手册的固定动作', '路径检查在三处触发']) {
+  for (const needle of ['[EXT-001：Agency Agents]', '[EXT-001：Agency Agents](#scenario-agency-agents)', '自然语言改手册的固定动作', '路径检查在三处触发']) {
     if (!text.includes(needle)) fail(`operator manual is missing: ${needle}`);
   }
   if (externalSection.includes('EXT-001 Agency Agents')) fail('operator manual retains the old inconsistent EXT-001 label');

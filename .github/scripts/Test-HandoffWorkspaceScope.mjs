@@ -1,0 +1,106 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
+import { spawnSync } from 'node:child_process';
+import { readGitWorkspaceBaseline, verifyWorkspaceBaseline } from './Prepare-Handoff.mjs';
+import { SCOPED_WORKSPACE_ALGORITHM, validateInflightScope, validateScopedWorkspaceSources, validWorkspaceFingerprint, validateScopeInventory } from './HandoffWorkspaceScope.mjs';
+
+const parent = process.env.TEMP || process.env.TMPDIR;
+if (!parent) throw new Error('provide an authorized test temporary directory');
+fs.mkdirSync(parent, { recursive: true });
+const root = fs.mkdtempSync(path.join(parent, 'handoff-scope-'));
+const git = (...args) => { const r = spawnSync('git', ['-C', root, ...args], { encoding: 'utf8' }); assert.equal(r.status, 0, r.stderr); return r.stdout; };
+const put = (ref, text) => { const absolute = path.join(root, ref); fs.mkdirSync(path.dirname(absolute), { recursive: true }); fs.writeFileSync(absolute, text); };
+git('init', '-q');
+git('config', 'user.name', 'Fixture'); git('config', 'user.email', 'fixture@example.invalid');
+git('config', 'core.autocrlf', 'false');
+put('central/CURRENT.md', 'fixture ownership record\n'); put('core.js', 'fixed\n'); put('specialist/task.js', 'version one\n'); put('.gitignore', 'necessary.local\n');
+git('add', '--', 'central/CURRENT.md', 'core.js', 'specialist/task.js', '.gitignore'); git('commit', '-qm', 'Fixture');
+const scope = { excluded_roots: [{ path_ref: 'specialist', owner: 'SPECIALIST_ROLE', reason: 'ordinary in-flight work is unrelated to the takeover breakpoint', ownership_source_ref: 'central/CURRENT.md' }] };
+const sources = { ownership: { root_ref: 'source_root', path_ref: 'central/CURRENT.md' } };
+let count = 0;
+const check = (name, run) => { run(); count++; console.log(`PASS ${name}`); };
+const base = (refs = []) => ({ root_ref: '.', required_untracked: refs.map(ref => ({ path_ref: ref, sha256: '0'.repeat(64), reason: 'required' })), ...readGitWorkspaceBaseline(root, refs, scope) });
+const verify = workspace => verifyWorkspaceBaseline(root, workspace, sources);
+check('opt-in uses a distinct algorithm', () => assert.equal(base().worktree_fingerprint.algorithm, SCOPED_WORKSPACE_ALGORITHM));
+const initial = base();
+check('initial scope verifies', () => assert.deepEqual(verify(initial), []));
+check('scoped fingerprint cannot omit scope', () => { const copy = structuredClone(initial); delete copy.inflight_scope; assert.equal(validWorkspaceFingerprint(copy, sources), false); });
+check('malformed scope is rejected without throwing', () => assert(validateInflightScope({ excluded_roots: [null, scope.excluded_roots[0]] }).length));
+check('null scope sources are rejected without throwing', () => assert(validateScopedWorkspaceSources(initial, null).length));
+put('specialist/new-test.js', 'new test\n');
+check('untracked specialist change remains valid', () => assert.deepEqual(verify(initial), []));
+put('specialist/task.js', 'version two\n');
+check('tracked specialist change remains valid', () => assert.deepEqual(verify(initial), []));
+git('add', '--', 'specialist/task.js', 'specialist/new-test.js');
+check('staged specialist change remains valid', () => assert.deepEqual(verify(initial), []));
+put('central/CURRENT.md', 'changed ownership\n');
+check('central change is rejected', () => assert(verify(initial).length));
+put('central/CURRENT.md', 'fixture ownership record\n');
+put('core.js', 'changed\n');
+check('necessary tracked change is rejected', () => assert(verify(initial).length));
+put('core.js', 'fixed\n');
+put('unclassified.js', 'unclassified\n');
+check('unclassified new path is rejected', () => assert(verify(initial).length)); fs.unlinkSync(path.join(root, 'unclassified.js'));
+put('necessary.local', 'required old\n');
+const withIgnored = base(['necessary.local']);
+put('necessary.local', 'required new\n');
+check('ignored necessary change is rejected', () => assert(verify(withIgnored).length));
+fs.unlinkSync(path.join(root, 'necessary.local'));
+check('ignored necessary missing is rejected', () => assert(verify(withIgnored).length));
+check('scope cannot exclude a seal source', () => assert(validateScopedWorkspaceSources(initial, { active: { root_ref: 'source_root', path_ref: 'specialist/task.js' }, ...sources }).length));
+check('scope requires ownership as a strict source', () => assert(validateScopedWorkspaceSources(initial, {}).length));
+check('scope cannot exclude ownership', () => assert(validateInflightScope({ excluded_roots: [{ ...scope.excluded_roots[0], path_ref: 'central' }] }).length));
+check('scope cannot exclude shared configuration', () => assert(validateInflightScope({ excluded_roots: [{ ...scope.excluded_roots[0], path_ref: '.github' }] }).length));
+check('scope rejects traversal', () => assert(validateInflightScope({ excluded_roots: [{ ...scope.excluded_roots[0], path_ref: '../specialist' }] }).length));
+check('scope rejects duplicate roots', () => assert(validateInflightScope({ excluded_roots: [scope.excluded_roots[0], scope.excluded_roots[0]] }).length));
+check('scope rejects nested overlap', () => assert(validateInflightScope({ excluded_roots: [scope.excluded_roots[0], { ...scope.excluded_roots[0], path_ref: 'specialist/nested' }] }).length));
+check('scope rejects normalized case overlap', () => assert(validateInflightScope({ excluded_roots: [scope.excluded_roots[0], { ...scope.excluded_roots[0], path_ref: 'SPECIALIST' }] }).length));
+check('undeclared case-variant directories cannot be excluded', () => assert.throws(() => validateScopeInventory(scope, ['specialist/task.js', 'Specialist/other.js']), /directory case/));
+check('a single decomposed Unicode path keeps its literal value', () => assert.doesNotThrow(() => validateScopeInventory(scope, ['unicode/e\u0301.js'])));
+check('Unicode directory aliases with disjoint filenames are rejected', () => assert.throws(() => validateScopeInventory(scope, ['unicode/e\u0301/one.js', 'unicode/é/two.js']), /Unicode path collision/));
+check('pinned rule snapshot cannot be excluded', () => assert(validateScopedWorkspaceSources(initial, sources, { ruleBaseline: { mode: 'PINNED_SNAPSHOT', snapshot_ref: 'specialist/snapshot.json' } }).length));
+put('specialist/control/status.md', 'external nested control\n');
+check('external control nested in source root cannot be excluded', () => assert(validateScopedWorkspaceSources(initial, { ...sources, external: { root_ref: 'external_control_plane', path_ref: 'status.md' } }, { sourceRoot: root, externalControlPlaneRoot: path.join(root, 'specialist/control') }).length));
+fs.unlinkSync(path.join(root, 'specialist/control/status.md')); fs.rmdirSync(path.join(root, 'specialist/control'));
+const externalScope = { excluded_roots: [{ ...scope.excluded_roots[0], ownership_root_ref: 'external_control_plane', ownership_source_ref: 'ownership.md' }] };
+check('external ownership uses an existing strict external source', () => assert.deepEqual(validateScopedWorkspaceSources({ ...initial, inflight_scope: externalScope }, { owner: { root_ref: 'external_control_plane', path_ref: 'ownership.md' } }), []));
+fs.mkdirSync(path.join(root, 'specialist/public-rules'));
+check('nested public workflow repository cannot be excluded', () => assert(validateScopedWorkspaceSources(initial, sources, { sourceRoot: root, workflowRepositoryRoot: path.join(root, 'specialist/public-rules') }).length));
+fs.rmdirSync(path.join(root, 'specialist/public-rules'));
+check('a junction or symlink cannot replace the declared root', () => {
+  const original = path.join(root, 'specialist'), moved = path.join(root, 'specialist-original');
+  fs.renameSync(original, moved);
+  let linked = false;
+  try { fs.symlinkSync(moved, original, process.platform === 'win32' ? 'junction' : 'dir'); linked = true; assert.throws(() => base(), /symlink/); }
+  finally { if (linked) { if (process.platform === 'win32') fs.rmdirSync(original); else fs.unlinkSync(original); } fs.renameSync(moved, original); }
+});
+check('unknown algorithm is rejected', () => assert(verify({ ...initial, worktree_fingerprint: { ...initial.worktree_fingerprint, algorithm: 'unknown' } }).length));
+const legacy = { root_ref: '.', required_untracked: [], ...readGitWorkspaceBaseline(root) };
+put('specialist/newer.js', 'more\n');
+check('default V1 still rejects specialist changes', () => assert(verifyWorkspaceBaseline(root, legacy).length));
+fs.unlinkSync(path.join(root, 'specialist/newer.js'));
+git('reset', '-q', 'HEAD', '--', 'specialist/task.js', 'specialist/new-test.js');
+const staging = base();
+put('core.js', 'intermediate\n'); git('add', '--', 'core.js'); put('core.js', 'fixed\n');
+check('index-only drift with identical worktree is rejected', () => assert(verify(staging).length));
+git('reset', '-q', 'HEAD', '--', 'core.js');
+check('protected mutation during sampling is rejected', () => {
+  const originalRead = fs.readFileSync;
+  let injected = false;
+  fs.readFileSync = function (file, ...args) {
+    const bytes = originalRead.call(this, file, ...args);
+    if (!injected && String(file) === path.join(root, 'core.js')) { injected = true; fs.writeFileSync(file, 'concurrent protected change\n'); }
+    return bytes;
+  };
+  try { assert.throws(() => base(), /changed during scoped observation/); assert.equal(injected, true); }
+  finally { fs.readFileSync = originalRead; put('core.js', 'fixed\n'); }
+});
+git('mv', '--', 'core.js', 'specialist/core.js');
+check('rename across scope boundary is rejected', () => assert(verify(staging).length));
+git('reset', '-q', 'HEAD', '--', 'core.js', 'specialist/core.js'); fs.renameSync(path.join(root, 'specialist/core.js'), path.join(root, 'core.js'));
+put('specialist/AI状态索引.md', 'new control entry\n');
+check('central record names inside specialist stay strict', () => assert(verify(staging).length)); fs.unlinkSync(path.join(root, 'specialist/AI状态索引.md'));
+git('add', '--', 'specialist/task.js', 'specialist/new-test.js'); git('commit', '-qm', 'In-flight commit');
+check('HEAD still remains strict even for specialist commits', () => assert(verify(staging).some(error => error.includes('head'))));
+console.log(`Handoff workspace scope: ${count} checks passed`);

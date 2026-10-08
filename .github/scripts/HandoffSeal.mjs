@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
+import { validWorkspaceFingerprint, validateScopedWorkspaceSources } from './HandoffWorkspaceScope.mjs';
 
 const HEX = /^[0-9a-f]{64}$/;
 const TOP_LEVEL_KEYS = new Set(['schema_version', 'record_type', 'generation', 'writer_id', 'old_writer_status', 'seal_sequence', 'previous_seal_digest', 'fact_cutoff', 'sealed_at', 'event_id', 'sources', 'source_digest_status', 'rule_baseline', 'objective', 'prohibitions', 'communications', 'workspace', 'remote', 'control_handoff_confidence', 'candidate_verification_status', 'switch_status', 'handoff_phase', 'runtime_acceptance_status', 'professional_acceptance_status', 'transition', 'migration', 'invalidation_conditions', 'seal_digest']);
@@ -22,6 +23,7 @@ const sorted = value => {
 export const canonicalJson = value => JSON.stringify(sorted(value));
 export const sealDigest = seal => digest(canonicalJson(Object.fromEntries(Object.entries(seal).filter(([key]) => key !== 'seal_digest'))));
 export const transitionDigest = intent => digest(canonicalJson(Object.fromEntries(Object.entries(intent).filter(([key]) => key !== 'transition_digest'))));
+export const recoveryDigest = recovery => digest(canonicalJson(Object.fromEntries(Object.entries(recovery).filter(([key]) => key !== 'recovery_digest'))));
 
 const fail = (errors, message) => errors.push(message);
 const RULE_BASELINE_KEYS = ['rule_version', 'manifest_sha256', 'mode', 'source_role', 'snapshot_ref', 'snapshot_sha256', 'observed_live_rule_version', 'observed_live_manifest_sha256', 'compatibility', 'action'];
@@ -75,6 +77,7 @@ function verifySourceFiles(seal, sourceRoot, externalControlPlaneRoot) {
       if (digest(fs.readFileSync(snapshot)) !== baseline.snapshot_sha256) throw new Error('snapshot digest mismatch');
     } catch (error) { errors.push(`rule snapshot verification failed: ${error.message}`); }
   }
+  errors.push(...validateScopedWorkspaceSources(seal.workspace, seal.sources, { sourceRoot: internalRoot, externalControlPlaneRoot: externalRoot, ruleBaseline: seal.rule_baseline, workflowRepositoryRoot: path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..') }));
   return errors;
 }
 
@@ -194,7 +197,7 @@ export function validateSeal(seal, { checkDigest = true, requireExtensions = fal
   const w = seal.workspace;
   const workspaceKeys = ['root_ref', 'branch', 'head', 'tree', 'staged_count', 'tracked_modified_count', 'untracked_count', 'required_untracked'];
   const legacyWorkspace = w && !Object.hasOwn(w, 'worktree_fingerprint');
-  if (!w || (!legacyWorkspace && !exactKeys(w, [...workspaceKeys, 'worktree_fingerprint'])) || (legacyWorkspace && !requireExtensions && !exactKeys(w, workspaceKeys)) || (legacyWorkspace && requireExtensions) || typeof w.root_ref !== 'string' || !w.root_ref || typeof w.branch !== 'string' || !w.branch || !/^[0-9a-f]{40,64}$/.test(w.head || '') || !/^[0-9a-f]{40,64}$/.test(w.tree || '') || !Number.isInteger(w.staged_count) || w.staged_count < 0 || !Number.isInteger(w.tracked_modified_count) || w.tracked_modified_count < 0 || !Number.isInteger(w.untracked_count) || w.untracked_count < 0 || !Array.isArray(w.required_untracked) || (!legacyWorkspace && (!exactKeys(w.worktree_fingerprint, ['algorithm', 'tracked_diff_sha256', 'untracked_digest']) || w.worktree_fingerprint.algorithm !== 'git-diff-binary+untracked-content-sha256-v1' || !HEX.test(w.worktree_fingerprint.tracked_diff_sha256 || '') || !HEX.test(w.worktree_fingerprint.untracked_digest || '')))) fail(errors, 'invalid workspace baseline');
+  if (!w || (!legacyWorkspace && !exactKeys(w, [...workspaceKeys, 'worktree_fingerprint', ...(Object.hasOwn(w, 'inflight_scope') ? ['inflight_scope'] : [])])) || (legacyWorkspace && !requireExtensions && !exactKeys(w, workspaceKeys)) || (legacyWorkspace && requireExtensions) || typeof w.root_ref !== 'string' || !w.root_ref || typeof w.branch !== 'string' || !w.branch || !/^[0-9a-f]{40,64}$/.test(w.head || '') || !/^[0-9a-f]{40,64}$/.test(w.tree || '') || !Number.isInteger(w.staged_count) || w.staged_count < 0 || !Number.isInteger(w.tracked_modified_count) || w.tracked_modified_count < 0 || !Number.isInteger(w.untracked_count) || w.untracked_count < 0 || !Array.isArray(w.required_untracked) || (!legacyWorkspace && !validWorkspaceFingerprint(w, seal.sources, { ruleBaseline: seal.rule_baseline }))) fail(errors, 'invalid workspace baseline');
   else for (const item of w.required_untracked) if (!exactKeys(item, ['path_ref', 'sha256', 'reason']) || !relativeRef(item.path_ref) || !HEX.test(item.sha256 || '') || typeof item.reason !== 'string' || !item.reason) fail(errors, 'invalid required_untracked item');
   const r = seal.remote;
   if (!exactKeys(r, ['status', 'default_ref', 'head', 'observed_at']) || !['PASS', 'UNKNOWN', 'FAIL', 'NOT_APPLICABLE'].includes(r.status) || typeof r.default_ref !== 'string' || !r.default_ref || (r.head !== null && !/^[0-9a-f]{40,64}$/.test(r.head || '')) || (r.observed_at !== null && !iso(r.observed_at))) fail(errors, 'invalid remote baseline');
@@ -240,7 +243,7 @@ function sealFiles(dir) {
 export function readChain(dir, { ignoreOwnLock = false } = {}) {
   const errors = [];
   if (!fs.existsSync(dir)) return { records: [], errors: ['seal directory missing'] };
-  const leftovers = fs.readdirSync(dir).filter(name => (name === '.handoff.lock' && !ignoreOwnLock) || name.includes('.tmp') || (!/^handoff-state\.\d+\.[0-9a-f]{64}\.json$/.test(name) && !/^handoff-transition\.\d+\.[0-9a-f]{64}\.json$/.test(name) && name !== '.handoff.lock'));
+  const leftovers = fs.readdirSync(dir).filter(name => (name === '.handoff.lock' && !ignoreOwnLock) || name.includes('.tmp') || (!/^handoff-state\.\d+\.[0-9a-f]{64}\.json$/.test(name) && !/^handoff-transition\.\d+\.[0-9a-f]{64}\.json$/.test(name) && !/^handoff-transition-recovery\.\d+\.[0-9a-f]{64}\.json$/.test(name) && name !== '.handoff.lock'));
   leftovers.forEach(name => fail(errors, `recovery artifact present: ${name}`));
   const records = [];
   for (const file of sealFiles(dir)) {
@@ -260,6 +263,17 @@ export function readChain(dir, { ignoreOwnLock = false } = {}) {
       if (transitionPredecessors.has(intent.previous_seal_digest)) fail(errors, `duplicate transition intent for ${intent.previous_seal_digest}`);
       transitionPredecessors.add(intent.previous_seal_digest);
       intents.set(intent.transition_digest, intent);
+    } catch (error) { fail(errors, `${file}: ${error.message}`); }
+  }
+  const recoveries = new Map();
+  for (const file of fs.readdirSync(dir).filter(name => /^handoff-transition-recovery\.\d+\.[0-9a-f]{64}\.json$/.test(name))) {
+    try {
+      const recovery = readTransitionRecovery(path.join(dir, file));
+      const intent = intents.get(recovery.intent_digest);
+      if (!intent) throw new Error('recovery references a missing transition intent');
+      if (recoveries.has(recovery.intent_digest)) throw new Error('transition intent has more than one recovery');
+      if (recovery.previous_seal_digest !== intent.previous_seal_digest || recovery.previous_sequence !== intent.previous_sequence || recovery.generation !== intent.previous_generation || recovery.writer_id !== intent.previous_writer_id || Date.parse(recovery.recovered_at) < Date.parse(intent.prepared_at)) throw new Error('recovery does not match transition predecessor or time');
+      recoveries.set(recovery.intent_digest, recovery);
     } catch (error) { fail(errors, `${file}: ${error.message}`); }
   }
   const seen = new Set();
@@ -299,10 +313,18 @@ export function readChain(dir, { ignoreOwnLock = false } = {}) {
   const consumed = new Map();
   for (const seal of records) if (seal.transition?.intent_digest) consumed.set(seal.transition.intent_digest, (consumed.get(seal.transition.intent_digest) ?? 0) + 1);
   for (const [intentDigest, count] of consumed) if (count > 1) fail(errors, `transition intent consumed more than once: ${intentDigest}`);
-  const pendingIntents = [...intents.values()].filter(intent => !consumed.has(intent.transition_digest));
+  for (const [intentDigest, recovery] of recoveries) {
+    if (consumed.has(intentDigest)) fail(errors, `recovered transition intent was consumed: ${intentDigest}`);
+    if (seenEventIds.has(recovery.event_id) || [...intents.values()].some(intent => intent.event_id === recovery.event_id) || [...recoveries.values()].filter(other => other.event_id === recovery.event_id).length !== 1) fail(errors, `recovery event_id already exists: ${recovery.event_id}`);
+    const predecessor = records.find(record => record.seal_digest === recovery.previous_seal_digest);
+    if (!predecessor || predecessor.seal_sequence !== recovery.previous_sequence || predecessor.generation !== recovery.generation || predecessor.writer_id !== recovery.writer_id || Date.parse(recovery.recovered_at) < Date.parse(predecessor.sealed_at)) fail(errors, `recovery predecessor mismatch: ${intentDigest}`);
+    const successor = records.find(record => record.seal_sequence === recovery.previous_sequence + 1);
+    if (successor && (successor.handoff_phase !== 'CURRENT_ATTESTATION' || successor.generation !== recovery.generation || successor.writer_id !== recovery.writer_id || Date.parse(successor.sealed_at) < Date.parse(recovery.recovered_at))) fail(errors, `recovered intent must be followed by same-writer current attestation: ${intentDigest}`);
+  }
+  const pendingIntents = [...intents.values()].filter(intent => !consumed.has(intent.transition_digest) && !recoveries.has(intent.transition_digest));
   const latest = records.at(-1);
   for (const intent of pendingIntents) if (!latest || intent.previous_seal_digest !== latest.seal_digest || intent.previous_sequence !== latest.seal_sequence || intent.previous_generation !== latest.generation || intent.previous_writer_id !== latest.writer_id) fail(errors, `stale unconsumed transition intent: ${intent.transition_digest}`);
-  return { records, intents: [...intents.values()], pending_intents: pendingIntents, historical_assurance: hasLegacyRecords ? 'LEGACY_UNVERIFIED' : 'STRICT_V3', errors };
+  return { records, intents: [...intents.values()], recoveries: [...recoveries.values()], pending_intents: pendingIntents, historical_assurance: hasLegacyRecords ? 'LEGACY_UNVERIFIED' : 'STRICT_V3', errors };
 }
 
 export function verifyChain(dir, options = {}) {
@@ -324,9 +346,10 @@ export function verifyChain(dir, options = {}) {
   const identity = requiresLiveSources && sourceVerificationErrors.length === 0
     ? verifyControlIdentity(latest, options) : { status: 'NOT_CHECKED', errors: [] };
   if (identity.status === 'FAIL') result.errors.push(...identity.errors);
-  const controlStatus = result.errors.length || latest?.switch_status === 'BLOCKED' || latestSourceStatus !== 'PASS' || identity.status !== 'PASS' ? 'BLOCKED' : 'READY';
+  const awaitingRecoveryAttestation = result.recoveries?.some(recovery => recovery.previous_seal_digest === latest?.seal_digest);
+  const controlStatus = result.errors.length || awaitingRecoveryAttestation || latest?.switch_status === 'BLOCKED' || latestSourceStatus !== 'PASS' || identity.status !== 'PASS' ? 'BLOCKED' : 'READY';
   const handoffReady = controlStatus === 'READY' && latest && ['READY', 'READY_WITH_RESTRICTIONS', 'COMPLETED'].includes(latest.switch_status);
-  return { ...result, latest, latest_source_status: latestSourceStatus, control_identity_status: identity.status, control_identity_errors: identity.errors, control_status: controlStatus, handoff_ready: Boolean(handoffReady), transition_status: result.pending_intents?.length ? 'PENDING' : 'SETTLED', status: result.errors.length ? 'BLOCKED' : 'PASS' };
+  return { ...result, latest, latest_source_status: latestSourceStatus, control_identity_status: identity.status, control_identity_errors: identity.errors, control_status: controlStatus, handoff_ready: Boolean(handoffReady), transition_status: result.pending_intents?.length ? 'PENDING' : 'SETTLED', recovery_status: awaitingRecoveryAttestation ? 'AWAITING_ATTESTATION' : 'SETTLED', status: result.errors.length ? 'BLOCKED' : 'PASS' };
 }
 
 function validateTransitionIntent(intent) {
@@ -351,6 +374,68 @@ function readTransitionIntent(ticketPath) {
   return intent;
 }
 
+function validateTransitionRecovery(recovery) {
+  const errors = [];
+  if (!exactKeys(recovery, ['record_type', 'intent_digest', 'previous_seal_digest', 'previous_sequence', 'generation', 'writer_id', 'reason', 'event_id', 'recovered_at', 'previous_source_status', 'drifted_sources', 'recovery_digest'])) return ['invalid transition recovery fields'];
+  if (recovery.record_type !== 'handoff-transition-recovery' || recovery.reason !== 'RULE_REBASE' || !['PASS', 'DRIFTED_NONCONTROL'].includes(recovery.previous_source_status)) fail(errors, 'invalid transition recovery evidence');
+  if (!Array.isArray(recovery.drifted_sources) || recovery.drifted_sources.some(item => !exactKeys(item, ['name', 'actual_digest']) || !/^[a-z][a-z0-9_]*$/.test(item.name || '') || !HEX.test(item.actual_digest || '')) || new Set(recovery.drifted_sources.map(item => item.name)).size !== recovery.drifted_sources.length || recovery.drifted_sources.some((item, index) => index > 0 && item.name <= recovery.drifted_sources[index - 1].name) || (recovery.previous_source_status === 'PASS') !== (recovery.drifted_sources.length === 0)) fail(errors, 'invalid transition recovery drift inventory');
+  if (!HEX.test(recovery.intent_digest || '') || !HEX.test(recovery.previous_seal_digest || '') || !Number.isInteger(recovery.previous_sequence) || recovery.previous_sequence < 1 || !Number.isInteger(recovery.generation) || recovery.generation < 1 || !/^[A-Za-z0-9._-]+$/.test(recovery.writer_id || '')) fail(errors, 'invalid transition recovery predecessor');
+  if (!/^[A-Za-z0-9._:-]+$/.test(recovery.event_id || '') || !iso(recovery.recovered_at)) fail(errors, 'invalid transition recovery event or time');
+  if (!HEX.test(recovery.recovery_digest || '') || recovery.recovery_digest !== recoveryDigest(recovery)) fail(errors, 'transition recovery digest mismatch');
+  return errors;
+}
+function readTransitionRecovery(recoveryPath) {
+  const recovery = JSON.parse(fs.readFileSync(recoveryPath, 'utf8'));
+  const errors = validateTransitionRecovery(recovery);
+  if (errors.length) throw new Error(errors.join('; '));
+  const match = /^handoff-transition-recovery\.(\d+)\.([0-9a-f]{64})\.json$/.exec(path.basename(recoveryPath));
+  if (!match || Number(match[1]) !== recovery.previous_sequence || match[2] !== recovery.recovery_digest) throw new Error('transition recovery filename does not match record');
+  return recovery;
+}
+export function recoverTransition(dir, { sourceRoot, externalControlPlaneRoot, expectedPreviousDigest, expectedIntentDigest, eventId, recoveredAt = new Date().toISOString() } = {}) {
+  const lock = path.join(dir, '.handoff.lock');
+  const fd = fs.openSync(lock, 'wx');
+  try {
+    const current = verifyChain(dir, { ignoreOwnLock: true, sourceRoot, externalControlPlaneRoot, verifyLatestSources: false });
+    if (current.status !== 'PASS') throw new Error(`current seal history is invalid: ${current.errors.join('; ')}`);
+    const predecessor = current.latest;
+    if (predecessor.seal_digest !== expectedPreviousDigest) throw new Error('expected previous digest mismatch');
+    if (current.pending_intents.length !== 1 || current.pending_intents[0].transition_digest !== expectedIntentDigest) throw new Error('expected unique pending transition intent mismatch');
+    if (current.records.some(record => record.event_id === eventId) || current.intents.some(intent => intent.event_id === eventId) || current.recoveries.some(recovery => recovery.event_id === eventId)) throw new Error('event_id already exists in the handoff chain');
+    const intent = current.pending_intents[0];
+    if (Date.parse(recoveredAt) < Date.parse(intent.prepared_at) || Date.parse(recoveredAt) < Date.parse(predecessor.sealed_at)) throw new Error('recovery time precedes the intent or predecessor');
+    const protectedSources = new Set([...CONTROL_IDENTITY_SOURCES, 'control_plane_registry']);
+    const audit = () => {
+      const errors = verifySourceFiles(predecessor, sourceRoot, externalControlPlaneRoot);
+      const drifted = [];
+      for (const error of errors) {
+        const match = /^source verification failed: ([a-z][a-z0-9_]*): source digest mismatch$/.exec(error);
+        if (!match || protectedSources.has(match[1])) throw new Error(`recovery cannot bypass control or unreadable source: ${error}`);
+        const name = match[1];
+        const source = predecessor.sources[name];
+        const root = source.root_ref === 'external_control_plane' ? externalControlPlaneRoot : sourceRoot;
+        const resolved = fs.realpathSync(path.resolve(root, source.path_ref));
+        if (!insideRoot(root, resolved)) throw new Error(`recovery source escapes root: ${name}`);
+        drifted.push({ name, actual_digest: digest(fs.readFileSync(resolved)) });
+      }
+      const identity = verifyControlIdentity(predecessor, { sourceRoot, externalControlPlaneRoot });
+      if (identity.status !== 'PASS') throw new Error(`recovery control identity is not verified: ${identity.errors.join('; ')}`);
+      return drifted.sort((a, b) => a.name.localeCompare(b.name));
+    };
+    const driftedSources = audit();
+    if (canonicalJson(driftedSources) !== canonicalJson(audit())) throw new Error('recovery source changed during observation');
+    const recovery = { record_type: 'handoff-transition-recovery', intent_digest: intent.transition_digest, previous_seal_digest: predecessor.seal_digest, previous_sequence: predecessor.seal_sequence, generation: predecessor.generation, writer_id: predecessor.writer_id, reason: 'RULE_REBASE', event_id: eventId, recovered_at: recoveredAt, previous_source_status: driftedSources.length ? 'DRIFTED_NONCONTROL' : 'PASS', drifted_sources: driftedSources, recovery_digest: '' };
+    recovery.recovery_digest = recoveryDigest(recovery);
+    const errors = validateTransitionRecovery(recovery);
+    if (errors.length) throw new Error(errors.join('; '));
+    const finalPath = path.join(dir, `handoff-transition-recovery.${recovery.previous_sequence}.${recovery.recovery_digest}.json`);
+    const tempPath = `${finalPath}.${process.pid}.tmp`;
+    const out = fs.openSync(tempPath, 'wx');
+    try { fs.writeFileSync(out, `${JSON.stringify(recovery, null, 2)}\n`, 'utf8'); fs.fsyncSync(out); } finally { fs.closeSync(out); }
+    fs.renameSync(tempPath, finalPath);
+    return { recovery, path: finalPath };
+  } finally { fs.closeSync(fd); fs.unlinkSync(lock); }
+}
 export function prepareTransition(dir, { sourceRoot, externalControlPlaneRoot, expectedPreviousDigest, nextGeneration, nextWriterId, eventId, preparedAt = new Date().toISOString() } = {}) {
   fs.mkdirSync(dir, { recursive: true });
   const lock = path.join(dir, '.handoff.lock');
@@ -363,7 +448,8 @@ export function prepareTransition(dir, { sourceRoot, externalControlPlaneRoot, e
     const generationTransition = nextGeneration === previous.generation + 1 && nextWriterId !== previous.writer_id;
     if (!generationTransition) throw new Error('transition intent requires the next generation and a different writer');
     if (current.pending_intents.length) throw new Error('an unconsumed transition intent already exists');
-    if (current.records.some(record => record.event_id === eventId) || current.intents.some(intent => intent.event_id === eventId)) throw new Error('event_id already exists in the handoff chain');
+    if (current.recoveries.some(recovery => recovery.previous_seal_digest === previous.seal_digest)) throw new Error('recovered intent requires a new current attestation before preparing another transition');
+    if (current.records.some(record => record.event_id === eventId) || current.intents.some(intent => intent.event_id === eventId) || current.recoveries.some(recovery => recovery.event_id === eventId)) throw new Error('event_id already exists in the handoff chain');
     if (Date.parse(preparedAt) < Date.parse(previous.sealed_at)) throw new Error('transition prepared_at precedes predecessor seal');
     const intent = {
       record_type: 'handoff-transition-intent', previous_seal_digest: previous.seal_digest, previous_sequence: previous.seal_sequence,
@@ -395,6 +481,8 @@ export function appendSeal(dir, draft, { expectedPreviousDigest, sourceRoot, ext
     if (expectedPreviousDigest !== undefined && expectedPreviousDigest !== actualPreviousDigest) throw new Error('expected previous digest mismatch');
     if (current.pending_intents.length && !transitionTicket) throw new Error('an unconsumed transition intent must be consumed or explicitly recovered before appending');
     const seal = structuredClone(draft);
+    const recovery = current.recoveries.find(item => item.previous_seal_digest === previous?.seal_digest);
+    if (recovery && (seal.handoff_phase !== 'CURRENT_ATTESTATION' || Date.parse(seal.sealed_at) < Date.parse(recovery.recovered_at))) throw new Error('recovered intent requires a later same-writer current attestation');
     if (seal.schema_version !== 3) throw new Error('new seal writes require schema_version 3; schema 1/2 records are read-only legacy history');
     if (previous && seal.generation < previous.generation) throw new Error('generation rollback');
     if (previous && seal.generation === previous.generation && seal.writer_id !== previous.writer_id) throw new Error('writer change without generation transition');
@@ -415,7 +503,7 @@ export function appendSeal(dir, draft, { expectedPreviousDigest, sourceRoot, ext
     if (seal.handoff_phase === 'CURRENT_ATTESTATION' && (!previous || seal.generation !== previous.generation || seal.writer_id !== previous.writer_id || transitionTicket)) throw new Error('current attestation requires an existing seal with the same generation and writer');
     seal.seal_sequence = (previous?.seal_sequence ?? 0) + 1;
     seal.previous_seal_digest = previous?.seal_digest ?? null;
-    if (current.records.some(record => record.event_id === seal.event_id)) throw new Error('event_id already exists in the handoff chain');
+    if (current.records.some(record => record.event_id === seal.event_id) || current.intents.some(previousIntent => previousIntent.event_id === seal.event_id && previousIntent.transition_digest !== intent?.transition_digest) || current.recoveries.some(recovery => recovery.event_id === seal.event_id)) throw new Error('event_id already exists in the handoff chain');
     if (previous && Date.parse(seal.fact_cutoff) < Date.parse(previous.fact_cutoff)) throw new Error('fact_cutoff rollback');
     if (previous && Date.parse(seal.sealed_at) < Date.parse(previous.sealed_at)) throw new Error('sealed_at rollback');
     if (intent && Date.parse(intent.prepared_at) > Date.parse(seal.sealed_at)) throw new Error('transition prepared_at follows takeover seal');
@@ -449,6 +537,7 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.a
   const [command, target, sourceRoot, ...rest] = process.argv.slice(2);
   if (command === 'verify' && target) { const historicalOnly = rest.includes('--history-only'); const externalControlPlaneRoot = rest.find(value => value.startsWith('--external-control-plane-root='))?.slice('--external-control-plane-root='.length); const result = verifyChain(path.resolve(target), { sourceRoot, externalControlPlaneRoot, verifyLatestSources: !historicalOnly }); console.log(JSON.stringify(result, null, 2)); process.exitCode = result.status === 'PASS' ? 0 : 1; }
   else if (command === 'prepare' && target && sourceRoot && rest.length >= 3) { const [nextGeneration, nextWriterId, eventId] = rest; const externalControlPlaneRoot = rest.find(value => value.startsWith('--external-control-plane-root='))?.slice('--external-control-plane-root='.length); const result = prepareTransition(path.resolve(target), { sourceRoot, externalControlPlaneRoot, nextGeneration: Number(nextGeneration), nextWriterId, eventId }); console.log(JSON.stringify(result, null, 2)); }
+  else if (command === 'recover' && target && sourceRoot && rest.length >= 3) { const [previousDigest, intentDigest, eventId] = rest; const externalControlPlaneRoot = rest.find(value => value.startsWith('--external-control-plane-root='))?.slice('--external-control-plane-root='.length); const result = recoverTransition(path.resolve(target), { sourceRoot, externalControlPlaneRoot, expectedPreviousDigest: previousDigest, expectedIntentDigest: intentDigest, eventId }); console.log(JSON.stringify(result, null, 2)); }
   else if (command === 'append' && target && sourceRoot && rest.length >= 1) { const [draftPath, transitionTicket] = rest; const externalControlPlaneRoot = rest.find(value => value.startsWith('--external-control-plane-root='))?.slice('--external-control-plane-root='.length); const draft = JSON.parse(fs.readFileSync(draftPath, 'utf8')); const result = appendSeal(path.resolve(target), draft, { sourceRoot, externalControlPlaneRoot, transitionTicket }); console.log(JSON.stringify(result, null, 2)); }
-  else { console.error('usage: node HandoffSeal.mjs verify <seal-directory> <source-root> [--external-control-plane-root=<root>] [--history-only] | prepare <seal-directory> <source-root> <next-generation> <next-writer-id> <event-id> [--external-control-plane-root=<root>] | append <seal-directory> <source-root> <draft-json> [transition-ticket] [--external-control-plane-root=<root>]'); process.exitCode = 2; }
+  else { console.error('usage: node HandoffSeal.mjs verify <seal-directory> <source-root> [--external-control-plane-root=<root>] [--history-only] | prepare <seal-directory> <source-root> <next-generation> <next-writer-id> <event-id> [--external-control-plane-root=<root>] | recover <seal-directory> <source-root> <previous-digest> <intent-digest> <recovery-event-id> [--external-control-plane-root=<root>] | append <seal-directory> <source-root> <draft-json> [transition-ticket] [--external-control-plane-root=<root>]'); process.exitCode = 2; }
 }

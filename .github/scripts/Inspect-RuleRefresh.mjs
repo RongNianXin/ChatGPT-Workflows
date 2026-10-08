@@ -7,9 +7,9 @@ const defaultRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '
 const repositoryPrefixes = ['.github/', '引用的外部工具/'];
 const required = [
   ...Array.from({ length: 12 }, (_, index) => `${String(index).padStart(2, '0')}-`),
-  '.github/scripts/HandoffSeal.mjs', '.github/scripts/Prepare-Handoff.mjs',
+  '.github/scripts/HandoffSeal.mjs', '.github/scripts/Prepare-Handoff.mjs', '.github/scripts/HandoffWorkspaceScope.mjs',
   '.github/scripts/Inspect-WorkspaceTracking.mjs', '.github/scripts/Inspect-RuleRefresh.mjs',
-  '.github/scripts/Mark-Handoff-Delivered.mjs', '总指挥轻量交接启动配置.md',
+  '.github/scripts/Mark-Handoff-Delivered.mjs', '.github/scripts/Inspect-QuotaProtection.mjs', '总指挥轻量交接启动配置.md',
   '规则刷新广播包.md', '规则刷新接收回执模板.md', 'templates/HANDOFF_STATE.schema.json',
   '引用的外部工具/外部工具目录.md', '引用的外部工具/外部工具自动对接规范.md'
 ];
@@ -93,16 +93,48 @@ export function captureRuleRefresh(ruleRoot = defaultRoot, { mode = 'local', exp
   };
 }
 
+// Offsets count Unicode code points, so a segment never splits a surrogate pair.
+// This describes text emitted by the tool, not text understood by an Agent.
+export function readRuleSegment(capture, file, { offset = 0, length } = {}) {
+  if (typeof file !== 'string' || !Object.hasOwn(capture.texts, file) || !Number.isSafeInteger(offset) || offset < 0 ||
+      !Number.isSafeInteger(length) || length <= 0) fail('INVALID_INPUT', 'Invalid registered file or segment range');
+  const points = Array.from(capture.texts[file]);
+  if (offset > points.length) fail('INVALID_INPUT', 'Segment offset exceeds text length');
+  const end = offset + Math.min(length, points.length - offset);
+  return { result: capture.report.result, snapshot_sha256: capture.report.snapshot_sha256,
+    file_sha256: capture.report.rules.find(item => item.path_ref === file).sha256,
+    path_ref: file, offset_unit: 'unicode_code_point', start: offset, end,
+    next_offset: end, total: points.length, text_reading: 'NOT_ATTESTED',
+    text: points.slice(offset, end).join('') };
+}
+
 function main(argv) {
   const options = {};
   for (let index = 0; index < argv.length; index += 2) {
     const flag = argv[index];
-    if (!['--rule-root', '--mode', '--expected', '--file'].includes(flag) || !argv[index + 1] || options[flag] !== undefined) {
-      fail('INVALID_INPUT', 'Usage: node Inspect-RuleRefresh.mjs [--rule-root PATH] [--mode local|pinned] [--expected SHA256] [--file PATH_REF]');
+    if (!['--rule-root', '--mode', '--expected', '--file', '--offset', '--length'].includes(flag) || !argv[index + 1] || options[flag] !== undefined) {
+      fail('INVALID_INPUT', 'Usage: node Inspect-RuleRefresh.mjs [--rule-root PATH] [--mode local|pinned] [--expected SHA256] [--file PATH_REF] [--offset N --length N]');
     }
     options[flag] = argv[index + 1];
   }
-  const { report, texts } = captureRuleRefresh(options['--rule-root'] || defaultRoot, { mode: options['--mode'] || 'local', expected: options['--expected'] });
+  const segmented = options['--offset'] !== undefined || options['--length'] !== undefined;
+  if (segmented && (!options['--file'] || options['--length'] === undefined ||
+      !/^\d+$/.test(options['--length']) || (options['--offset'] !== undefined && !/^\d+$/.test(options['--offset'])))) {
+    fail('INVALID_INPUT', 'Segments require --file and a positive integer --length; --offset defaults to zero');
+  }
+  if (segmented && Number(options['--offset'] ?? 0) > 0 && !options['--expected']) {
+    fail('INVALID_INPUT', 'Continuation requires --expected to bind the same saved snapshot');
+  }
+  const captured = captureRuleRefresh(options['--rule-root'] || defaultRoot, { mode: options['--mode'] || 'local', expected: options['--expected'] });
+  const { report, texts } = captured;
+  if (segmented) {
+    const { text, ...segment } = readRuleSegment(captured, options['--file'], {
+      offset: Number(options['--offset'] ?? 0), length: Number(options['--length'])
+    });
+    console.log(JSON.stringify(segment));
+    process.stdout.write(text);
+    return;
+  }
   if (options['--file']) {
     if (!Object.hasOwn(texts, options['--file'])) fail('INVALID_INPUT', 'Requested file is not a registered rule');
     console.log(JSON.stringify({ result: report.result, snapshot_sha256: report.snapshot_sha256, text_reading: 'NOT_ATTESTED' }));

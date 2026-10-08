@@ -6,14 +6,21 @@ import { fileURLToPath } from 'node:url';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const workflow = path.join(root, '总指挥工作流', '第二代总指挥的工作模式');
-const read = name => fs.readFileSync(path.join(workflow, name), 'utf8');
+// Existing prose contracts check visible wording; the dedicated reference check
+// separately validates these hidden semantic bindings and history boundaries.
+const read = name => fs.readFileSync(path.join(workflow, name), 'utf8')
+  .replace(/<!-- SCENARIO_(?:REFS:[^\n]*|HISTORY:(?:BEGIN|END)) -->/g, '');
 const sha256 = value => crypto.createHash('sha256').update(value).digest('hex').toUpperCase();
 const schema = JSON.parse(fs.readFileSync(path.join(workflow, 'templates', 'HANDOFF_STATE.schema.json'), 'utf8'));
 const REFRESH_REQUIRED_RULES = [
+  '.github/scripts/HandoffWorkspaceScope.mjs',
   '.github/scripts/HandoffSeal.mjs',
   '.github/scripts/Prepare-Handoff.mjs',
   '.github/scripts/Mark-Handoff-Delivered.mjs',
   '.github/scripts/Inspect-RuleRefresh.mjs',
+  '.github/scripts/Inspect-QuotaProtection.mjs',
+  '.github/scripts/Test-OperatorManualReferences.mjs',
+  'templates/OPERATOR_MANUAL_REFERENCES.json',
   ...Array.from({ length: 12 }, (_, index) => `${String(index).padStart(2, '0')}-`),
   '总指挥轻量交接启动配置.md',
   '规则刷新广播包.md',
@@ -49,6 +56,9 @@ checks.push(['platform thread failure freezes handoff writes', read('04-状态�
 checks.push(['empty cross-task output is an explicit failure', read('09-自动化授权与风险分级.md'), ['目标任务完成但最终文本为空', '不得写成 `RECEIVED`、`COMPLETED`', '非空的 `BLOCKED` 或 `FAILED`', '空输出不能作为成功回执']]);
 checks.push(['operator-visible receipt precedes tools and blocks empty closeout', `${read('09-自动化授权与风险分级.md')}\n${fs.readFileSync(path.join(root, 'AGENTS.md'), 'utf8')}`, ['首个可见文本', '只能记为 `OUTPUT_UNVERIFIED/BLOCKED`', '暂停恢复原主线', '本地反馈不产生对外发送权限']]);
 checks.push(['core rules carry the cross-project closeout hard gate', read('02-总指挥核心规则.md'), ['总指挥核心收口硬门', '无对外回执授权', '必须先向当前操作者输出非空的收件状态', '所有启用本工作流的项目均适用', '`AGENTS.md` 只能作为本项目附加护栏']]);
+checks.push(['same-window authority reuse preserves source and permission boundaries', `${read('规则刷新广播包.md')}\n${read('01-操作者操作手册.md')}`, ['当前窗口已核验且仍有效的权威来源绑定', '可回源', '未被撤销、替换', '不要求操作者重复确认路径', '裸历史路径和其他窗口声明仍不可用']]);
+checks.push(['refresh continuity preserves exact reading and real stop conditions', `${read('规则刷新广播包.md')}\n${read('02-总指挥核心规则.md')}\n${read('09-自动化授权与风险分级.md')}`, ['真实停止条件触发后正文没读完', '下一位置', '正常分段', '不能替代正文理解', 'NOT_ATTESTED', '--offset 0 --length 2000', '规则来源故障仅指规则根本身', '必须注明停止原因，不得写成规则来源故障', '状态的缺口不否定纯规则加载']]);
+checks.push(['refresh result belongs to its current event rather than old business', `${read('规则刷新接收回执模板.md')}\n${read('09-自动化授权与风险分级.md')}`, ['最终结果必须对应当前刷新事件', '旧业务答复', 'MESSAGE_ID', '待确认', '平台完成']]);
 checks.push(['rule refresh separates source authority, adoption record and identity control', `${read('规则刷新广播包.md')}\n${read('规则刷新接收回执模板.md')}\n${read('09-自动化授权与风险分级.md')}`, ['规则来源选择门禁', 'RULE_SOURCE_LOCATOR', 'SOURCE_NOT_LOCATED', 'STALE_SOURCE_UNCONFIRMED', '规则采用记录', 'RULE_ADOPTION=PASS', 'PROJECT_REGISTRATION=SYNC_PENDING', '不得修改总指挥、唯一写者、CURRENT', '正式交接前必须由项目唯一写者处理']]);
 checks.push(['rule drift has automatic rebase without operator version choice', `${read('规则刷新广播包.md')}\n${read('01-操作者操作手册.md')}\n${read('02-总指挥核心规则.md')}\n${read('04-状态、目标变更与交接规范.md')}\n${read('10-自动状态索引规范.md')}`, ['rule_baseline', 'RULE_REBASE_PENDING', 'SUPERSEDED_BY_RULE_REBASE', '不要求操作者选择版本', '只暂停受影响阶段', 'PINNED_CURRENT / RULE_REBASE_PENDING / REBASED / REBASE_BLOCKED']]);
 checks.push(['feedback triages before costly 2C and repairs within scope', `${read('01-操作者操作手册.md')}\n${read('docs/PIPELINE_DIAGNOSIS_AND_ALGORITHM_TUNING_STANDARD.md')}`, ['先描述现象；AI 定点核对后决定是否进入 2C', '最小定点核对后仍无法定位', '原因及修复边界已有可靠证据的，在现有授权内局部修复与回归', '已有同一问题的修复授权时直接修复与回归', '仅报结果且没有开放目标', '一次列明拟改范围、影响和验证以请求差额授权']]);
@@ -126,12 +136,20 @@ checks.push(['new cycle cannot repeat exhausted failed methods', goalBudget, ['�
 checks.push(['manual step pauses only dependent work', read('01-操作者操作手册.md'), ['只暂停依赖该问题的步骤', '没有安全且有意义的已授权工作可继续时才收口', '总预算到限按各自规则停止']]);
 checks.push(['prompt language review stays in the existing workflow', read('06-复盘与优化规则.md'), ['文档质量检查并入现有生成、验证和审查流程，不新增审批层', '谁执行、执行什么、针对什么对象、在什么条件下执行', '作者从操作者角度完整读一遍实际复制块', '润色没有改变权限、停止条件和验证义务', '不能证明语言正确']]);
 checks.push(['unavailable quota opt-out is explicit and scoped', `${read('01-操作者操作手册.md')}\n${read('05-模型选择与资源策略.md')}`, ['当无法查看额度时，允许忽略依赖额度读数的停止项', '不能仅因API登录或读取失败推定已有许可', '没有这项许可时，按原额度保护约定安全收口', '不新增费用或高资源权限', '不把缺失期间的用量记为零', '额度读取失败时按上面的明确许可处理，不因此单独停止']]);
+checks.push(['quota direction and reset preserve task budget', read('05-模型选择与资源策略.md'), ['usedPercent', '100-usedPercent', 'rateLimitsByLimitId', 'windowDurationMins', 'resetsAt', '禁止取绝对差', '已用22%→42%等于剩余78%→58%', '剩余22%→100%不构成78个百分点消耗', '不把不同池差值相加', '不能清零预算', '新观测段不重复计算此前增量', '重置间未采到的消耗记 `UNKNOWN`', '已知累计已到限仍停止', '有限数值必须在0至100范围内']]);
+checks.push(['quota inspection preserves fixed epoch and recovery boundaries', read('05-模型选择与资源策略.md'), ['Inspect-QuotaProtection.mjs', '固定锚点不能随相邻读数滑移', '同时间不同读数', '恢复必须提供原 `nextState`', '不得用初始化清零', '`nextState:null` 不覆盖旧可靠状态', '数值归一、比较及累计统一到小数点后9位', '不能覆盖可核到限、冻结、权限或其他停止门', '省略账号/池的终点不能写成这些字段也已直接核到']]);
 checks.push(['Goal quality gates calibrate early and pause only dependent work', read('02-总指挥核心规则.md'), ['### Goal质量反馈节点', '大量迭代前校准质量', '不固定每轮问人', '确需人的判断才转2E', '等待标签不证明平台暂停', '必需验收未满足不complete', '累计预算与终止交付仍按05']]);
 checks.push(['verification cadence preserves real runtime, counterexamples and valid evidence', read('docs/AUTOMATED_TESTING_LESSONS.md'), ['### 2.5 验证时机与证据复用', '不等于每消息、每命令或每轮全量重测', '无关版本标签变化不使全部证据失效', '对应真实产物/入口核验', 'Bug修复后立即匹配回归', '不代签自然路径', '受影响旧结论暂不作为验收依据', '不新增平行账本或固定测试轮']]);
 checks.push(['Goal templates plan quality nodes and distinguish active continuation from paused recovery', read('01-操作者操作手册.md'), ['详细触发与最小判断包见02', '准备可预见的质量校准、自动验证和人工触发节点', '每个完整工作批次按变更影响和证据缺口', '且没有人工暂停、交接或等待你明确继续的要求时', '只有你明确要求继续、平台恢复已实际核验', '不代替你解除暂停，不清零预算']]);
 checks.push(['5A shares all operator inputs with readable originals and transparent exceptions', read('docs/EXECUTION_AND_INDEPENDENT_REVIEW.md'), ['### 1.4 场景5A的原始要求与参考资料对等', '全部附件、本地路径、网页链接、截图及其他参考资料', '作者的分析、推断与原文分开', '共享原件，不只共享总结', '逐项说明收到、可读取或具体缺口', '不证明材料已读', '新增资料同步，稳定材料复用', '不清零轮次', '不新建平行账本', '资料可读不等于可外发', '只限制依赖部分']]);
 checks.push(['5A template and dispatch distinguish minimal authorization evidence from full reference sharing', `${read('01-操作者操作手册.md')}\n${read('02-总指挥核心规则.md')}\n${read('09-自动化授权与风险分级.md')}`, ['按协作规范1.4', '对方实际可读且版本绑定的入口', '不能只转述你的总结', '新增资料及时同步', '不转发受禁止外发的原件', '不以摘要代原件', '授权核验的最小摘录不替代讨论所需原件共享']]);
 let failed = 0;
+checks.push(['manual candidate and final prompts retain the pre-stop readback gate', read('01-操作者操作手册.md'), ['不要仅凭 READY 或材料置信度高提示我停旧', '先按轻量配置完成停旧前轮换准备及候选回读', '有本轮有效通信授权才可自动联络', '同时回读停旧前已经准备、已由本候选确认的匹配轮换票据', '不事后补造或倒填']]);
+checks.push(['lightweight entry separates material readiness from stopping', read('总指挥轻量交接启动配置.md'), ['`status=READY / READY_WITH_RESTRICTIONS` 只表示材料通过', '`rotation.status=MATCHED`、`can_stop_old=true`', '正常 `NOT_PREPARED` 只表示下一步由旧写者准备', '由 AI 填好完整轮换准备请求']]);
+checks.push(['rotation recovery preserves source immutability and fresh stop confirmation', read('04-状态、目标变更与交接规范.md'), ['停旧前轮换准备与过早停旧的恢复', '票据和运输回执均不写入已被封条覆盖的来源', '不能代替修复完成后的新确认', '不自行授予跨任务发送权限']]);
+checks.push(['workflow regression is wired into the real repository quality entry', fs.readFileSync(path.join(root, '.github/scripts/Test-Repository.ps1'), 'utf8'), ["& node (Join-Path $PSScriptRoot 'Test-Verify-Handoff-Candidate.mjs')", "if ($LASTEXITCODE -ne 0) { throw '候选材料与停旧前轮换准备组合检查失败。' }"]]);
+checks.push(['in-flight scope preserves strict defaults and live source separation', read('04-状态、目标变更与交接规范.md'), ['在途专项与交接保护范围', 'git-scoped-index-worktree-sha256-v2', 'ownership_source_ref', '候选不能临时扩大排除范围', '分别核验 Git 索引与工作树', '旧票据恢复只登记旧来源漂移', '旧封条、票据及恢复记录不改签', '交接保存可靠阶段观察']]);
+checks.push(['scope behavioral regression is part of repository quality', fs.readFileSync(path.join(root, '.github/scripts/Test-Repository.ps1'), 'utf8'), ["& node (Join-Path $PSScriptRoot 'Test-HandoffWorkspaceScope.mjs')"]]);
 for (const [name, text, needles] of checks) {
   const missing = needles.filter(needle => !text.includes(needle));
   if (missing.length) { failed += 1; console.error(`FAIL: ${name}: missing ${missing.join(', ')}`); }

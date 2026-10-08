@@ -27,6 +27,26 @@ check('rule drift classifier separates same, compatible, affected and unavailabl
   assert.deepEqual(classifyRuleDrift({ pinned, live: null }), { status: 'UNAVAILABLE', action: 'STOP_AFFECTED' });
 });
 
+check('rule drift rejects incomplete baselines and never continues a reversed or reused epoch', () => {
+  const pinned = { rule_version: '2026-10-08.9', manifest_sha256: 'a'.repeat(64) };
+  const live = { rule_version: '2026-10-08.11', manifest_sha256: 'b'.repeat(64) };
+  assert.equal(classifyRuleDrift({ pinned: {}, live: {} }).status, 'UNAVAILABLE');
+  for (const rule_version of ['2026-10-08.8', pinned.rule_version, '2026-10-07.99']) {
+    assert.equal(classifyRuleDrift({ pinned, live: { ...live, rule_version }, changedPaths: ['06-复盘与优化规则.md'] }).status, 'AFFECTED_RECHECK');
+  }
+  assert.equal(classifyRuleDrift({ pinned, live, changedPaths: ['06-复盘与优化规则.md'] }).status, 'NEWER_COMPATIBLE');
+  assert.equal(classifyRuleDrift({ pinned, live: { ...live, rule_version: '2026-02-30.1' } }).status, 'UNAVAILABLE');
+});
+
+check('rule drift requires valid deltas and protects the actual candidate and workspace dependencies', () => {
+  const pinned = { rule_version: '2026-10-08.9', manifest_sha256: 'a'.repeat(64) };
+  const live = { rule_version: '2026-10-08.11', manifest_sha256: 'b'.repeat(64) };
+  for (const changedPaths of [null, [null], ['../06-复盘与优化规则.md'], ['C:/<RULE_ROOT>/06.md'], [''],
+    ['.github/scripts/Verify-Handoff-Candidate.mjs'], ['HandoffWorkspaceScope.mjs'], ['.github/scripts/Rebase-Handoff-Draft.mjs']]) {
+    assert.equal(classifyRuleDrift({ pinned, live, changedPaths }).status, 'AFFECTED_RECHECK');
+  }
+});
+
 function writeCurrent(relative, body) {
   const absolute = path.join(sourceRoot, relative);
   fs.mkdirSync(path.dirname(absolute), { recursive: true });
@@ -522,6 +542,30 @@ try {
     assert.equal(sha256(fs.readFileSync(path.join(configDir, 'draft.json'))), originalDigest);
     const retry = spawnSync(process.execPath, [rebaseScript, input.configPath, output], { cwd: outputRoot, encoding: 'utf8' });
     assert.equal(retry.status, 1); assert.match(retry.stderr, /refusing to overwrite/);
+  });
+  check('protected non-source drift after rendering cannot produce a final attachment', () => {
+    const latePath = path.join(sourceRoot, 'late-protected.txt');
+    fs.writeFileSync(latePath, 'before rendering\n');
+    const input = restrictedCase(405);
+    input.config.preflight_only = false;
+    writeJson(input.configPath, input.config);
+    const originalOpen = fs.openSync, originalSync = fs.fsyncSync;
+    let snapshotFd = null, injected = false;
+    fs.openSync = function (file, ...args) {
+      const fd = originalOpen.call(this, file, ...args);
+      if (String(file).includes(path.basename(input.finalPath)) && String(file).endsWith('.tmp')) snapshotFd = fd;
+      return fd;
+    };
+    fs.fsyncSync = function (fd) {
+      originalSync.call(this, fd);
+      if (!injected && fd === snapshotFd) { injected = true; fs.writeFileSync(latePath, 'changed during rendering\n'); }
+    };
+    try {
+      assert.throws(() => prepareFormalHandoff(input.configPath), /workspace drifted while rendering/);
+      assert.equal(injected, true);
+      assert.equal(fs.existsSync(input.finalPath), false);
+      assert.equal(fs.existsSync(input.receiptPath), false);
+    } finally { fs.openSync = originalOpen; fs.fsyncSync = originalSync; fs.unlinkSync(latePath); }
   });
   console.log(`Prepare handoff: PASS (${passed} cases)`);
 } finally {

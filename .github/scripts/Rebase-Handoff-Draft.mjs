@@ -38,7 +38,7 @@ export function rebaseHandoffDraft(configPath, outputDraftPath) {
     source.digest = sha256(fs.readFileSync(absolute));
     source.fact_cutoff = cutoff;
   }
-  rebased.workspace = { ...(rebased.workspace ?? {}), root_ref: '.', ...readGitWorkspaceBaseline(sourceRoot, rebased.workspace?.required_untracked?.map(item => item.path_ref) ?? []) };
+  rebased.workspace = { ...(rebased.workspace ?? {}), root_ref: '.', ...readGitWorkspaceBaseline(sourceRoot, rebased.workspace?.required_untracked?.map(item => item.path_ref) ?? [], rebased.workspace?.inflight_scope ?? null) };
   if (rebased.remote?.status === 'PASS') {
     try {
       const live = readLiveRemoteBaseline(sourceRoot, rebased.remote.default_ref);

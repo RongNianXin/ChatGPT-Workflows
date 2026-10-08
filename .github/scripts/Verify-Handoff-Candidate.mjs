@@ -9,8 +9,27 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 const defaultWorkflowRoot = path.resolve(here, '..', '..', '总指挥工作流', '第二代总指挥的工作模式');
 const sha = value => String(value || '').toLowerCase();
 
-export function verifyHandoffCandidate({ sealDirectory, sourceRoot, externalControlPlaneRoot, workflowRoot = defaultWorkflowRoot, manifestPath = path.join(workflowRoot, '规则刷新manifest.json'), remoteRequired = false } = {}) {
-  const result = { status: 'BLOCKED', chain: null, rule: null, workspace: null, remote: null, actions: [], errors: [] };
+// Material readiness and permission to ask the operator to stop are separate gates.
+function verifyRotation(chain, { nextGeneration, nextWriterId, eventId }) {
+  const result = { status: 'NOT_PREPARED', can_stop_old: false, errors: [] };
+  const target = [nextGeneration, nextWriterId, eventId];
+  const supplied = target.some(value => value !== undefined);
+  if (supplied && (!Number.isSafeInteger(nextGeneration) || nextGeneration !== chain.latest.generation + 1 ||
+      typeof nextWriterId !== 'string' || !/^[A-Za-z0-9._-]+$/.test(nextWriterId) || nextWriterId === chain.latest.writer_id ||
+      typeof eventId !== 'string' || !/^[A-Za-z0-9._:-]+$/.test(eventId))) {
+    return { ...result, status: 'INPUT_REQUIRED', errors: ['INPUT_REQUIRED: provide the next generation, different writer and takeover event as one valid target'] };
+  }
+  const intents = chain.pending_intents || [];
+  if (!intents.length) return result;
+  if (!supplied) return { ...result, status: 'TARGET_REQUIRED', errors: ['INPUT_REQUIRED: bind the pending intent to this candidate before stopping the old writer'] };
+  if (intents.length !== 1 || intents[0].next_generation !== nextGeneration || intents[0].next_writer_id !== nextWriterId || intents[0].event_id !== eventId) {
+    return { ...result, status: 'MISMATCH', errors: ['ROTATION_TARGET_MISMATCH: pending intent does not match this candidate target'] };
+  }
+  return { ...result, status: 'MATCHED', can_stop_old: true };
+}
+
+export function verifyHandoffCandidate({ sealDirectory, sourceRoot, externalControlPlaneRoot, workflowRoot = defaultWorkflowRoot, manifestPath = path.join(workflowRoot, '规则刷新manifest.json'), remoteRequired = false, nextGeneration, nextWriterId, eventId } = {}) {
+  const result = { status: 'BLOCKED', chain: null, rule: null, workspace: null, remote: null, rotation: { status: 'NOT_CHECKED', can_stop_old: false, errors: [] }, actions: [], errors: [] };
   let chain;
   try { chain = verifyChain(sealDirectory, { sourceRoot, externalControlPlaneRoot }); } catch (error) { result.errors.push(`SEAL_VERIFY_FAILED: ${error.message}`); return result; }
   result.chain = { status: chain.status, control_status: chain.control_status, handoff_ready: chain.handoff_ready, latest_source_status: chain.latest_source_status, phase: chain.latest?.handoff_phase ?? null };
@@ -34,7 +53,7 @@ export function verifyHandoffCandidate({ sealDirectory, sourceRoot, externalCont
     result.actions.push('由仍拥有唯一写权的移交方在原断点重建候选并重新运行 1C/1D');
     return result;
   }
-  const workspaceErrors = verifyWorkspaceBaseline(sourceRoot, chain.latest.workspace);
+  const workspaceErrors = verifyWorkspaceBaseline(sourceRoot, chain.latest.workspace, chain.latest.sources, { externalControlPlaneRoot, ruleBaseline: chain.latest.rule_baseline, workflowRepositoryRoot: path.resolve(workflowRoot, '../..') });
   result.workspace = { status: workspaceErrors.length ? 'FAIL' : 'PASS', errors: workspaceErrors };
   if (workspaceErrors.length) { result.errors.push(...workspaceErrors); return result; }
   try {
@@ -51,17 +70,50 @@ export function verifyHandoffCandidate({ sealDirectory, sourceRoot, externalCont
     result.actions.push('远端基线已变化；由移交方核对差额并重建候选。下一步依赖远端时暂停，不按网络不可观察处理');
     if (remoteRequired) return result;
   }
+  // A stop recommendation must use an unchanged observation group, not the first cached chain.
+  try {
+    const finalChain = verifyChain(sealDirectory, { sourceRoot, externalControlPlaneRoot });
+    const finalManifest = verifyRuleManifest(workflowRoot, manifestPath);
+    const finalManifestDigest = crypto.createHash('sha256').update(fs.readFileSync(manifestPath)).digest('hex');
+    const finalWorkspaceErrors = verifyWorkspaceBaseline(sourceRoot, chain.latest.workspace, chain.latest.sources, { externalControlPlaneRoot, ruleBaseline: chain.latest.rule_baseline, workflowRepositoryRoot: path.resolve(workflowRoot, '../..') });
+    const intents = value => JSON.stringify((value.pending_intents || []).map(intent => intent.transition_digest).sort());
+    if (finalChain.status !== 'PASS' || finalChain.control_status !== 'READY' ||
+        finalChain.latest?.seal_digest !== chain.latest.seal_digest || intents(finalChain) !== intents(chain) ||
+        finalManifest.rule_version !== live.rule_version || finalManifestDigest !== live.manifest_sha256 || finalWorkspaceErrors.length) {
+      result.chain = { status: finalChain.status, control_status: finalChain.control_status, handoff_ready: finalChain.handoff_ready, latest_source_status: finalChain.latest_source_status, phase: finalChain.latest?.handoff_phase ?? null };
+      result.workspace = { status: finalWorkspaceErrors.length ? 'FAIL' : 'PASS', errors: finalWorkspaceErrors };
+      result.errors.push('CANDIDATE_CHANGED_DURING_VERIFY: chain, intent, rules or protected workspace changed before return', ...(finalChain.errors || []), ...finalWorkspaceErrors);
+      result.actions.push('核验期间证据已变化；只重新核对受影响来源与候选，完成前不得提示停旧');
+      return result;
+    }
+    chain = finalChain;
+  } catch (error) {
+    result.errors.push(`CANDIDATE_CHANGED_DURING_VERIFY: final observation could not be verified: ${error.message}`);
+    result.actions.push('返回前复核未完成；补齐具体缺口后重新核验，不按旧缓存提示停旧');
+    return result;
+  }
   result.status = result.remote?.status !== 'PASS' || chain.latest.switch_status === 'READY_WITH_RESTRICTIONS' ? 'READY_WITH_RESTRICTIONS' : 'READY';
+  result.rotation = verifyRotation(chain, { nextGeneration, nextWriterId, eventId });
+  if (!result.rotation.can_stop_old) {
+    result.actions.push(result.rotation.status === 'NOT_PREPARED'
+      ? '材料已通过；先由旧唯一写者准备本候选的轮换意图，新候选回读确认后才可提示操作者停旧'
+      : '材料与停旧条件分别判定；先补齐或核对本候选目标及匹配轮换意图，暂不提示操作者停旧');
+  }
   return result;
 }
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1])) {
   const [sealDirectory, sourceRoot, ...rest] = process.argv.slice(2);
-  if (!sealDirectory || !sourceRoot) { console.error('usage: node Verify-Handoff-Candidate.mjs <seal-directory> <source-root> [--external-control-plane-root=<root>] [--remote-required]'); process.exitCode = 2; }
+  if (!sealDirectory || !sourceRoot) { console.error('usage: node Verify-Handoff-Candidate.mjs <seal-directory> <source-root> [--external-control-plane-root=<root>] [--remote-required] [--next-generation=<n> --next-writer-id=<writer> --takeover-event-id=<event>]'); process.exitCode = 2; }
   else {
     const externalRootValue = rest.find(value => value.startsWith('--external-control-plane-root='))?.slice('--external-control-plane-root='.length);
     const externalControlPlaneRoot = externalRootValue?.trim() ? path.resolve(externalRootValue) : undefined;
-    const output = verifyHandoffCandidate({ sealDirectory: path.resolve(sealDirectory), sourceRoot: path.resolve(sourceRoot), externalControlPlaneRoot, remoteRequired: rest.includes('--remote-required') });
+    const flag = name => rest.find(value => value.startsWith(`${name}=`))?.slice(name.length + 1);
+    const generationValue = flag('--next-generation');
+    const malformedTarget = ['--next-generation', '--next-writer-id', '--takeover-event-id'].some(name =>
+      rest.includes(name) || rest.filter(value => value.startsWith(`${name}=`)).length > 1);
+    const output = verifyHandoffCandidate({ sealDirectory: path.resolve(sealDirectory), sourceRoot: path.resolve(sourceRoot), externalControlPlaneRoot, remoteRequired: rest.includes('--remote-required'),
+      nextGeneration: malformedTarget ? NaN : generationValue === undefined ? undefined : Number(generationValue), nextWriterId: flag('--next-writer-id'), eventId: flag('--takeover-event-id') });
     console.log(JSON.stringify(output, null, 2));
     process.exitCode = ['READY', 'READY_WITH_RESTRICTIONS'].includes(output.status) ? 0 : 1;
   }

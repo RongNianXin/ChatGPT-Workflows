@@ -1,0 +1,524 @@
+{
+  "schema_version": 1,
+  "document_ref": "01-操作者操作手册.md",
+  "manual_sha256": "3be2964c230ba32fd91b79921f3821c199217a8d9f8e576b368dc53af6aaa261",
+  "sections": [
+    {
+      "anchor": null,
+      "references": {
+        "scenario-commander-start": "1A",
+        "scenario-onboarding": "场景零",
+        "scenario-rule-refresh": "0A",
+        "scenario-project-rule-broadcast": "0B",
+        "scenario-lifecycle": "场景一",
+        "scenario-handoff-triage": "1B",
+        "scenario-commander-prepare": "1C",
+        "scenario-commander-takeover": "1D",
+        "scenario-independent-work": "场景二",
+        "scenario-team-development": "场景三",
+        "scenario-remote-collaboration": "场景四",
+        "scenario-independent-review": "场景五",
+        "scenario-research": "场景六",
+        "scenario-general-capabilities": "场景七",
+        "scenario-goal-mode": "Gen1",
+        "scenario-pause-and-archive": "Gen2",
+        "scenario-ordinary-handoff": "1E",
+        "scenario-ordinary-takeover": "1F",
+        "scenario-interruption-recovery": "1G",
+        "scenario-contextless-recovery": "1H",
+        "scenario-handoff-repair": "1I",
+        "scenario-cross-project-rule-update": "1J",
+        "scenario-normal-task": "2",
+        "scenario-planning-to-work-items": "2A",
+        "scenario-code-simplification": "2B",
+        "scenario-pipeline-diagnosis": "2C",
+        "scenario-run-current-result": "2D",
+        "scenario-human-feedback": "2E",
+        "scenario-work-retrospective": "2F",
+        "scenario-bounded-real-data-testing": "2G",
+        "scenario-project-analysis": "3A",
+        "scenario-teammate-takeover": "3B",
+        "scenario-feature-planning": "3C",
+        "scenario-direction-state-update": "3D",
+        "scenario-submit-pr": "4A",
+        "scenario-handle-pr": "4B",
+        "scenario-issue-to-pr": "4C",
+        "scenario-progress-report": "4D",
+        "scenario-obsolete-object-review": "4E",
+        "scenario-full-collaboration-queue": "4F",
+        "scenario-incremental-collaboration-queue": "4G",
+        "scenario-long-drift-preparation": "4H",
+        "scenario-safe-result-convergence": "4I",
+        "scenario-remote-to-local": "4J",
+        "scenario-local-to-remote": "4K",
+        "scenario-review-pair-create": "5A",
+        "scenario-review-pair-recover": "5B",
+        "scenario-review-pair-feedback": "5C",
+        "scenario-review-pair-scope-change": "5D",
+        "scenario-compare-solutions": "6A",
+        "scenario-reference-literature": "6B",
+        "scenario-goal-template": "Gen1.1",
+        "scenario-goal-specification": "Gen1.2",
+        "scenario-goal-pause-recovery": "Gen1.3"
+      },
+      "history": [
+        {
+          "before": " 关闭画像；Pe1-(c) 从文本、路径或链接增补候选资料 |\n\n\n旧编号迁移：",
+          "text": "旧 2B",
+          "after": " 的本地开发归入场景 2；旧 2D 改为 4I；旧 2E 改为 2D；旧 2F "
+        },
+        {
+          "before": "、路径或链接增补候选资料 |\n\n\n旧编号迁移：旧 2B 的本地开发归入场景 2；",
+          "text": "旧 2D",
+          "after": " 改为 4I；旧 2E 改为 2D；旧 2F 改为场景五；旧版精简提示词中的 2"
+        },
+        {
+          "before": "料 |\n\n\n旧编号迁移：旧 2B 的本地开发归入场景 2；旧 2D 改为 4I；",
+          "text": "旧 2E",
+          "after": " 改为 2D；旧 2F 改为场景五；旧版精简提示词中的 2G 改为 2B，当前版"
+        },
+        {
+          "before": "：旧 2B 的本地开发归入场景 2；旧 2D 改为 4I；旧 2E 改为 2D；",
+          "text": "旧 2F",
+          "after": " 改为场景五；旧版精简提示词中的 2G 改为 2B，当前版 2G 是有界自动测试"
+        },
+        {
+          "before": "D 改为 4I；旧 2E 改为 2D；旧 2F 改为场景五；旧版精简提示词中的 ",
+          "text": "2G",
+          "after": " 改为 2B，当前版 2G 是有界自动测试与负反馈修复，按提示词内容和规则版本消"
+        },
+        {
+          "before": "为 2B，当前版 2G 是有界自动测试与负反馈修复，按提示词内容和规则版本消歧；",
+          "text": "旧 3A/3B/3C",
+          "after": " 改为 4F/4G/4E；旧 4 改为 4D；旧 4A 改为 2E；旧 5 改为"
+        },
+        {
+          "before": "修复，按提示词内容和规则版本消歧；旧 3A/3B/3C 改为 4F/4G/4E；",
+          "text": "旧 4",
+          "after": " 改为 4D；旧 4A 改为 2E；旧 5 改为 3D；旧 6/6A/6B 改为"
+        },
+        {
+          "before": "规则版本消歧；旧 3A/3B/3C 改为 4F/4G/4E；旧 4 改为 4D；",
+          "text": "旧 4A",
+          "after": " 改为 2E；旧 5 改为 3D；旧 6/6A/6B 改为 1C/1D/1G；旧"
+        },
+        {
+          "before": "/3B/3C 改为 4F/4G/4E；旧 4 改为 4D；旧 4A 改为 2E；",
+          "text": "旧 5",
+          "after": " 改为 3D；旧 6/6A/6B 改为 1C/1D/1G；旧 7 改为 2F；旧"
+        },
+        {
+          "before": "4F/4G/4E；旧 4 改为 4D；旧 4A 改为 2E；旧 5 改为 3D；",
+          "text": "旧 6/6A/6B",
+          "after": " 改为 1C/1D/1G；旧 7 改为 2F；旧 8 改为 Gen2。\n\n\n##"
+        },
+        {
+          "before": "A 改为 2E；旧 5 改为 3D；旧 6/6A/6B 改为 1C/1D/1G；",
+          "text": "旧 7",
+          "after": " 改为 2F；旧 8 改为 Gen2。\n\n\n### 首次使用\n\n1. 把本工作流"
+        },
+        {
+          "before": "5 改为 3D；旧 6/6A/6B 改为 1C/1D/1G；旧 7 改为 2F；",
+          "text": "旧 8",
+          "after": " 改为 Gen2。\n\n\n### 首次使用\n\n1. 把本工作流下载或克隆到一个稳定"
+        }
+      ]
+    },
+    {
+      "anchor": "scenario-onboarding",
+      "references": {},
+      "history": []
+    },
+    {
+      "anchor": "scenario-rule-refresh",
+      "references": {
+        "scenario-project-rule-broadcast": "0B",
+        "scenario-rule-refresh": "0A"
+      },
+      "history": []
+    },
+    {
+      "anchor": "scenario-project-rule-broadcast",
+      "references": {
+        "scenario-project-rule-broadcast": "0B",
+        "scenario-rule-refresh": "0A"
+      },
+      "history": []
+    },
+    {
+      "anchor": "scenario-lifecycle",
+      "references": {},
+      "history": []
+    },
+    {
+      "anchor": "scenario-commander-start",
+      "references": {
+        "scenario-goal-mode": "Gen1"
+      },
+      "history": []
+    },
+    {
+      "anchor": "scenario-handoff-triage",
+      "references": {
+        "scenario-handoff-triage": "1B",
+        "scenario-commander-prepare": "1C",
+        "scenario-commander-takeover": "1D"
+      },
+      "history": []
+    },
+    {
+      "anchor": "scenario-commander-prepare",
+      "references": {
+        "scenario-commander-prepare": "1C",
+        "scenario-ordinary-handoff": "1E",
+        "scenario-ordinary-takeover": "1F",
+        "scenario-commander-start": "1A",
+        "scenario-commander-takeover": "1D",
+        "scenario-handoff-triage": "1B"
+      },
+      "history": []
+    },
+    {
+      "anchor": "scenario-commander-takeover",
+      "references": {},
+      "history": []
+    },
+    {
+      "anchor": "scenario-ordinary-handoff",
+      "references": {
+        "scenario-commander-prepare": "1C",
+        "scenario-commander-takeover": "1D",
+        "scenario-ordinary-handoff": "1E",
+        "scenario-handoff-triage": "1B"
+      },
+      "history": []
+    },
+    {
+      "anchor": "scenario-ordinary-takeover",
+      "references": {
+        "scenario-commander-prepare": "1C"
+      },
+      "history": []
+    },
+    {
+      "anchor": "scenario-interruption-recovery",
+      "references": {
+        "scenario-commander-prepare": "1C",
+        "scenario-commander-takeover": "1D",
+        "scenario-interruption-recovery": "1G"
+      },
+      "history": []
+    },
+    {
+      "anchor": "scenario-contextless-recovery",
+      "references": {},
+      "history": []
+    },
+    {
+      "anchor": "scenario-handoff-repair",
+      "references": {
+        "scenario-commander-takeover": "1D"
+      },
+      "history": []
+    },
+    {
+      "anchor": "scenario-cross-project-rule-update",
+      "references": {
+        "scenario-commander-takeover": "1D"
+      },
+      "history": []
+    },
+    {
+      "anchor": "scenario-independent-work",
+      "references": {
+        "scenario-normal-task": "2",
+        "scenario-planning-to-work-items": "2A",
+        "scenario-bounded-real-data-testing": "2G"
+      },
+      "history": []
+    },
+    {
+      "anchor": "scenario-normal-task",
+      "references": {
+        "scenario-planning-to-work-items": "2A",
+        "scenario-bounded-real-data-testing": "2G"
+      },
+      "history": []
+    },
+    {
+      "anchor": "scenario-planning-to-work-items",
+      "references": {},
+      "history": []
+    },
+    {
+      "anchor": "scenario-code-simplification",
+      "references": {
+        "scenario-normal-task": "2",
+        "scenario-independent-review": "场景五"
+      },
+      "history": []
+    },
+    {
+      "anchor": "scenario-pipeline-diagnosis",
+      "references": {
+        "scenario-human-feedback": "2E",
+        "scenario-pipeline-diagnosis": "2C"
+      },
+      "history": []
+    },
+    {
+      "anchor": "scenario-run-current-result",
+      "references": {},
+      "history": []
+    },
+    {
+      "anchor": "scenario-human-feedback",
+      "references": {
+        "scenario-pipeline-diagnosis": "2C",
+        "scenario-independent-review": "场景五",
+        "scenario-review-pair-feedback": "5C",
+        "scenario-normal-task": "2"
+      },
+      "history": []
+    },
+    {
+      "anchor": "scenario-work-retrospective",
+      "references": {},
+      "history": []
+    },
+    {
+      "anchor": "scenario-bounded-real-data-testing",
+      "references": {
+        "scenario-human-feedback": "2E",
+        "scenario-pipeline-diagnosis": "2C",
+        "scenario-bounded-real-data-testing": "2G"
+      },
+      "history": []
+    },
+    {
+      "anchor": "scenario-team-development",
+      "references": {},
+      "history": []
+    },
+    {
+      "anchor": "scenario-project-analysis",
+      "references": {},
+      "history": []
+    },
+    {
+      "anchor": "scenario-teammate-takeover",
+      "references": {},
+      "history": []
+    },
+    {
+      "anchor": "scenario-feature-planning",
+      "references": {
+        "scenario-project-analysis": "3A"
+      },
+      "history": []
+    },
+    {
+      "anchor": "scenario-direction-state-update",
+      "references": {},
+      "history": []
+    },
+    {
+      "anchor": "scenario-remote-collaboration",
+      "references": {
+        "scenario-submit-pr": "4A",
+        "scenario-handle-pr": "4B",
+        "scenario-issue-to-pr": "4C",
+        "scenario-progress-report": "4D",
+        "scenario-obsolete-object-review": "4E",
+        "scenario-full-collaboration-queue": "4F",
+        "scenario-incremental-collaboration-queue": "4G",
+        "scenario-long-drift-preparation": "4H",
+        "scenario-safe-result-convergence": "4I",
+        "scenario-remote-to-local": "4J",
+        "scenario-local-to-remote": "4K"
+      },
+      "history": []
+    },
+    {
+      "anchor": "scenario-submit-pr",
+      "references": {
+        "scenario-local-to-remote": "4K",
+        "scenario-submit-pr": "4A"
+      },
+      "history": []
+    },
+    {
+      "anchor": "scenario-handle-pr",
+      "references": {},
+      "history": []
+    },
+    {
+      "anchor": "scenario-issue-to-pr",
+      "references": {},
+      "history": []
+    },
+    {
+      "anchor": "scenario-progress-report",
+      "references": {
+        "scenario-commander-start": "1A"
+      },
+      "history": []
+    },
+    {
+      "anchor": "scenario-obsolete-object-review",
+      "references": {},
+      "history": []
+    },
+    {
+      "anchor": "scenario-full-collaboration-queue",
+      "references": {
+        "scenario-incremental-collaboration-queue": "4G",
+        "scenario-full-collaboration-queue": "4F",
+        "scenario-handle-pr": "4B"
+      },
+      "history": []
+    },
+    {
+      "anchor": "scenario-incremental-collaboration-queue",
+      "references": {
+        "scenario-full-collaboration-queue": "4F",
+        "scenario-incremental-collaboration-queue": "4G",
+        "scenario-handle-pr": "4B"
+      },
+      "history": []
+    },
+    {
+      "anchor": "scenario-long-drift-preparation",
+      "references": {
+        "scenario-safe-result-convergence": "4I",
+        "scenario-long-drift-preparation": "4H"
+      },
+      "history": []
+    },
+    {
+      "anchor": "scenario-safe-result-convergence",
+      "references": {
+        "scenario-safe-result-convergence": "4I",
+        "scenario-normal-task": "2"
+      },
+      "history": []
+    },
+    {
+      "anchor": "scenario-remote-to-local",
+      "references": {
+        "scenario-safe-result-convergence": "4I",
+        "scenario-long-drift-preparation": "4H",
+        "scenario-remote-to-local": "4J"
+      },
+      "history": []
+    },
+    {
+      "anchor": "scenario-local-to-remote",
+      "references": {
+        "scenario-remote-to-local": "4J",
+        "scenario-local-to-remote": "4K",
+        "scenario-submit-pr": "4A",
+        "scenario-safe-result-convergence": "4I",
+        "scenario-independent-review": "场景五"
+      },
+      "history": []
+    },
+    {
+      "anchor": "scenario-independent-review",
+      "references": {
+        "scenario-independent-review": "场景五",
+        "scenario-review-pair-create": "5A",
+        "scenario-review-pair-recover": "5B",
+        "scenario-review-pair-feedback": "5C",
+        "scenario-review-pair-scope-change": "5D"
+      },
+      "history": []
+    },
+    {
+      "anchor": "scenario-review-pair-create",
+      "references": {},
+      "history": []
+    },
+    {
+      "anchor": "scenario-review-pair-recover",
+      "references": {},
+      "history": []
+    },
+    {
+      "anchor": "scenario-review-pair-feedback",
+      "references": {},
+      "history": []
+    },
+    {
+      "anchor": "scenario-review-pair-scope-change",
+      "references": {},
+      "history": []
+    },
+    {
+      "anchor": "scenario-research",
+      "references": {},
+      "history": []
+    },
+    {
+      "anchor": "scenario-compare-solutions",
+      "references": {},
+      "history": []
+    },
+    {
+      "anchor": "scenario-reference-literature",
+      "references": {},
+      "history": []
+    },
+    {
+      "anchor": "scenario-general-capabilities",
+      "references": {},
+      "history": []
+    },
+    {
+      "anchor": "scenario-goal-mode",
+      "references": {},
+      "history": []
+    },
+    {
+      "anchor": "scenario-goal-template",
+      "references": {
+        "scenario-goal-specification": "Gen1.2",
+        "scenario-goal-pause-recovery": "Gen1.3"
+      },
+      "history": []
+    },
+    {
+      "anchor": "scenario-goal-specification",
+      "references": {
+        "scenario-goal-template": "Gen1.1",
+        "scenario-goal-pause-recovery": "Gen1.3"
+      },
+      "history": []
+    },
+    {
+      "anchor": "scenario-goal-pause-recovery",
+      "references": {
+        "scenario-goal-specification": "Gen1.2",
+        "scenario-interruption-recovery": "1G"
+      },
+      "history": []
+    },
+    {
+      "anchor": "scenario-pause-and-archive",
+      "references": {},
+      "history": []
+    },
+    {
+      "anchor": "scenario-agency-agents",
+      "references": {},
+      "history": []
+    },
+    {
+      "anchor": "scenario-cli-anything",
+      "references": {
+        "scenario-goal-specification": "Gen1.2"
+      },
+      "history": []
+    }
+  ]
+}

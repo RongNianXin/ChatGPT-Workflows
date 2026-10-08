@@ -3,10 +3,12 @@ import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { spawnSync } from 'node:child_process';
+import { SCOPED_WORKSPACE_ALGORITHM, readScopedWorkspaceBaseline, validateScopedWorkspaceSources } from './HandoffWorkspaceScope.mjs';
 import { fileURLToPath } from 'node:url';
 import { appendSeal, sealDigest, validateControlPlaneRegistry, verifyChain, verifyControlIdentity } from './HandoffSeal.mjs';
 
 export const REQUIRED_RULES = [
+  '.github/scripts/HandoffWorkspaceScope.mjs',
   '.github/scripts/HandoffSeal.mjs',
   '.github/scripts/Prepare-Handoff.mjs',
   '.github/scripts/Mark-Handoff-Delivered.mjs',
@@ -38,12 +40,26 @@ const physicalTarget = target => {
 };
 const verificationCommandPattern = /node\s+"[^"]*HandoffSeal\.mjs"\s+verify\s+"[^"]+"\s+"[^"]+"(?:\s+"[^"]+")?/;
 
-const RULE_CRITICAL_PATHS = new Set(['01-操作者操作手册.md', '02-总指挥核心规则.md', '04-状态、目标变更与交接规范.md', '07-总指挥交接记录模板.md', '09-自动化授权与风险分级.md', '10-自动状态索引规范.md', '总指挥轻量交接启动配置.md', 'templates/HANDOFF_STATE.schema.json', '.github/scripts/HandoffSeal.mjs', '.github/scripts/Prepare-Handoff.mjs']);
+const RULE_CRITICAL_PATHS = new Set(['01-操作者操作手册.md', '02-总指挥核心规则.md', '04-状态、目标变更与交接规范.md', '07-总指挥交接记录模板.md', '09-自动化授权与风险分级.md', '10-自动状态索引规范.md', '总指挥轻量交接启动配置.md', 'templates/HANDOFF_STATE.schema.json', '.github/scripts/HandoffSeal.mjs', '.github/scripts/Prepare-Handoff.mjs', '.github/scripts/Verify-Handoff-Candidate.mjs', '.github/scripts/HandoffWorkspaceScope.mjs', '.github/scripts/Rebase-Handoff-Draft.mjs', '.github/scripts/Mark-Handoff-Delivered.mjs']);
+const RULE_CRITICAL_NAMES = new Set([...RULE_CRITICAL_PATHS].map(value => path.posix.basename(value)));
+function ruleEpoch(value) {
+  if (typeof value !== 'string') return null;
+  const match = /^(\d{4}-\d{2}-\d{2})(?:\.(\d+))?$/.exec(value);
+  if (!match) return null;
+  const date = new Date(`${match[1]}T00:00:00.000Z`);
+  const revision = Number(match[2] ?? 0);
+  if (!Number.isFinite(date.getTime()) || date.toISOString().slice(0, 10) !== match[1] || !Number.isSafeInteger(revision)) return null;
+  return [date.getTime(), revision];
+}
 export function classifyRuleDrift({ pinned, live, changedPaths = null } = {}) {
-  if (!pinned || !live) return { status: 'UNAVAILABLE', action: 'STOP_AFFECTED' };
+  const oldEpoch = ruleEpoch(pinned?.rule_version), newEpoch = ruleEpoch(live?.rule_version);
+  if (!oldEpoch || !newEpoch || !/^[0-9a-f]{64}$/i.test(pinned?.manifest_sha256 ?? '') || !/^[0-9a-f]{64}$/i.test(live?.manifest_sha256 ?? '')) return { status: 'UNAVAILABLE', action: 'STOP_AFFECTED' };
   if (String(pinned.rule_version) === String(live.rule_version) && String(pinned.manifest_sha256).toLowerCase() === String(live.manifest_sha256).toLowerCase()) return { status: 'SAME', action: 'CONTINUE' };
-  const normalized = Array.isArray(changedPaths) ? changedPaths.map(value => String(value).replaceAll('\\', '/')) : null;
-  const affected = normalized === null || normalized.some(value => RULE_CRITICAL_PATHS.has(value) || RULE_CRITICAL_PATHS.has(path.basename(value)) || value.includes('/templates/'));
+  // Compatibility is only a classification; production still needs trusted delta evidence.
+  if (newEpoch[0] < oldEpoch[0] || (newEpoch[0] === oldEpoch[0] && newEpoch[1] <= oldEpoch[1])) return { status: 'AFFECTED_RECHECK', action: 'REBASE' };
+  const validPaths = Array.isArray(changedPaths) && changedPaths.every(value => typeof value === 'string' && value.length > 0 && !/^[A-Za-z]:/.test(value) && !path.isAbsolute(value) && !value.replaceAll('\\', '/').split('/').some(part => !part || part === '.' || part === '..'));
+  const normalized = validPaths ? changedPaths.map(value => value.replaceAll('\\', '/')) : null;
+  const affected = normalized === null || normalized.some(value => RULE_CRITICAL_PATHS.has(value) || RULE_CRITICAL_NAMES.has(path.posix.basename(value)) || value.split('/').includes('templates'));
   return affected ? { status: 'AFFECTED_RECHECK', action: 'REBASE' } : { status: 'NEWER_COMPATIBLE', action: 'CONTINUE' };
 }
 
@@ -156,7 +172,8 @@ export function verifyRuleManifest(ruleRoot, manifestPath) {
   return manifest;
 }
 
-function readGitWorkspaceBaseline(sourceRoot, requiredRefs = []) {
+function readGitWorkspaceBaseline(sourceRoot, requiredRefs = [], inflightScope = null) {
+  if (inflightScope !== null) return readScopedWorkspaceBaseline(sourceRoot, requiredRefs, inflightScope);
   const run = args => spawnSync('git', ['-C', sourceRoot, ...args], { encoding: 'utf8' });
   const head = run(['rev-parse', 'HEAD']);
   if (head.status !== 0) return null;
@@ -240,8 +257,16 @@ export function readLiveRemoteBaseline(sourceRoot, defaultRef) {
 
 export { readGitWorkspaceBaseline };
 
-export function verifyWorkspaceBaseline(sourceRoot, workspace) {
-  const live = readGitWorkspaceBaseline(sourceRoot, workspace?.required_untracked?.map(item => item.path_ref) ?? []);
+export function verifyWorkspaceBaseline(sourceRoot, workspace, sources = {}, context = {}) {
+  const algorithm = workspace?.worktree_fingerprint?.algorithm;
+  if (workspace && Object.hasOwn(workspace, 'inflight_scope') && !workspace.inflight_scope) return ['explicit workspace scope cannot be null or empty'];
+  if (algorithm && !['git-diff-binary+untracked-content-sha256-v1', SCOPED_WORKSPACE_ALGORITHM].includes(algorithm)) return ['unknown workspace fingerprint algorithm'];
+  if ((algorithm === SCOPED_WORKSPACE_ALGORITHM) !== Boolean(workspace?.inflight_scope)) return ['workspace scope and algorithm must match'];
+  const scopeErrors = validateScopedWorkspaceSources(workspace, sources, { ...context, sourceRoot });
+  if (scopeErrors.length) return scopeErrors;
+  let live;
+  try { live = readGitWorkspaceBaseline(sourceRoot, workspace?.required_untracked?.map(item => item.path_ref) ?? [], workspace?.inflight_scope ?? null); }
+  catch (error) { return [`workspace verification failed: ${error.message}`]; }
   if (!live) return [];
   if (!workspace) return ['workspace baseline is missing'];
   if (!/^[0-9a-f]{40,64}$/i.test(workspace.head || '') || !workspace.worktree_fingerprint) return ['workspace baseline fingerprint is missing or invalid'];
@@ -249,7 +274,7 @@ export function verifyWorkspaceBaseline(sourceRoot, workspace) {
   for (const key of ['head', 'tree', 'branch', 'staged_count', 'tracked_modified_count', 'untracked_count']) {
     if (String(live[key]) !== String(workspace[key])) errors.push(`workspace baseline drift: ${key} expected ${workspace[key]}, found ${live[key]}`);
   }
-  for (const key of ['algorithm', 'tracked_diff_sha256', 'untracked_digest']) {
+  for (const key of ['algorithm', 'tracked_diff_sha256', 'untracked_digest', ...(algorithm === SCOPED_WORKSPACE_ALGORITHM ? ['index_sha256'] : [])]) {
     if (String(live.worktree_fingerprint[key]) !== String(workspace.worktree_fingerprint[key])) errors.push(`workspace baseline drift: worktree_fingerprint.${key}`);
   }
   return errors;
@@ -439,7 +464,7 @@ export function prepareFormalHandoff(configPath) {
   if (sourceDigestErrors.length) throw new Error(`preflight source verification failed: ${sourceDigestErrors.join('; ')}`);
   const identity = verifyControlIdentity(draft, { sourceRoot, externalControlPlaneRoot });
   if (identity.status !== 'PASS') throw new Error(`control identity preflight failed: ${identity.errors.join('; ')}`);
-  const workspaceErrors = verifyWorkspaceBaseline(sourceRoot, draft.workspace);
+  const workspaceErrors = verifyWorkspaceBaseline(sourceRoot, draft.workspace, draft.sources, { externalControlPlaneRoot, ruleBaseline: draft.rule_baseline, workflowRepositoryRoot: workflowRoot });
   if (workspaceErrors.length) throw new Error(`preflight workspace verification failed: ${workspaceErrors.join('; ')}`);
   if (draft.remote?.status === 'PASS') {
     let liveRemote;
@@ -548,6 +573,8 @@ export function prepareFormalHandoff(configPath) {
     verifyRuleManifest(ruleRoot, manifestPath);
     const finalVerification = verifyChain(realSealDirectory, { sourceRoot, externalControlPlaneRoot });
     if (finalVerification.status !== 'PASS' || !finalVerification.handoff_ready || finalVerification.latest?.seal_digest !== seal.seal_digest || finalVerification.latest_source_status !== 'PASS') throw new Error(`facts drifted while rendering the attachment: ${finalVerification.errors.join('; ')}`);
+    const finalWorkspaceErrors = verifyWorkspaceBaseline(sourceRoot, seal.workspace, seal.sources, { externalControlPlaneRoot, ruleBaseline: seal.rule_baseline, workflowRepositoryRoot: workflowRoot });
+    if (finalWorkspaceErrors.length) throw new Error(`workspace drifted while rendering the attachment: ${finalWorkspaceErrors.join('; ')}`);
     if (seal.remote?.status === 'PASS') {
       const finalLiveRemote = readLiveRemoteBaseline(sourceRoot, seal.remote.default_ref);
       if (finalLiveRemote && finalLiveRemote.head !== String(seal.remote.head || '').toLowerCase()) throw new Error(`remote baseline drifted while rendering the attachment: expected ${seal.remote.head}, found ${finalLiveRemote.head}`);

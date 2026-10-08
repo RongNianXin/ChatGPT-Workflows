@@ -304,7 +304,7 @@ function Test-CommanderDurableWorkflowContract {
         },
         @{
             Path = '总指挥工作流/第二代总指挥的工作模式/总指挥轻量交接启动配置.md'
-            Required = @('KEY_NODE', 'central_work_items:', '待实施、进行中、阻断、暂缓、待验收', 'canonical_start_command', 'startup_check', 'commit_ledger', 'step_deck_pointer_and_hash', '场景 1G 是角色中立的任务中断恢复入口', '候选阶段不得询问是否启用', 'introduction: not-shown / shown / answered / ignored', '旧机器绝对路径', '## 7. 统一接管汇报模板', '1. 总指挥身份', '2. 交接结论', '3. 接续断点', '4. 下一步与边界', '当前任务 ID：', '当前范围交接条件：', '没有证据支持遗漏时写“无”', '不得承诺任意账号或窗口凭 ID 即可跨权限访问', 'scheduler_rebuild:', 'existing_task_check', 'authorization_required', 'control_handoff_confidence:', 'handoff_seal:', 'expected previous digest', '主附件必须是 `final-*` 正式候选附件', '不进入评分或可切换判断')
+            Required = @('KEY_NODE', 'central_work_items:', '待实施、进行中、阻断、暂缓、待验收', 'canonical_start_command', 'startup_check', 'commit_ledger', 'step_deck_pointer_and_hash', '场景 1G 是角色中立的任务中断恢复入口', '候选阶段不得询问是否启用', 'introduction: not-shown / shown / answered / ignored', '旧机器绝对路径', '## 8. 统一接管汇报模板', '1. 总指挥身份', '2. 交接结论', '3. 接续断点', '4. 下一步与边界', '当前任务 ID：', '当前范围交接条件：', '没有证据支持遗漏时写“无”', '不得承诺任意账号或窗口凭 ID 即可跨权限访问', 'scheduler_rebuild:', 'existing_task_check', 'authorization_required', 'control_handoff_confidence:', 'handoff_seal:', 'expected previous digest', '主附件必须是 `final-*` 正式候选附件', '不进入评分或可切换判断')
         },
         @{
             Path = '总指挥工作流/第二代总指挥的工作模式/templates/SCHEDULER_REBUILD_GUIDE.md'
@@ -342,7 +342,7 @@ function Test-CommanderDurableWorkflowContract {
         },
         @{
             Path = '总指挥工作流/第二代总指挥的工作模式/docs/EXECUTION_AND_INDEPENDENT_REVIEW.md'
-            Required = @('执行与独立审查协作规范', '逻辑角色，不覆盖窗口原身份', '至少两个不同 Agent 实例', '不强制第三个 Agent 或两个独立任务窗口', '唯一中央调度者和单写者', '只创建一个独立审查任务', '普通同窗口自检不触发 2F', '仅讨论或模拟场景不创建任务', '唯一当前行动与冲突收敛', '`advice_kind`', '`action_status`', '`affected_resource/conflict_domain`', '当前阶段行动方（执行者或独立审查者）', '兼任阶段行动方与收口方', '候选已由收口方确认接收', '候选已发送待确认', '候选尚未送达', '不削弱操作者直接指令本身', '“谁最后发消息听谁的”无效', '已发送待确认')
+            Required = @('执行与独立审查协作规范', '逻辑角色，不覆盖窗口原身份', '至少两个不同 Agent 实例', '不强制第三个 Agent 或两个独立任务窗口', '唯一中央调度者和单写者', '只创建一个独立审查任务', '普通同窗口自检不触发 场景五', '仅讨论或模拟场景不创建任务', '唯一当前行动与冲突收敛', '`advice_kind`', '`action_status`', '`affected_resource/conflict_domain`', '当前阶段行动方（执行者或独立审查者）', '兼任阶段行动方与收口方', '候选已由收口方确认接收', '候选已发送待确认', '候选尚未送达', '不削弱操作者直接指令本身', '“谁最后发消息听谁的”无效', '已发送待确认')
         },
         @{
             Path = 'README.md'
@@ -496,34 +496,34 @@ function Test-CommanderBoundedExecutionCases {
     Write-Host "Bounded execution: PASS ($($guards.Count) document guards, $($cases.Count) synthetic decisions; not live Agent behavior)"
 }
 
-function Test-CommanderScene2FRoutingCases {
+function Test-CommanderIndependentReviewRoutingCases {
     $cases = @(
-        @{ Name = 'current window executes, create one reviewer'; Request = 'execute'; DistinctAgent = $true; IndependentReview = $true; CurrentCanExecute = $true; PairReady = $false; CreateAuthorized = $true; Expected = '2F:create-one-reviewer' },
-        @{ Name = 'two commanders reuse existing pair'; Request = 'execute'; DistinctAgent = $true; IndependentReview = $true; CurrentCanExecute = $true; PairReady = $true; CreateAuthorized = $false; Expected = '2F:reuse-pair' },
-        @{ Name = 'commander coordinates two existing tasks'; Request = 'execute'; DistinctAgent = $true; IndependentReview = $true; CurrentCanExecute = $false; PairReady = $true; CreateAuthorized = $false; Expected = '2F:reuse-pair' },
-        @{ Name = 'same-window self-check'; Request = 'execute'; DistinctAgent = $false; IndependentReview = $false; CurrentCanExecute = $true; PairReady = $false; CreateAuthorized = $false; Expected = 'not-2F' },
-        @{ Name = 'explain scene only'; Request = 'explain'; DistinctAgent = $true; IndependentReview = $true; CurrentCanExecute = $true; PairReady = $false; CreateAuthorized = $false; Expected = 'not-2F' },
-        @{ Name = 'pair requested but creation not authorized'; Request = 'execute'; DistinctAgent = $true; IndependentReview = $true; CurrentCanExecute = $true; PairReady = $false; CreateAuthorized = $false; Expected = '2F:prepare-only' }
+        @{ Name = 'current window executes, create one reviewer'; Request = 'execute'; DistinctAgent = $true; IndependentReview = $true; CurrentCanExecute = $true; PairReady = $false; CreateAuthorized = $true; Expected = 'review:create-one-reviewer' },
+        @{ Name = 'two commanders reuse existing pair'; Request = 'execute'; DistinctAgent = $true; IndependentReview = $true; CurrentCanExecute = $true; PairReady = $true; CreateAuthorized = $false; Expected = 'review:reuse-pair' },
+        @{ Name = 'commander coordinates two existing tasks'; Request = 'execute'; DistinctAgent = $true; IndependentReview = $true; CurrentCanExecute = $false; PairReady = $true; CreateAuthorized = $false; Expected = 'review:reuse-pair' },
+        @{ Name = 'same-window self-check'; Request = 'execute'; DistinctAgent = $false; IndependentReview = $false; CurrentCanExecute = $true; PairReady = $false; CreateAuthorized = $false; Expected = 'not-independent-review' },
+        @{ Name = 'explain scene only'; Request = 'explain'; DistinctAgent = $true; IndependentReview = $true; CurrentCanExecute = $true; PairReady = $false; CreateAuthorized = $false; Expected = 'not-independent-review' },
+        @{ Name = 'pair requested but creation not authorized'; Request = 'execute'; DistinctAgent = $true; IndependentReview = $true; CurrentCanExecute = $true; PairReady = $false; CreateAuthorized = $false; Expected = 'review:prepare-only' }
     )
 
     foreach ($case in $cases) {
-        $actual = 'not-2F'
+        $actual = 'not-independent-review'
         if ($case.Request -eq 'execute' -and $case.DistinctAgent -and $case.IndependentReview) {
             if ($case.PairReady) {
-                $actual = '2F:reuse-pair'
+                $actual = 'review:reuse-pair'
             }
             elseif (-not $case.CreateAuthorized) {
-                $actual = '2F:prepare-only'
+                $actual = 'review:prepare-only'
             }
             elseif ($case.CurrentCanExecute) {
-                $actual = '2F:create-one-reviewer'
+                $actual = 'review:create-one-reviewer'
             }
             else {
-                $actual = '2F:create-minimum-missing-roles'
+                $actual = 'review:create-minimum-missing-roles'
             }
         }
         if ($actual -ne $case.Expected) {
-            throw "场景 2F 虚构路由失败：$($case.Name)；expected=$($case.Expected) actual=$actual"
+            throw "场景五虚构路由失败：$($case.Name)；expected=$($case.Expected) actual=$actual"
         }
     }
     # Synthetic policy walkthroughs, not live Agent creation or lifecycle tests.
@@ -544,25 +544,25 @@ function Test-CommanderScene2FRoutingCases {
             if ($case.Direct) { $actual = "$($case.Requested):direct" }
             elseif ($case.Relay) { $actual = "$($case.Requested):relay" }
         }
-        if ($actual -ne $case.Expected) { throw "2F carrier walkthrough failed: $($case.Name)" }
+        if ($actual -ne $case.Expected) { throw "Independent-review carrier walkthrough failed: $($case.Name)" }
     }
     $contractPath = Join-Path $repoRoot '总指挥工作流/第二代总指挥的工作模式/docs/EXECUTION_AND_INDEPENDENT_REVIEW.md'
     $contract = Get-Content -LiteralPath $contractPath -Raw -Encoding utf8
     foreach ($phrase in @('同一 Agent 换口吻自审不算独立审查', '不以子 Agent 或 Fork 偷换', '不能保证不可视、空白上下文、独立文件系统或永久可恢复', '同一冲突域只有一个写入负责人', '共享文件变化只使受影响审查失效', '不能假定原助手仍存活或自动恢复', '不能重复执行、丢掉成果或清零失败次数', '不因换角色重置轮次', '方案共识不能代签最终产物', '不自动迁移在途专项', '不降格为作者自审', '资料可读不等于可向子 Agent 传递')) {
-        if (-not $contract.Contains($phrase)) { throw "2F carrier contract missing: $phrase" }
+        if (-not $contract.Contains($phrase)) { throw "Independent-review carrier contract missing: $phrase" }
     }
     foreach ($obsolete in @('审查者必须位于执行者之外的另一个 AI 窗口', '最少只需两个窗口')) {
-        if ($contract.Contains($obsolete)) { throw "2F obsolete carrier gate: $obsolete" }
+        if ($contract.Contains($obsolete)) { throw "Independent-review obsolete carrier gate: $obsolete" }
     }
     $manual = Get-Content -LiteralPath (Join-Path $repoRoot '总指挥工作流/第二代总指挥的工作模式/01-操作者操作手册.md') -Raw -Encoding utf8
     if (-not $manual.Contains('<a id="场景-2f跨窗口执行与独立审查协作"></a>')) { throw '2F legacy anchor missing' }
-    foreach ($phrase in @('可说“AI交叉检查”或“审查者模式”', '只说“对抗式审查”“你再自查一下”默认由当前 AI 做结构化自审', '只询问或讨论 2F 时不启动配对', '默认只用一名独立审查者')) {
-        if (-not $manual.Contains($phrase)) { throw "2F natural-language routing contract missing: $phrase" }
+    foreach ($phrase in @('可说“AI交叉检查”或“审查者模式”', '只说“对抗式审查”“你再自查一下”默认由当前 AI 做结构化自审', '只询问或讨论场景五时不启动配对', '默认只用一名独立审查者')) {
+        if (-not $manual.Contains($phrase)) { throw "Independent-review natural-language routing contract missing: $phrase" }
     }
     foreach ($phrase in @('平台支持精简上下文就优先使用不复制完整历史的方式', '审查分为两种范围', '首轮无实质问题即收口', '不得把“讨论到一致”作为开启新轮次或通过的理由')) {
-        if (-not $contract.Contains($phrase)) { throw "2F minimum-sufficient review contract missing: $phrase" }
+        if (-not $contract.Contains($phrase)) { throw "Independent-review minimum-sufficient review contract missing: $phrase" }
     }
-    Write-Host "Commander scene 2F routing: PASS ($($cases.Count) route cases, $($carrierCases.Count) carrier cases; documentary boundary checks; no live Agent tests)"
+    Write-Host "Commander independent-review routing: PASS ($($cases.Count) route cases, $($carrierCases.Count) carrier cases; documentary boundary checks; no live Agent tests)"
 }
 
 function Test-PublicUsageCasePrivacyContract {
@@ -1327,7 +1327,7 @@ Test-PowerShellFiles
 Test-CommanderRuleVersion
 Test-CommanderDurableWorkflowContract
 Test-CommanderBoundedExecutionCases
-Test-CommanderScene2FRoutingCases
+Test-CommanderIndependentReviewRoutingCases
 Test-PublicUsageCasePrivacyContract
 Test-CommanderNextActionConvergenceCases
 Test-CommanderContinuityRoutingCases
@@ -1339,14 +1339,22 @@ if ($LASTEXITCODE -ne 0) { throw '交接封条链合成检查失败。' }
 if ($LASTEXITCODE -ne 0) { throw '交接控制面身份一致性检查失败。' }
 & node (Join-Path $PSScriptRoot 'Test-Prepare-Handoff.mjs')
 if ($LASTEXITCODE -ne 0) { throw '正式交接附件原子生成检查失败。' }
+& node (Join-Path $PSScriptRoot 'Test-Verify-Handoff-Candidate.mjs')
+if ($LASTEXITCODE -ne 0) { throw '候选材料与停旧前轮换准备组合检查失败。' }
+& node (Join-Path $PSScriptRoot 'Test-HandoffWorkspaceScope.mjs')
+if ($LASTEXITCODE -ne 0) { throw '在途专项与交接工作区范围检查失败。' }
 & node (Join-Path $PSScriptRoot 'Test-Mark-Handoff-Delivered.mjs')
 if ($LASTEXITCODE -ne 0) { throw '交接附件交付闭环检查失败。' }
 & node (Join-Path $PSScriptRoot 'Test-WorkflowRefreshContract.mjs')
 if ($LASTEXITCODE -ne 0) { throw '工作流刷新契约检查失败。' }
 & node (Join-Path $PSScriptRoot 'Test-Inspect-RuleRefresh.mjs')
 if ($LASTEXITCODE -ne 0) { throw '已保存本地规则刷新合成检查失败。' }
+& node (Join-Path $PSScriptRoot 'Test-Inspect-QuotaProtection.mjs')
+if ($LASTEXITCODE -ne 0) { throw '额度保护方向、累计与重置回归失败。' }
 & node (Join-Path $PSScriptRoot 'Test-OperatorManualExternalEntries.mjs')
 if ($LASTEXITCODE -ne 0) { throw '操作者手册与外部工具入口检查失败。' }
+& node (Join-Path $PSScriptRoot 'Test-OperatorManualReferences.mjs')
+if ($LASTEXITCODE -ne 0) { throw '操作者手册场景编号、语义绑定与交叉引用检查失败。' }
 & node (Join-Path $PSScriptRoot 'Test-Inspect-WorkspaceTracking.mjs')
 if ($LASTEXITCODE -ne 0) { throw '工作区跟踪检查失败。' }
 Test-TextFlowchartTemplateContract
