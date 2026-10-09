@@ -8,6 +8,8 @@ import { fileURLToPath } from 'node:url';
 import { appendSeal, sealDigest, validateControlPlaneRegistry, verifyChain, verifyControlIdentity } from './HandoffSeal.mjs';
 
 export const REQUIRED_RULES = [
+  '.github/scripts/HandoffControl.mjs',
+  '.github/scripts/Takeover-Handoff.mjs',
   '.github/scripts/HandoffWorkspaceScope.mjs',
   '.github/scripts/HandoffSeal.mjs',
   '.github/scripts/Prepare-Handoff.mjs',
@@ -40,7 +42,7 @@ const physicalTarget = target => {
 };
 const verificationCommandPattern = /node\s+"[^"]*HandoffSeal\.mjs"\s+verify\s+"[^"]+"\s+"[^"]+"(?:\s+"[^"]+")?/;
 
-const RULE_CRITICAL_PATHS = new Set(['01-操作者操作手册.md', '02-总指挥核心规则.md', '04-状态、目标变更与交接规范.md', '07-总指挥交接记录模板.md', '09-自动化授权与风险分级.md', '10-自动状态索引规范.md', '总指挥轻量交接启动配置.md', 'templates/HANDOFF_STATE.schema.json', '.github/scripts/HandoffSeal.mjs', '.github/scripts/Prepare-Handoff.mjs', '.github/scripts/Verify-Handoff-Candidate.mjs', '.github/scripts/HandoffWorkspaceScope.mjs', '.github/scripts/Rebase-Handoff-Draft.mjs', '.github/scripts/Mark-Handoff-Delivered.mjs']);
+const RULE_CRITICAL_PATHS = new Set(['.github/scripts/HandoffControl.mjs', '.github/scripts/Takeover-Handoff.mjs', '01-操作者操作手册.md', '02-总指挥核心规则.md', '04-状态、目标变更与交接规范.md', '07-总指挥交接记录模板.md', '09-自动化授权与风险分级.md', '10-自动状态索引规范.md', '总指挥轻量交接启动配置.md', 'templates/HANDOFF_STATE.schema.json', '.github/scripts/HandoffSeal.mjs', '.github/scripts/Prepare-Handoff.mjs', '.github/scripts/Verify-Handoff-Candidate.mjs', '.github/scripts/HandoffWorkspaceScope.mjs', '.github/scripts/Rebase-Handoff-Draft.mjs', '.github/scripts/Mark-Handoff-Delivered.mjs']);
 const RULE_CRITICAL_NAMES = new Set([...RULE_CRITICAL_PATHS].map(value => path.posix.basename(value)));
 function ruleEpoch(value) {
   if (typeof value !== 'string') return null;
@@ -418,7 +420,7 @@ export function prepareFormalHandoff(configPath) {
     throw new Error('LEGACY_MIGRATION_REQUIRES_EMPTY_V3_DIRECTORY: keep the v1/v2 seal directory read-only and configure a separate empty directory for the first v3 migration seal');
   }
   const allowedPreflightPhase = preflightOnly && draft.handoff_phase === 'CURRENT_MIGRATION';
-  if (draft.schema_version !== 3 || (!allowedPreflightPhase && draft.handoff_phase !== 'MATERIAL_PREPARED') || (!allowedPreflightPhase && !['READY', 'READY_WITH_RESTRICTIONS'].includes(draft.switch_status))) throw new Error('formal handoff requires a schema v3 MATERIAL_PREPARED draft in READY or READY_WITH_RESTRICTIONS');
+  if (![3, 4].includes(draft.schema_version) || (!allowedPreflightPhase && draft.handoff_phase !== 'MATERIAL_PREPARED') || (!allowedPreflightPhase && !['READY', 'READY_WITH_RESTRICTIONS'].includes(draft.switch_status))) throw new Error('formal handoff requires a schema v3/v4 MATERIAL_PREPARED draft in READY or READY_WITH_RESTRICTIONS');
   const sourceRefs = Object.values(draft.sources ?? {}).filter(item => item.root_ref !== 'external_control_plane').map(item => item.path_ref);
   // required_untracked is a protection summary, not a formal source inventory.
   const inventory = unicodeInventory(sourceRoot, sourceRefs);

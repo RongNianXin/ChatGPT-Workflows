@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "document_ref": "01-操作者操作手册.md",
-  "manual_sha256": "3be2964c230ba32fd91b79921f3821c199217a8d9f8e576b368dc53af6aaa261",
+  "manual_sha256": "c2ea79843705e653bd481d4239736b2db1777b051f6d868f47e3c128ab57a945",
   "sections": [
     {
       "anchor": null,
@@ -189,7 +189,8 @@
         "scenario-commander-prepare": "1C",
         "scenario-commander-takeover": "1D",
         "scenario-ordinary-handoff": "1E",
-        "scenario-handoff-triage": "1B"
+        "scenario-handoff-triage": "1B",
+        "scenario-ordinary-takeover": "1F"
       },
       "history": []
     },

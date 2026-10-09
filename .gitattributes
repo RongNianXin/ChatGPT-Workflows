@@ -5,11 +5,14 @@
 总指挥工作流/第二代总指挥的工作模式/docs/DOCUMENT_REVIEW_STANDARD.md text eol=lf
 总指挥工作流/第二代总指挥的工作模式/docs/AUTOMATED_TESTING_LESSONS.md text eol=lf
 .github/scripts/HandoffSeal.mjs text eol=lf
+.github/scripts/HandoffControl.mjs text eol=lf
+.github/scripts/Takeover-Handoff.mjs text eol=lf
 .github/scripts/HandoffWorkspaceScope.mjs text eol=lf
 .github/scripts/Prepare-Handoff.mjs text eol=lf
 .github/scripts/Inspect-WorkspaceTracking.mjs text eol=lf
 .github/scripts/Inspect-RuleRefresh.mjs text eol=lf
 .github/scripts/Inspect-QuotaProtection.mjs text eol=lf
+.github/scripts/Inspect-PrReviewPayload.mjs text eol=lf
 .github/scripts/Test-OperatorManualReferences.mjs text eol=lf
 .github/scripts/Mark-Handoff-Delivered.mjs text eol=lf
 .github/scripts/Rebase-Handoff-Draft.mjs text eol=lf

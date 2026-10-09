@@ -11,7 +11,7 @@
       "then": { "properties": { "sources": { "additionalProperties": { "$ref": "#/$defs/sourceV3" } } } }
     },
     {
-      "if": { "properties": { "control_handoff_confidence": { "const": "HIGH" } } },
+      "if": { "properties": { "schema_version": { "const": 3 }, "control_handoff_confidence": { "const": "HIGH" } } },
       "then": { "properties": { "sources": { "required": ["central_work_items", "current_view", "status_index"] }, "source_digest_status": { "const": "PASS" }, "remote": { "properties": { "status": { "const": "PASS" } } } } }
     },
     {
@@ -19,7 +19,7 @@
       "then": { "properties": { "sources": { "required": ["central_work_items", "current_view", "status_index"] }, "source_digest_status": { "const": "PASS" } } }
     },
     {
-      "if": { "properties": { "switch_status": { "enum": ["READY", "COMPLETED"] } } },
+      "if": { "properties": { "schema_version": { "const": 3 }, "switch_status": { "enum": ["READY", "COMPLETED"] } } },
       "then": { "properties": { "sources": { "required": ["central_work_items", "current_view", "status_index"] }, "source_digest_status": { "const": "PASS" }, "remote": { "properties": { "status": { "const": "PASS" } } } } }
     },
     {
@@ -46,9 +46,15 @@
       "if": { "properties": { "handoff_phase": { "const": "CURRENT_ATTESTATION" } } },
       "then": { "properties": { "switch_status": { "const": "COMPLETED" }, "previous_seal_digest": { "type": "string", "pattern": "^[0-9a-f]{64}$" }, "transition": { "type": "null" }, "migration": { "type": "null" } } }
     }
+,
+    {"if":{"properties":{"schema_version":{"const":4}}},"then":{"required":["restrictions"],"properties":{"sources":{"required":["central_work_items","current_view","status_index"],"additionalProperties":{"$ref":"#/$defs/sourceV3"}},"source_digest_status":{"const":"PASS"},"remote":{"properties":{"status":{"enum":["PASS","UNKNOWN","FAIL","NOT_APPLICABLE"]}}}}}},
+    {"if":{"properties":{"schema_version":{"const":3}}},"then":{"not":{"required":["restrictions"]}}},
+    {"if":{"properties":{"schema_version":{"const":4},"remote":{"properties":{"status":{"const":"UNKNOWN"}}}}},"then":{"properties":{"restrictions":{"contains":{"const":"REMOTE_UNOBSERVED"}}}},"else":{"properties":{"restrictions":{"maxItems":0}}}},
+    {"if":{"properties":{"schema_version":{"const":4},"switch_status":{"enum":["READY","COMPLETED"]}}},"then":{"properties":{"remote":{"properties":{"status":{"enum":["PASS","UNKNOWN"]}}}}}}
+    ,{"if":{"properties":{"schema_version":{"const":4},"control_handoff_confidence":{"const":"HIGH"}}},"then":{"properties":{"remote":{"properties":{"status":{"enum":["PASS","UNKNOWN"]}}}}}}
   ],
   "properties": {
-    "schema_version": { "const": 3 },
+    "schema_version": { "enum": [3, 4] },
     "record_type": { "const": "handoff-seal" },
     "generation": { "type": "integer", "minimum": 1 },
     "writer_id": { "type": "string", "minLength": 1, "pattern": "^[A-Za-z0-9._-]+$" },
@@ -73,6 +79,7 @@
     "runtime_acceptance_status": { "enum": ["PASS", "FAIL", "NOT_RUN", "UNKNOWN", "NOT_APPLICABLE"] },
     "professional_acceptance_status": { "enum": ["PASS", "FAIL", "NOT_RUN", "UNKNOWN", "NOT_APPLICABLE"] },
     "transition": { "anyOf": [{ "type": "null" }, { "$ref": "#/$defs/transition" }] },
+    "restrictions": {"type":"array","uniqueItems":true,"items":{"const":"REMOTE_UNOBSERVED"}},
     "migration": { "anyOf": [{ "type": "null" }, { "$ref": "#/$defs/migration" }] },
     "invalidation_conditions": { "type": "array", "minItems": 1, "items": { "type": "string" } },
     "seal_digest": { "type": "string", "pattern": "^[0-9a-f]{64}$" }

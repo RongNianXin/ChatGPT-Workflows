@@ -107,11 +107,11 @@ try {
   check('scoped seal cannot ignore a strict active specialist source', () => assert.throws(() => makeCandidate({ workspace: scopedWorkspace, sources: { ...internalSources, active_specialist: { owner: 'synthetic', path_ref: 'specialist/task.js', root_ref: 'source_root', digest: sha256(fs.readFileSync(path.join(inflightDirectory, 'task.js'))), fact_cutoff: stamp } } }), /invalid workspace baseline/));
   fs.unlinkSync(path.join(inflightDirectory, 'task.js'));
   fs.rmdirSync(inflightDirectory);
-  check('material READY without a prepared rotation must not tell the operator to stop the old writer', () => {
+  check('material READY without a separately delivered intent permits stopping, not authority transfer', () => {
     const result = verify(candidate);
     assert.equal(result.status, 'READY');
-    assert.equal(result.rotation?.status, 'NOT_PREPARED');
-    assert.equal(result.rotation?.can_stop_old, false);
+    assert.equal(result.rotation?.status, 'DIRECT_PREPARE_AVAILABLE');
+    assert.equal(result.rotation?.can_stop_old, true);
   });
   check('API retains repository-contained control sources without an external root', () => {
     const result = verify(internalCandidate, { externalControlPlaneRoot: undefined, remoteRequired: true });
@@ -145,10 +145,10 @@ try {
     const predecessor = verifyChain(rotationCandidate, { sourceRoot, ...layoutOptions }).latest;
     check(`${layout}: known target without an intent remains a normal preparation step`, () => {
       const result = rotationVerify(target);
-      assert.equal(result.status, 'READY'); assert.equal(result.rotation.status, 'NOT_PREPARED');
-      assert.equal(result.rotation.can_stop_old, false);
+      assert.equal(result.status, 'READY'); assert.equal(result.rotation.status, 'DIRECT_PREPARE_AVAILABLE');
+      assert.equal(result.rotation.can_stop_old, true);
       const command = cli(rotationCandidate, [...layoutFlags, ...targetFlags]);
-      assert.equal(command.code, 0); assert.equal(command.value.rotation.can_stop_old, false);
+      assert.equal(command.code, 0); assert.equal(command.value.rotation.can_stop_old, true);
     });
     const prepared = prepareTransition(rotationCandidate, { sourceRoot, ...layoutOptions, expectedPreviousDigest: predecessor.seal_digest, ...target, preparedAt: '2026-01-01T00:00:01.000Z' });
     check(`${layout}: a pending intent without the candidate binding cannot authorize stopping`, () => {

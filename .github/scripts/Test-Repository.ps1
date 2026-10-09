@@ -403,7 +403,7 @@ function Test-CommanderBoundedExecutionCases {
         @{ File='09-自动化授权与风险分级.md'; Required=@('授权内连续执行与局部停止', '不要求每项各发一条人工消息', '修复和运行额度', '画像外发双重确认'); Forbidden=@('或修改受保护分支；', '场景 2A、3A、3B 或单窗口长任务结束时') },
         @{ File='03-专项任务卡模板.md'; Required=@('核心字段和实际触发的条件段', '没有 GitHub 对象', '默认沿用当前配置', '验证类型为流程／生成效果／两者', '生成效果缺素材、样本或判据时', '操作目的：', '异常反馈：'); Forbidden=@('中断恢复身份：保持本专项任务身份', '场景 2B 必须在通用任务卡基础上增加') },
         @{ File='10-自动状态索引规范.md'; Required=@('下一项实质动作前回读', '指纹证明内容身份', '完整读取受影响标题', '当前授权明确覆盖全量范围', 'CURRENT_ATTESTATION', '不改变中央单写者'); Forbidden=@('无法唯一恢复时自动切换全量推进') },
-        @{ File='总指挥轻量交接启动配置.md'; Required=@('可可靠定位时完整读取受影响标题', '候选阶段只读', '旧远端授权', 'CURRENT_ATTESTATION', '不得作为首条封条'); Forbidden=@('只完整读取受影响文件并记录差异') },
+        @{ File='总指挥轻量交接启动配置.md'; Required=@('可可靠定位时完整读取受影响标题', '核验阶段只读', '仅本次交接准备/提交可写', '完成回读前仍无业务调度权', '旧远端授权', 'CURRENT_ATTESTATION', '不得作为首条封条'); Forbidden=@('只完整读取受影响文件并记录差异') },
         @{ File='docs/PIPELINE_DIAGNOSIS_AND_ALGORITHM_TUNING_STANDARD.md'; Required=@('不每阶段重复询问', '已有有效授权内的后续动作', '都是可选证据，不是进入本流程的前提', '缺少该证据只暂停依赖它的归因', '不能凭相关性直接升级为根因', '阶段 A～G 是内部工作顺序', '既定上限到达', '算法按设计正确运行仍可能不适用', '行为关系测试', '样本少时仅报告观察范围', '不能证明整体识别准确或专业正确'); Forbidden=@('只有操作者重新发送建议文本后', 'AI 还必须询问', '一般修复授权、2E 反馈、沉默、先前其他问题的确认都不替代本次确认', '超过阶段/成本边界、扩大范围或启动新一轮前再确认差额') },
         @{ File='docs/PR_SUBMISSION_AND_REVIEW_STANDARD.md'; Required=@('尚未通读时只允许本地草稿', '没有代码变化无需制造新 Commit', '只比较登记文件中自报的 manifest、版本或摘要字符串不构成核验', '实际 checkout 或合并候选重新计算', '算法 SemVer 按算法族或组件分别维护', 'PR 保持 Draft'); Forbidden=@('给出新的精确 Head') },
         @{ File='docs/EXECUTION_AND_INDEPENDENT_REVIEW.md'; Required=@('不等于一条命令', '实质失效', '正常修订和新增验证', '绝对上限三轮'); Forbidden=@('证据、权限、范围、中央暂停/停止、收口状态或互斥资源发生变化时') },
@@ -1335,6 +1335,8 @@ Test-CommanderContinuityRoutingCases
 if ($LASTEXITCODE -ne 0) { throw '成果连续性虚构检查失败。' }
 & node (Join-Path $PSScriptRoot 'Test-HandoffSeal.mjs')
 if ($LASTEXITCODE -ne 0) { throw '交接封条链合成检查失败。' }
+& node (Join-Path $PSScriptRoot 'Test-Takeover-Handoff.mjs')
+if ($LASTEXITCODE -ne 0) { throw '接收方直接接管与中断恢复检查失败。' }
 & node (Join-Path $PSScriptRoot 'Test-ControlIdentity.mjs')
 if ($LASTEXITCODE -ne 0) { throw '交接控制面身份一致性检查失败。' }
 & node (Join-Path $PSScriptRoot 'Test-Prepare-Handoff.mjs')
@@ -1351,6 +1353,8 @@ if ($LASTEXITCODE -ne 0) { throw '工作流刷新契约检查失败。' }
 if ($LASTEXITCODE -ne 0) { throw '已保存本地规则刷新合成检查失败。' }
 & node (Join-Path $PSScriptRoot 'Test-Inspect-QuotaProtection.mjs')
 if ($LASTEXITCODE -ne 0) { throw '额度保护方向、累计与重置回归失败。' }
+& node (Join-Path $PSScriptRoot 'Test-Inspect-PrReviewPayload.mjs')
+if ($LASTEXITCODE -ne 0) { throw 'PR审阅交付聚合与只读载荷检查失败。' }
 & node (Join-Path $PSScriptRoot 'Test-OperatorManualExternalEntries.mjs')
 if ($LASTEXITCODE -ne 0) { throw '操作者手册与外部工具入口检查失败。' }
 & node (Join-Path $PSScriptRoot 'Test-OperatorManualReferences.mjs')

@@ -9,7 +9,8 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 const defaultWorkflowRoot = path.resolve(here, '..', '..', '总指挥工作流', '第二代总指挥的工作模式');
 const sha = value => String(value || '').toLowerCase();
 
-// Material readiness and permission to ask the operator to stop are separate gates.
+// Material readiness permits a stop recommendation; actual takeover still needs
+// direct operator confirmation and the receiving-agent commit entry.
 function verifyRotation(chain, { nextGeneration, nextWriterId, eventId }) {
   const result = { status: 'NOT_PREPARED', can_stop_old: false, errors: [] };
   const target = [nextGeneration, nextWriterId, eventId];
@@ -20,7 +21,7 @@ function verifyRotation(chain, { nextGeneration, nextWriterId, eventId }) {
     return { ...result, status: 'INPUT_REQUIRED', errors: ['INPUT_REQUIRED: provide the next generation, different writer and takeover event as one valid target'] };
   }
   const intents = chain.pending_intents || [];
-  if (!intents.length) return result;
+  if (!intents.length) return { ...result, status: 'DIRECT_PREPARE_AVAILABLE', can_stop_old: true };
   if (!supplied) return { ...result, status: 'TARGET_REQUIRED', errors: ['INPUT_REQUIRED: bind the pending intent to this candidate before stopping the old writer'] };
   if (intents.length !== 1 || intents[0].next_generation !== nextGeneration || intents[0].next_writer_id !== nextWriterId || intents[0].event_id !== eventId) {
     return { ...result, status: 'MISMATCH', errors: ['ROTATION_TARGET_MISMATCH: pending intent does not match this candidate target'] };
@@ -50,7 +51,7 @@ export function verifyHandoffCandidate({ sealDirectory, sourceRoot, externalCont
   result.rule = { status: drift.status, action: drift.action, pinned: { rule_version: pinned.rule_version, manifest_sha256: pinned.manifest_sha256 }, live };
   if (drift.status !== 'SAME') {
     result.errors.push(`RULE_REBASE_PENDING: ${drift.status}`);
-    result.actions.push('由仍拥有唯一写权的移交方在原断点重建候选并重新运行 1C/1D');
+    result.actions.push('规则变化只暂停受影响切换；接收方定点核验并保存新观察，无法证明安全时给出最小恢复，不正常返旧取票据');
     return result;
   }
   const workspaceErrors = verifyWorkspaceBaseline(sourceRoot, chain.latest.workspace, chain.latest.sources, { externalControlPlaneRoot, ruleBaseline: chain.latest.rule_baseline, workflowRepositoryRoot: path.resolve(workflowRoot, '../..') });
@@ -96,7 +97,7 @@ export function verifyHandoffCandidate({ sealDirectory, sourceRoot, externalCont
   result.rotation = verifyRotation(chain, { nextGeneration, nextWriterId, eventId });
   if (!result.rotation.can_stop_old) {
     result.actions.push(result.rotation.status === 'NOT_PREPARED'
-      ? '材料已通过；先由旧唯一写者准备本候选的轮换意图，新候选回读确认后才可提示操作者停旧'
+      ? '材料已通过；接收方在操作者直接停旧及转权确认后内部准备并提交，不要求另取票据'
       : '材料与停旧条件分别判定；先补齐或核对本候选目标及匹配轮换意图，暂不提示操作者停旧');
   }
   return result;

@@ -4,9 +4,10 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { validWorkspaceFingerprint, validateScopedWorkspaceSources } from './HandoffWorkspaceScope.mjs';
+import { assertControlReady, withControlLock, resolveSource } from './HandoffControl.mjs';
 
 const HEX = /^[0-9a-f]{64}$/;
-const TOP_LEVEL_KEYS = new Set(['schema_version', 'record_type', 'generation', 'writer_id', 'old_writer_status', 'seal_sequence', 'previous_seal_digest', 'fact_cutoff', 'sealed_at', 'event_id', 'sources', 'source_digest_status', 'rule_baseline', 'objective', 'prohibitions', 'communications', 'workspace', 'remote', 'control_handoff_confidence', 'candidate_verification_status', 'switch_status', 'handoff_phase', 'runtime_acceptance_status', 'professional_acceptance_status', 'transition', 'migration', 'invalidation_conditions', 'seal_digest']);
+const TOP_LEVEL_KEYS = new Set(['schema_version', 'record_type', 'generation', 'writer_id', 'old_writer_status', 'seal_sequence', 'previous_seal_digest', 'fact_cutoff', 'sealed_at', 'event_id', 'sources', 'source_digest_status', 'rule_baseline', 'objective', 'prohibitions', 'communications', 'workspace', 'remote', 'control_handoff_confidence', 'candidate_verification_status', 'switch_status', 'handoff_phase', 'runtime_acceptance_status', 'professional_acceptance_status', 'transition', 'migration', 'invalidation_conditions', 'seal_digest', 'restrictions']);
 const exactKeys = (value, allowed) => value && typeof value === 'object' && !Array.isArray(value) && Object.keys(value).every(key => allowed.includes(key));
 const relativeRef = value => typeof value === 'string' && value.length > 0 && !path.isAbsolute(value) && !path.win32.isAbsolute(value) && !value.split(/[\\/]+/).includes('..');
 const iso = value => typeof value === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/.test(value) && !Number.isNaN(Date.parse(value));
@@ -110,6 +111,8 @@ export function verifyControlIdentity(seal, { sourceRoot, externalControlPlaneRo
     return { status: 'NOT_CHECKED', errors: ['CONTROL_IDENTITY_REQUIRED: missing canonical identity/navigation sources'] };
   }
   const errors = [];
+  try { assertControlReady(seal, { sourceRoot, externalControlPlaneRoot }); }
+  catch (error) { return { status: error.message.includes('INPUT_REQUIRED:') ? 'NOT_CHECKED' : 'FAIL', errors: [error.message], platform_mapping_status: 'NOT_CHECKED' }; }
   const bodies = {};
   let platformMappingStatus = 'NOT_CHECKED';
   for (const name of CONTROL_IDENTITY_SOURCES) {
@@ -167,7 +170,9 @@ export function validateSeal(seal, { checkDigest = true, requireExtensions = fal
   const errors = [];
   if (!seal || typeof seal !== 'object' || Array.isArray(seal)) return ['seal must be an object'];
   for (const key of Object.keys(seal)) if (!TOP_LEVEL_KEYS.has(key)) fail(errors, `unknown top-level field: ${key}`);
-  if (![1, 2, 3].includes(seal.schema_version)) fail(errors, 'schema_version must be 1, 2, or 3');
+  if (![1, 2, 3, 4].includes(seal.schema_version)) fail(errors, 'schema_version must be 1, 2, 3, or 4');
+  if (seal.schema_version < 4 && Object.hasOwn(seal, 'restrictions')) fail(errors, 'legacy seal cannot contain v4 restrictions');
+  if (seal.schema_version === 4 && (!Array.isArray(seal.restrictions) || seal.restrictions.some(value => value !== 'REMOTE_UNOBSERVED') || new Set(seal.restrictions).size !== seal.restrictions.length || (seal.remote?.status === 'UNKNOWN') !== seal.restrictions.includes('REMOTE_UNOBSERVED'))) fail(errors, 'invalid v4 dependency restrictions');
   if (seal.record_type !== 'handoff-seal') fail(errors, 'record_type must be handoff-seal');
   if (!Number.isInteger(seal.generation) || seal.generation < 1) fail(errors, 'generation must be a positive integer');
   if (!/^[A-Za-z0-9._-]+$/.test(seal.writer_id || '')) fail(errors, 'writer_id is not a portable logical id');
@@ -175,7 +180,7 @@ export function validateSeal(seal, { checkDigest = true, requireExtensions = fal
   if (!Number.isInteger(seal.seal_sequence) || seal.seal_sequence < 1) fail(errors, 'seal_sequence must be positive');
   if (seal.previous_seal_digest !== null && !HEX.test(seal.previous_seal_digest || '')) fail(errors, 'invalid previous_seal_digest');
   for (const key of ['fact_cutoff', 'sealed_at']) if (!iso(seal[key])) fail(errors, `${key} must be an ISO timestamp`);
-  if (seal.schema_version === 3 && iso(seal.fact_cutoff) && iso(seal.sealed_at) && Date.parse(seal.sealed_at) < Date.parse(seal.fact_cutoff)) fail(errors, 'sealed_at must not precede fact_cutoff');
+  if (seal.schema_version >= 3 && iso(seal.fact_cutoff) && iso(seal.sealed_at) && Date.parse(seal.sealed_at) < Date.parse(seal.fact_cutoff)) fail(errors, 'sealed_at must not precede fact_cutoff');
   if (!/^[A-Za-z0-9._:-]+$/.test(seal.event_id || '')) fail(errors, 'event_id is not a portable logical id');
   if (!seal.sources || typeof seal.sources !== 'object' || Array.isArray(seal.sources) || !Object.keys(seal.sources).length) fail(errors, 'sources must be non-empty');
   else for (const [name, source] of Object.entries(seal.sources)) {
@@ -219,11 +224,12 @@ export function validateSeal(seal, { checkDigest = true, requireExtensions = fal
   const requiresReadyEvidence = seal.control_handoff_confidence === 'HIGH' || ['READY', 'READY_WITH_RESTRICTIONS', 'COMPLETED'].includes(seal.switch_status);
   if (requiresReadyEvidence && !['central_work_items', 'current_view', 'status_index'].every(key => seal.sources?.[key])) fail(errors, 'control handoff requires all canonical sources');
   if (requiresReadyEvidence && r?.observed_at !== null && Date.parse(r.observed_at) > Date.parse(seal.fact_cutoff)) fail(errors, 'remote observed_at must not be after fact_cutoff');
-  if (seal.control_handoff_confidence === 'HIGH' && (r?.status !== 'PASS' || seal.source_digest_status !== 'PASS')) fail(errors, 'HIGH control handoff requires remote PASS and source digest PASS');
+  if (seal.control_handoff_confidence === 'HIGH' && ((r?.status !== 'PASS' && !(seal.schema_version === 4 && r?.status === 'UNKNOWN' && seal.restrictions?.includes('REMOTE_UNOBSERVED'))) || seal.source_digest_status !== 'PASS')) fail(errors, 'HIGH control handoff requires remote PASS and source digest PASS');
   // A restricted candidate may be handed off when the remote is temporarily
   // unobservable, provided all local/control-plane evidence is current.  A
-  // fully READY or COMPLETED record still requires a live remote baseline.
-  if (['READY', 'COMPLETED'].includes(seal.switch_status) && (r?.status !== 'PASS' || seal.source_digest_status !== 'PASS')) fail(errors, 'READY status requires remote PASS and source digest PASS');
+  // v3 READY/COMPLETED still requires a live remote baseline; v4 may use
+  // UNKNOWN with the explicit REMOTE_UNOBSERVED restriction below.
+  if (['READY', 'COMPLETED'].includes(seal.switch_status) && ((r?.status !== 'PASS' && !(seal.schema_version === 4 && r?.status === 'UNKNOWN' && seal.restrictions?.includes('REMOTE_UNOBSERVED'))) || seal.source_digest_status !== 'PASS')) fail(errors, 'READY status requires remote PASS and source digest PASS');
   if (seal.switch_status === 'READY_WITH_RESTRICTIONS' && seal.source_digest_status !== 'PASS') fail(errors, 'READY_WITH_RESTRICTIONS requires source digest PASS');
   // READY describes candidate material readiness, not a transfer of authority.
   if (seal.switch_status === 'COMPLETED' && !['STOPPED_DISPATCH', 'ARCHIVED'].includes(seal.old_writer_status)) fail(errors, 'COMPLETED requires old writer stopped or archived');
@@ -284,7 +290,7 @@ export function readChain(dir, { ignoreOwnLock = false } = {}) {
   records.forEach((seal, index) => {
     if (seal.schema_version < 3) hasLegacyRecords = true;
     if (seal.schema_version < 3 && seenStrictV3) fail(errors, `legacy schema record appears after v3 at sequence ${seal.seal_sequence}`);
-    if (seal.schema_version === 3) seenStrictV3 = true;
+    if (seal.schema_version >= 3) seenStrictV3 = true;
     if (seen.has(seal.seal_sequence)) fail(errors, `duplicate seal_sequence: ${seal.seal_sequence}`); seen.add(seal.seal_sequence);
     const previous = records[index - 1];
     if (!previous && seal.seal_sequence !== 1) fail(errors, 'first seal must have sequence 1');
@@ -293,11 +299,11 @@ export function readChain(dir, { ignoreOwnLock = false } = {}) {
     if (previous && seal.generation < previous.generation) fail(errors, `generation rollback at sequence ${seal.seal_sequence}`);
     if (previous && seal.generation === previous.generation && seal.writer_id !== previous.writer_id) fail(errors, `writer change without generation transition at sequence ${seal.seal_sequence}`);
     if (previous && seal.generation > previous.generation && (seal.generation !== previous.generation + 1 || seal.writer_id === previous.writer_id || !['STOPPED_DISPATCH', 'ARCHIVED'].includes(seal.old_writer_status))) fail(errors, `unsafe generation transition at sequence ${seal.seal_sequence}`);
-    if (seal.schema_version === 3 && seenEventIds.has(seal.event_id)) fail(errors, `duplicate event_id at sequence ${seal.seal_sequence}: ${seal.event_id}`);
-    if (seal.schema_version === 3 && previous && Date.parse(seal.fact_cutoff) < Date.parse(previous.fact_cutoff)) fail(errors, `fact_cutoff rollback at sequence ${seal.seal_sequence}`);
-    if (seal.schema_version === 3 && previous && Date.parse(seal.sealed_at) < Date.parse(previous.sealed_at)) fail(errors, `sealed_at rollback at sequence ${seal.seal_sequence}`);
+    if (seal.schema_version >= 3 && seenEventIds.has(seal.event_id)) fail(errors, `duplicate event_id at sequence ${seal.seal_sequence}: ${seal.event_id}`);
+    if (seal.schema_version >= 3 && previous && Date.parse(seal.fact_cutoff) < Date.parse(previous.fact_cutoff)) fail(errors, `fact_cutoff rollback at sequence ${seal.seal_sequence}`);
+    if (seal.schema_version >= 3 && previous && Date.parse(seal.sealed_at) < Date.parse(previous.sealed_at)) fail(errors, `sealed_at rollback at sequence ${seal.seal_sequence}`);
     if (seal.handoff_phase === 'CURRENT_ATTESTATION' && (!previous || seal.generation !== previous.generation || seal.writer_id !== previous.writer_id || seal.transition !== null || seal.migration !== null)) fail(errors, `invalid current attestation at sequence ${seal.seal_sequence}`);
-    if (seal.schema_version === 3 && seal.handoff_phase === 'CURRENT_ATTESTATION' && previous) {
+    if (seal.schema_version >= 3 && seal.handoff_phase === 'CURRENT_ATTESTATION' && previous) {
       const names = new Set([...Object.keys(previous.sources ?? {}), ...Object.keys(seal.sources ?? {})]);
       if (![...names].some(name => previous.sources?.[name]?.digest !== seal.sources?.[name]?.digest)) fail(errors, `current attestation has no source change at sequence ${seal.seal_sequence}`);
     }
@@ -305,8 +311,9 @@ export function readChain(dir, { ignoreOwnLock = false } = {}) {
       const intent = intents.get(seal.transition.intent_digest);
       if (!intent) fail(errors, `missing transition intent at sequence ${seal.seal_sequence}`);
       else if (!previous || intent.previous_seal_digest !== previous.seal_digest || intent.previous_sequence !== previous.seal_sequence || intent.previous_generation !== previous.generation || intent.previous_writer_id !== previous.writer_id || intent.next_generation !== seal.generation || intent.next_writer_id !== seal.writer_id || intent.event_id !== seal.event_id || seal.transition.previous_seal_digest !== intent.previous_seal_digest || seal.transition.prepared_at !== intent.prepared_at) fail(errors, `transition intent mismatch at sequence ${seal.seal_sequence}`);
-      if (seal.schema_version === 3 && previous && Date.parse(seal.transition.prepared_at) < Date.parse(previous.sealed_at)) fail(errors, `transition prepared_at precedes predecessor seal at sequence ${seal.seal_sequence}`);
-      if (seal.schema_version === 3 && Date.parse(seal.transition.prepared_at) > Date.parse(seal.sealed_at)) fail(errors, `transition prepared_at follows takeover seal at sequence ${seal.seal_sequence}`);
+      if (intent?.record_type === 'handoff-direct-transition-intent' && seal.schema_version !== 4) fail(errors, 'direct recipient evidence cannot be consumed by a legacy seal');
+      if (seal.schema_version >= 3 && previous && Date.parse(seal.transition.prepared_at) < Date.parse(previous.sealed_at)) fail(errors, `transition prepared_at precedes predecessor seal at sequence ${seal.seal_sequence}`);
+      if (seal.schema_version >= 3 && Date.parse(seal.transition.prepared_at) > Date.parse(seal.sealed_at)) fail(errors, `transition prepared_at follows takeover seal at sequence ${seal.seal_sequence}`);
     }
     seenEventIds.add(seal.event_id);
   });
@@ -331,13 +338,14 @@ export function verifyChain(dir, options = {}) {
   const result = readChain(dir, options);
   const latest = result.records.at(-1) ?? null;
   if (!latest) result.errors.push('no immutable seal record');
+  if (latest?.sources?.status_index && options.verifyLatestSources !== false) { try { assertControlReady(latest, options); } catch (error) { result.errors.push(error.message); } }
   const requiresLiveSources = options.verifyLatestSources !== false && latest && latest.source_digest_status === 'PASS' && latest.sources;
   const sourceVerificationErrors = requiresLiveSources
     ? verifySourceFiles(latest, options.sourceRoot, options.externalControlPlaneRoot)
     : [];
   sourceVerificationErrors.forEach(error => result.errors.push(error));
   if (latest && latest.switch_status === 'COMPLETED' && latest.control_handoff_confidence !== 'HIGH') result.errors.push('COMPLETED requires control_handoff_confidence HIGH');
-  if (latest && latest.control_handoff_confidence === 'HIGH' && latest.remote.status === 'UNKNOWN') result.errors.push('HIGH control handoff cannot hide unknown remote baseline');
+  if (latest && latest.schema_version < 4 && latest.control_handoff_confidence === 'HIGH' && latest.remote.status === 'UNKNOWN') result.errors.push('HIGH control handoff cannot hide unknown remote baseline');
   const latestSourceStatus = requiresLiveSources
     ? sourceVerificationErrors.length === 0
       ? 'PASS'
@@ -354,8 +362,12 @@ export function verifyChain(dir, options = {}) {
 
 function validateTransitionIntent(intent) {
   const errors = [];
-  if (!exactKeys(intent, ['record_type', 'previous_seal_digest', 'previous_sequence', 'previous_generation', 'previous_writer_id', 'next_generation', 'next_writer_id', 'event_id', 'prepared_at', 'previous_source_status', 'transition_digest'])) return ['invalid transition intent fields'];
-  if (intent.record_type !== 'handoff-transition-intent') fail(errors, 'invalid transition record_type');
+  if (!exactKeys(intent, ['record_type', 'previous_seal_digest', 'previous_sequence', 'previous_generation', 'previous_writer_id', 'next_generation', 'next_writer_id', 'event_id', 'prepared_at', 'previous_source_status', 'transition_digest', ...(intent.record_type === 'handoff-direct-transition-intent' ? ['authorization'] : [])])) return ['invalid transition intent fields'];
+  if (intent.record_type === 'handoff-direct-transition-intent') {
+    errors.push(...validateDirectConfirmation(intent.authorization, { writerId: intent.next_writer_id, platformTaskId: intent.authorization?.recipient_platform_id, projectKey: intent.authorization?.project_key }, { seal_digest: intent.previous_seal_digest, generation: intent.previous_generation, writer_id: intent.previous_writer_id }));
+    if (Date.parse(intent.authorization?.confirmed_at) > Date.parse(intent.prepared_at)) fail(errors, 'direct preparation precedes operator confirmation');
+  }
+  if (!['handoff-transition-intent', 'handoff-direct-transition-intent'].includes(intent.record_type)) fail(errors, 'invalid transition record_type');
   if (!HEX.test(intent.previous_seal_digest || '') || !Number.isInteger(intent.previous_sequence) || intent.previous_sequence < 1) fail(errors, 'invalid transition predecessor');
   if (!Number.isInteger(intent.previous_generation) || !Number.isInteger(intent.next_generation) || intent.previous_generation < 1 || intent.next_generation < 1) fail(errors, 'invalid transition generation');
   if (!/^[A-Za-z0-9._-]+$/.test(intent.previous_writer_id || '') || !/^[A-Za-z0-9._-]+$/.test(intent.next_writer_id || '')) fail(errors, 'invalid transition writer');
@@ -392,7 +404,7 @@ function readTransitionRecovery(recoveryPath) {
   if (!match || Number(match[1]) !== recovery.previous_sequence || match[2] !== recovery.recovery_digest) throw new Error('transition recovery filename does not match record');
   return recovery;
 }
-export function recoverTransition(dir, { sourceRoot, externalControlPlaneRoot, expectedPreviousDigest, expectedIntentDigest, eventId, recoveredAt = new Date().toISOString() } = {}) {
+function recoverTransitionLocked(dir, { sourceRoot, externalControlPlaneRoot, expectedPreviousDigest, expectedIntentDigest, eventId, recoveredAt = new Date().toISOString() } = {}) {
   const lock = path.join(dir, '.handoff.lock');
   const fd = fs.openSync(lock, 'wx');
   try {
@@ -436,7 +448,7 @@ export function recoverTransition(dir, { sourceRoot, externalControlPlaneRoot, e
     return { recovery, path: finalPath };
   } finally { fs.closeSync(fd); fs.unlinkSync(lock); }
 }
-export function prepareTransition(dir, { sourceRoot, externalControlPlaneRoot, expectedPreviousDigest, nextGeneration, nextWriterId, eventId, preparedAt = new Date().toISOString() } = {}) {
+function prepareTransitionLocked(dir, { sourceRoot, externalControlPlaneRoot, expectedPreviousDigest, nextGeneration, nextWriterId, eventId, preparedAt = new Date().toISOString(), authorization } = {}) {
   fs.mkdirSync(dir, { recursive: true });
   const lock = path.join(dir, '.handoff.lock');
   const fd = fs.openSync(lock, 'wx');
@@ -452,13 +464,16 @@ export function prepareTransition(dir, { sourceRoot, externalControlPlaneRoot, e
     if (current.records.some(record => record.event_id === eventId) || current.intents.some(intent => intent.event_id === eventId) || current.recoveries.some(recovery => recovery.event_id === eventId)) throw new Error('event_id already exists in the handoff chain');
     if (Date.parse(preparedAt) < Date.parse(previous.sealed_at)) throw new Error('transition prepared_at precedes predecessor seal');
     const intent = {
-      record_type: 'handoff-transition-intent', previous_seal_digest: previous.seal_digest, previous_sequence: previous.seal_sequence,
+      record_type: authorization ? 'handoff-direct-transition-intent' : 'handoff-transition-intent', previous_seal_digest: previous.seal_digest, previous_sequence: previous.seal_sequence,
       previous_generation: previous.generation, previous_writer_id: previous.writer_id, next_generation: nextGeneration,
-      next_writer_id: nextWriterId, event_id: eventId, prepared_at: preparedAt, previous_source_status: 'PASS', transition_digest: ''
+      next_writer_id: nextWriterId, event_id: eventId, prepared_at: preparedAt, previous_source_status: 'PASS', transition_digest: '',
+      ...(authorization ? { authorization: structuredClone(authorization) } : {})
     };
     intent.transition_digest = transitionDigest(intent);
     const intentErrors = validateTransitionIntent(intent);
     if (intentErrors.length) throw new Error(`transition intent invalid: ${intentErrors.join('; ')}`);
+    const finalObservation = verifyChain(dir, { ignoreOwnLock: true, sourceRoot, externalControlPlaneRoot });
+    if (finalObservation.status !== 'PASS' || finalObservation.latest?.seal_digest !== previous.seal_digest || finalObservation.pending_intents.length) throw new Error('transition source changed before preparation');
     const finalPath = path.join(dir, `handoff-transition.${intent.previous_sequence}.${intent.transition_digest}.json`);
     const tempPath = `${finalPath}.${process.pid}.tmp`;
     const out = fs.openSync(tempPath, 'wx');
@@ -468,7 +483,7 @@ export function prepareTransition(dir, { sourceRoot, externalControlPlaneRoot, e
   } finally { fs.closeSync(fd); fs.unlinkSync(lock); }
 }
 
-export function appendSeal(dir, draft, { expectedPreviousDigest, sourceRoot, externalControlPlaneRoot, transitionTicket } = {}) {
+function appendSealLocked(dir, draft, { expectedPreviousDigest, sourceRoot, externalControlPlaneRoot, transitionTicket } = {}) {
   fs.mkdirSync(dir, { recursive: true });
   const lock = path.join(dir, '.handoff.lock');
   const fd = fs.openSync(lock, 'wx');
@@ -483,7 +498,7 @@ export function appendSeal(dir, draft, { expectedPreviousDigest, sourceRoot, ext
     const seal = structuredClone(draft);
     const recovery = current.recoveries.find(item => item.previous_seal_digest === previous?.seal_digest);
     if (recovery && (seal.handoff_phase !== 'CURRENT_ATTESTATION' || Date.parse(seal.sealed_at) < Date.parse(recovery.recovered_at))) throw new Error('recovered intent requires a later same-writer current attestation');
-    if (seal.schema_version !== 3) throw new Error('new seal writes require schema_version 3; schema 1/2 records are read-only legacy history');
+    if (![3, 4].includes(seal.schema_version)) throw new Error('new seal writes require schema_version 3 or 4; schema 1/2 records are read-only legacy history');
     if (previous && seal.generation < previous.generation) throw new Error('generation rollback');
     if (previous && seal.generation === previous.generation && seal.writer_id !== previous.writer_id) throw new Error('writer change without generation transition');
     if (previous && seal.generation > previous.generation && (seal.generation !== previous.generation + 1 || seal.writer_id === previous.writer_id || !['STOPPED_DISPATCH', 'ARCHIVED'].includes(seal.old_writer_status))) throw new Error('unsafe generation transition');
@@ -495,6 +510,12 @@ export function appendSeal(dir, draft, { expectedPreviousDigest, sourceRoot, ext
       if (path.dirname(resolvedTicket) !== resolvedDir) throw new Error('transition ticket must be stored in the seal directory');
       intent = readTransitionIntent(transitionTicket);
       if (!previous || intent.previous_seal_digest !== previous.seal_digest || intent.previous_sequence !== previous.seal_sequence || intent.previous_generation !== previous.generation || intent.previous_writer_id !== previous.writer_id || intent.next_generation !== seal.generation || intent.next_writer_id !== seal.writer_id || intent.event_id !== seal.event_id) throw new Error('transition intent does not match append');
+      if (intent.record_type === 'handoff-direct-transition-intent' && seal.schema_version !== 4) throw new Error('direct recipient evidence requires schema_version 4');
+      if (intent.record_type === 'handoff-direct-transition-intent') {
+        const body = fs.readFileSync(resolveSource(seal.sources.status_index, { sourceRoot, externalControlPlaneRoot }), 'utf8').split('<!-- CURRENT:BEGIN -->')[1]?.split('<!-- CURRENT:END -->')[0];
+        const mapping = JSON.parse(body?.match(/<!-- CONTROL_IDENTITY: (.*?) -->/)?.[1] || 'null');
+        if (mapping?.platform_task_id !== intent.authorization.recipient_platform_id || body?.match(/^项目键：([^\r\n]+)$/m)?.[1]?.trim() !== intent.authorization.project_key) throw new Error('direct intent recipient platform or project does not match new CURRENT');
+      }
       seal.transition = { intent_digest: intent.transition_digest, previous_seal_digest: intent.previous_seal_digest, prepared_at: intent.prepared_at };
     } else if (previousSourceErrors.length && seal.handoff_phase !== 'CURRENT_ATTESTATION') throw new Error(previousSourceErrors.join('; '));
     if (previous && seal.generation > previous.generation && !intent) throw new Error('generation transition requires a pre-update intent');
@@ -531,6 +552,49 @@ export function appendSeal(dir, draft, { expectedPreviousDigest, sourceRoot, ext
     fs.renameSync(tempPath, finalPath);
     return seal;
   } finally { fs.closeSync(fd); fs.unlinkSync(lock); }
+}
+
+
+// Every supported writer uses the same canonical index lock, then the chain lock.
+export function prepareTransition(dir, options = {}) {
+  if (options.authorization) throw new Error('direct confirmation requires the versioned direct entry');
+  const previous = readChain(dir, { ignoreOwnLock: true }).records.at(-1);
+  return withControlLock(previous, options, () => { assertControlReady(previous, options); return prepareTransitionLocked(dir, options); });
+}
+// Structural evidence checks cannot authenticate a caller. The receiving agent must
+// first resolve evidence_ref to the actual current operator message, not an attachment.
+export function validateDirectConfirmation(value, recipient, previous) {
+  const keys = ['protocol_version', 'origin', 'evidence_ref', 'confirmed_at', 'project_key', 'previous_seal_digest', 'old_generation', 'old_writer_id', 'old_writer_status', 'recipient_writer_id', 'recipient_platform_id', 'scope', 'transfer_confirmed'];
+  if (!exactKeys(value, keys) || keys.some(key => !Object.hasOwn(value, key))) return ['direct confirmation fields required'];
+  const errors = [];
+  if (value.protocol_version !== 1 || value.origin !== 'CURRENT_OPERATOR_MESSAGE' || value.scope !== 'HANDOFF_PREPARE_COMMIT_ONLY' || value.transfer_confirmed !== true || typeof value.evidence_ref !== 'string' || !value.evidence_ref.trim() || !iso(value.confirmed_at)) errors.push('direct operator confirmation and original evidence required');
+  if (!['STOPPED_DISPATCH', 'ARCHIVED'].includes(value.old_writer_status)) errors.push('old writer must be explicitly stopped');
+  if (value.previous_seal_digest !== previous?.seal_digest || value.old_generation !== previous?.generation || value.old_writer_id !== previous?.writer_id) errors.push('confirmation predecessor mismatch');
+  if (!recipient || value.recipient_writer_id !== recipient.writerId || value.recipient_platform_id !== recipient.platformTaskId || value.project_key !== recipient.projectKey || !/^[A-Za-z0-9._-]+$/.test(recipient.writerId || '') || !/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(recipient.platformTaskId || '') || typeof recipient.projectKey !== 'string' || !recipient.projectKey.trim()) errors.push('confirmation recipient or project mismatch');
+  if (value.recipient_writer_id === previous?.writer_id) errors.push('confirmation requires a different recipient writer');
+  return errors;
+}
+export function prepareDirectTransition(dir, options) {
+  const previous = readChain(dir, { ignoreOwnLock: true }).records.at(-1);
+  const errors = validateDirectConfirmation(options.confirmation, options.recipient, previous);
+  if (errors.length) throw new Error(errors.join('; '));
+  return withControlLock(previous, options, () => {
+    assertControlReady(previous, options);
+    return prepareTransitionLocked(dir, { ...options, expectedPreviousDigest: previous.seal_digest, nextGeneration: previous.generation + 1, nextWriterId: options.recipient.writerId, authorization: options.confirmation });
+  });
+}
+export function recoverTransition(dir, options = {}) {
+  const previous = readChain(dir, { ignoreOwnLock: true }).records.at(-1);
+  return withControlLock(previous, options, () => { assertControlReady(previous, options); return recoverTransitionLocked(dir, options); });
+}
+export function appendSeal(dir, draft, options = {}) {
+  const previous = readChain(dir, { ignoreOwnLock: true }).records.at(-1);
+  const anchor = previous || draft;
+  return withControlLock(anchor, options, () => {
+    assertControlReady(anchor, options);
+    if (previous && resolveSource(previous.sources.status_index, options) !== resolveSource(draft.sources.status_index, options)) throw new Error('canonical index change requires explicit migration');
+    return appendSealLocked(dir, draft, options);
+  });
 }
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1])) {
