@@ -31,6 +31,12 @@ const REFRESH_REQUIRED_RULES = [
   '引用的外部工具/外部工具自动对接规范.md'
 ];
 const checks = [
+  ['0A separates full integrity and rule reading from unused implementation text', read('10-自动状态索引规范.md'), ['RULE_TEXT_AND_IMPLEMENTATION_ON_DEMAND_V1', '全部文件仍核可读性', 'TEXT_DEFERRED', '安全依赖', '旧完整模式继续有效', '不得把延后阅读写成“源码已读”']],
+  ['refresh and operator entries share the layered contract', read('01-操作者操作手册.md') + read('规则刷新广播包.md'), ['RULE_TEXT_AND_IMPLEMENTATION_ON_DEMAND_V1', 'TEXT_DEFERRED', '全部清单条目仍核摘要及稳定性', '分段补读与停止条件不变']],
+  ['takeover recovery retains private storage and versioned exact write scope', read('04-状态、目标变更与交接规范.md'), ['同一只读存储检查', 'workspace_projection.version=2', 'workspace_projection_sha256', '恢复拒绝日志证据篡改、删除或无锚点投影', '只采用无投影的旧严格算法', '不得降级删字段', '不提供任意跳检/排除参数', '公共工具维护完成不表示来源项目迁移完成']],
+  ['handoff failure report separates readiness and completion reminder', read('总指挥轻量交接启动配置.md'), ['材料已就绪但登记未完成', '才显示完成后的派新任务提醒', '操作、目的、预期结果与失败时最小证据', '不称来源损坏']],
+  ['1C distinguishes unread identity from verified non-commander identity', read('01-操作者操作手册.md'), ['已核验为普通或专项任务', '工具启动失败、来源暂时不可读', '暂时无法核验总指挥身份', '不把核验未完成写成身份不符', '不据此改用 1E/1F']],
+  ['stage closeout reconciles central facts without transferring identity', read('10-自动状态索引规范.md'), ['### 阶段收口状态核账', '工作项主记录落盘不等于中央登记已更新', '中央工作项清单 → 当前进度视图 → 状态索引', '本轮已采用规则版本和指纹', '阶段成果与验证边界', '身份依据有效性与业务状态新鲜度分别核验', '只暂停依赖缺口的动作', '已冻结候选来源不得回写']],
   ['PR decision separates evidence, pending work and merge eligibility', read('docs/PR_SUBMISSION_AND_REVIEW_STANDARD.md'), ['“尚未批准”不等于“要求修改”', '可以附非阻断建议', 'CI 仅排队、其他审阅者批准待齐', '不以缩小范围规避必要审查', '审阅者暂时读不到不等于作者没有提供', '不要求先发生真实安全事故或数据丢失', '缺远端授权只保留正确结论的本地草稿']],
   ['PR formal state changes are not body edits or comments', read('docs/PR_SUBMISSION_AND_REVIEW_STANDARD.md'), ['复审仍绑定当前 Head', '作者声称已修复或线程被标为 resolved，不能代替验证', '编辑 Review 正文或补发 `Comment` 不等于改变已有 `Request changes` 的状态', '不是平台状态计算公式', '修复后实质复审及正式结论变化按7.1处理']],
   ['PR prompt uses canonical decision boundaries', read('01-操作者操作手册.md'), ['审阅认可不等于整个 PR 已可合并', '影响本次判断的必要验证缺失时不能提前批准', '可附非阻断建议', '编辑正文或补发 Comment 不能代替正式审阅状态变化', '缺远端权限时只保留本地草稿']],
@@ -107,7 +113,7 @@ const legacy0C = manual.split('### 兼容分支：把已运行项目的现有窗
 checks.push(['legacy 0C copy block preserves current 0B gates', legacy0C, ['本旧入口按现行0B处理', '本项目现任总指挥，否则停止转达', '本项目当前清单中全部可核验子任务', '不扩大到其他项目', '不迁移控制面']]);
 checks.push(['identity reference does not confer authority or require manual IDs', read('10-自动状态索引规范.md'), ['接收本条指令的对话', '中央登记的现任总指挥', '原/旧对话', '平台任务ID、逻辑 `writer_id`、总指挥世代和任务标题分别记录', '不能冒充平台ID', '不要求操作者手填技术ID', '不自动产生世代切换、中央写权、旧授权继承或远端权限', '已证明平台不可见时，ID UNKNOWN 不单独撤销已有中央证据确认的身份或切换状态', '普通规则刷新可以独立PASS', '在旧对话发送', '在新对话发送', '在接收对话发送']]);
 checks.push(['handoff and task continuation distinguish receiver from source', manual, ['本次拟建立或恢复的总指挥是接收本条指令的对话', '这里的当前窗口指接收本条指令、拟移交职责的旧对话', '调度权移交给当前接收这条指令的对话', '真实接收身份', '你是准备移交工作的旧任务窗口', '你是接收续接材料的新任务窗口', '原对话与接收对话分别定位']]);
-checks.push(['4K resolves reversible preparation problems without weakening publish gates', `${read('01-操作者操作手册.md')}\n${read('02-总指挥核心规则.md')}\n${read('09-自动化授权与风险分级.md')}`, ['4K简单问题自主处理', '无法在原范围安全修复的验证失败', '远端动作前还必须逐项读取目标 Commit/Head 的 Checks 和 Actions', '失败项默认全部进入本轮处理清单', '不得以取消测试、降低验收', '关闭检查或空提交掩盖失败', '同类修复连续两次无改善', '修复改变纳入内容时', '结果未知不重复副作用', '先完成可审阅候选', '最终远端确认仍适用', '已有有效精确确认不重复索权']]);
+checks.push(['4K resolves reversible preparation problems without weakening publish gates', `${read('01-操作者操作手册.md')}\n${read('02-总指挥核心规则.md')}\n${read('09-自动化授权与风险分级.md')}`, ['4K简单问题自主处理', '无法在原范围安全修复的验证失败', 'Push前完成候选本地必要验证', 'Push后回读精确新Head的全部Checks和Actions', '失败项默认全部进入本轮处理清单', '不得以取消测试、降低验收', '关闭检查或空提交掩盖失败', '同类修复连续两次无改善', '修复改变纳入内容时', '结果未知不重复副作用', '先完成可审阅候选', '最终远端确认仍适用', '已有有效精确确认不重复索权']]);
 checks.push(['cross-project route separates affiliation from operator authorization', `${read('09-自动化授权与风险分级.md')}\n${fs.readFileSync(path.join(root, 'AGENTS.md'), 'utf8')}`, ['跨项目默认路由', '本项目 AI / 其他项目 AI / 归属未知', '当前操作者在接收窗口直接明确要求处理来源业务', '来源归属与通信授权分开核验', '其他项目或归属未知的 AI 来信默认进入 `WORKFLOW_FEEDBACK`']]);
 checks.push(['cross-window feedback reads accessible material before execution gating', `${fs.readFileSync(path.join(root, 'AGENTS.md'), 'utf8')}\n${read('09-自动化授权与风险分级.md')}\n${read('06-复盘与优化规则.md')}`, ['完整取得并阅读当前消息提供的可访问材料', '只读范围内检索互联网', '读取、核验和总结不等于接管来源业务', '来源业务未授权', '缺失材料仍需标为 `INPUT_REQUIRED`']]);
 checks.push(['cross-task operator report has six explicit sections', `${fs.readFileSync(path.join(root, 'AGENTS.md'), 'utf8')}\n${read('01-操作者操作手册.md')}\n${read('09-自动化授权与风险分级.md')}`, ['跨任务事件的操作者可见六段汇报', '来源与要求', '读取与分析', '执行决定', '来源回执', '操作者干预', '处理状态与主线', '恢复原主线断点', '已发送待确认', '尚未向来源回执', '事件阻断或待回调时，不得写“处理完毕”']]);
@@ -160,6 +166,8 @@ checks.push(['ordinary sender copy block delivers the main file and next scene',
 checks.push(['ordinary recipient copy block consumes bounded main entry without rotation tickets', ordinaryTakeover.split('```text')[1]?.split('```')[0] || '', ['唯一主快照', '明确用途', '必读链接', '不递归', '只暂停依赖缺口的动作', '不要求中央轮换票据', '不得继承旧窗口的远端写入']]);
 checks.push(['manual provides one explicit stop-and-transfer input', read('01-操作者操作手册.md'), ['正常换任只发一次', '我已根据交接来源记录确认并停止旧总指挥的调度', '仅取得本次交接准备与提交权限', '完成回读前没有业务调度权', '不要求我另取唯一票据', '请保持旧总指挥停止接收和执行新任务']]);
 checks.push(['lightweight entry separates readiness from authority and hides internal preparation', read('总指挥轻量交接启动配置.md'), ['只表示材料通过', 'DIRECT_PREPARE_AVAILABLE', 'can_stop_old=true', '没有独立票据不称材料失败', '操作者只实际停旧并一次发送附件与1D', '不转交正常准备请求或票据']]);
+checks.push(['lightweight handoff reuses deterministic checks without weakening control gates', read('总指挥轻量交接启动配置.md'), ['先定位唯一CURRENT', 'HISTORY仅在来源冲突或必要恢复时定点展开', '同实例已完整读取', '新实例独立读必要正文并核权', '无变化不再先重复运行组合入口', '--summary', '仍执行完整核验并保留全部错误', '锁内前后复核及完成回读保持', '历史日志按原渲染版本核验']]);
+checks.push(['shared role loading reuses only verified evidence from the same instance', fs.readFileSync(path.join(root, '引用的外部工具/外部工具自动对接规范.md'), 'utf8'), ['新实例独立读取所需角色正文', '同实例已有可核的完整读取记录', '实物、适用职责和依赖未变', '核目标、版本、实物、当前权限及原消费', '不继承其他实例“已读”']]);
 checks.push(['direct protocol preserves legacy intent and interrupted writes', read('04-状态、目标变更与交接规范.md'), ['接收方直接准备、受控提交与中断恢复', 'handoff-direct-transition-intent', 'schema v4', '所有受支持v3 prepare/recover/append', '第三种字节保留现场', '不自行授予跨任务发送权限', '不能代替修复后的新确认']]);
 checks.push(['workflow regression is wired into the real repository quality entry', fs.readFileSync(path.join(root, '.github/scripts/Test-Repository.ps1'), 'utf8'), ["& node (Join-Path $PSScriptRoot 'Test-Verify-Handoff-Candidate.mjs')", "if ($LASTEXITCODE -ne 0) { throw '候选材料与停旧前轮换准备组合检查失败。' }"]]);
 checks.push(['in-flight scope preserves strict defaults and live source separation', read('04-状态、目标变更与交接规范.md'), ['在途专项与交接保护范围', 'git-scoped-index-worktree-sha256-v2', 'ownership_source_ref', '候选不能临时扩大排除范围', '分别核验 Git 索引与工作树', '旧票据恢复只登记旧来源漂移', '旧封条、票据及恢复记录不改签', '交接保存可靠阶段观察']]);
@@ -169,6 +177,10 @@ checks.push(['handoff output defaults to human summary with optional technical t
 checks.push(['core entry uses scoped human final source', read('02-总指挥核心规则.md'), ['轻量启动配置第 8 节', '默认四句人话摘要', '普通业务压缩恢复不套用交接汇报']]);
 checks.push(['recovery entry does not close an already delivered takeover again', read('04-状态、目标变更与交接规范.md'), ['轻量启动配置第 8 节', '默认四句人话摘要', '已最终交付的交接不因中断恢复而重新收口']]);
 checks.push(['cross-task final verifies current substance rather than a nonempty shell', read('09-自动化授权与风险分级.md'), ['当前请求—实际动作—证据—状态', '本事件的实质判断和剩余交付', '来源回信成功或已经采纳不能代替', '已完成且已交付的交接', '新来信插入原任务']]);
+checks.push(['current-request output rule rejects stale final conclusions', read('02-总指挥核心规则.md') + '\n' + read('09-自动化授权与风险分级.md'), ['当前请求的对象', '上一回合的 PRIMARY_OUTPUT、工具结果和未执行计划只能作为历史证据', 'OUTPUT_MISROUTED', '当前用户消息优先于迟到的工具结果']]);
+checks.push(['cross-task substantive reports preserve requirements and evidence', `${read('02-总指挥核心规则.md')}\n${read('09-自动化授权与风险分级.md')}`, ['跨任务实质汇报的信息保真门禁', '逐项映射', 'REPORT_INCOMPLETE', 'INPUT_REQUIRED', 'NOT_RUN', '证据入口', '下一行动方', '`part i/n`', '合理推断']]);
+checks.push(['visible cross-task receipt is required before continuation', `${read('02-总指挥核心规则.md')}\n${read('09-自动化授权与风险分级.md')}`, ['跨任务入站的操作者可见收件硬门禁', '下一次可以产生的操作者可见文本', 'operator_feedback_status', 'HOST_NO_VISIBLE_TURN/UNKNOWN', '不能声称已读取', '来源写明“无需回复”只免除向来源回传']]);
+checks.push(['phase closeout does not invent a new budget', read('02-总指挥核心规则.md'), ['阶段收口本身不自动产生新预算或新授权请求', '周期或预算到限', '范围/权限/风险发生变化', '明确停止条件命中', '新增高风险依赖']]);
 const reportScope = read('总指挥轻量交接启动配置.md').split('## 8. 统一接管汇报模板')[1];
 const staleReportDirectives = [
   [reportScope, /适用于正常交接、已确认总指挥身份的中断恢复/],
@@ -177,11 +189,60 @@ const staleReportDirectives = [
   [read('04-状态、目标变更与交接规范.md'), /正常换任和已确认总指挥身份的中断恢复均按该格式输出/]
 ];
 checks.push(['old overbroad or mandatory technical final directives cannot coexist with the scoped outlet', staleReportDirectives.every(([text, pattern]) => !pattern.test(text)) ? 'NO_STALE_REPORT_DIRECTIVE' : '', ['NO_STALE_REPORT_DIRECTIVE']]);
+const scene4J = manual.split('### 场景 4J：')[1]?.split('<a id="scenario-local-to-remote">')[0] || '';
+const scene4K = manual.split('### 场景 4K：')[1]?.split('<a id="场景-2f')[0] || '';
+const prStandard = read('docs/PR_SUBMISSION_AND_REVIEW_STANDARD.md');
+const syncChecks = read('09-自动化授权与风险分级.md').split('### 4K简单问题自主处理')[1]?.split('### ')[0] || '';
+// These assertions guard the public routing contract, not a live model's decisions.
+const permissionRules = read('09-自动化授权与风险分级.md');
+const directPermission = permissionRules.split('直接执行请求与准备请求分流：')[1]?.split('\n1. ')[0] || '';
+const scene4A = manual.split('### 场景 4A：')[1]?.split('### 场景 4B：')[0] || '';
+const prPreparation = prStandard.split('### 3.2 ')[1]?.split('## ')[0] || '';
+checks.push(['direct remote execution reuses operator authority without requiring technical IDs', directPermission, ['直接执行请求', '仅准备或预览', '已有有效授权不重复索权', '首次远端写入前', '由AI补齐', '不是新的授权缺口']]);
+checks.push(['direct remote authority preserves actual drift and dedicated confirmation gates', directPermission, ['已绑定的Head或载荷', '实质变化', '明确要求先展示最终载荷后另行确认', '分次或双重确认', '人工通读', '只暂停受影响动作']]);
+checks.push(['remote write scope does not silently include merge or side effects', directPermission, ['Push、创建/更新PR不包含', 'Merge', 'Approve', 'Tag', 'Release', '部署', '删除', '先回读实际结果']]);
+checks.push(['4A and 4K route direct requests through the same authorization branch', `${scene4A}\n${scene4K}`, ['4A先按09的直接执行请求与准备请求分流', '4K先按09的直接执行请求与准备请求分流', '已有有效执行授权时连续完成', '仅准备或预览']]);
+checks.push(['core route and PR preparation reuse the same permission rule', `${read('02-总指挥核心规则.md')}\n${prPreparation}`, ['远端授权按09的直接执行请求与准备请求分流核验', '按09的直接执行请求与准备请求分流', '核验并复用远端授权']]);
+checks.push(['PR gates permit authorized draft progress without certifying human review', prStandard, ['授权已覆盖的Push或Draft不因', '不代填“已通读”', '先展示后另确认', '远端写入确认或合并门禁']]);
+const staleRemoteDirectives = [
+  [scene4K, /它们只表示进入盘点和候选准备，不直接授权 Push/],
+  [scene4A, /候选稳定后只展示一次最终 PR 内容与远端执行卡，操作者确认后才 Push/],
+  [prPreparation, /后一阶段仍须绑定最终候选单独确认|只在候选稳定后申请远端确认/],
+  [prStandard.split('### 6.1 ')[1]?.split('### 6.2 ')[0] || '', /操作者确认同一成果范围、输入基线、动作顺序和验证范围后/],
+  [permissionRules, /达到该状态后再生成一次最终远端执行卡，由操作者集中确认实际远端动作|先完成可审阅候选，再集中展示并确认精确远端动作/],
+];
+checks.push(['old unconditional preparation-only directives cannot reset direct execution authority', staleRemoteDirectives.every(([text, pattern]) => !pattern.test(text)) ? 'NO_STALE_REMOTE_DIRECTIVE' : '', ['NO_STALE_REMOTE_DIRECTIVE']]);
+checks.push(['4J loads existing reproduction contract for every source type', scene4J, ['按同步目的接入04', '成果连续性与运行复现契约', '已读且未变化的证据按有效范围复用']]);
+checks.push(['4J separates code inclusion, actual runtime and accepted effect', scene4J, ['代码已同步', '运行已采用', '效果已验收', '前一项不能代签后一项', '实际进程采用新成果', '代码已同步，运行效果未验证']]);
+checks.push(['source-only sync avoids unrelated runtime mutations', scene4J, ['仅更新源码时运行和效果可不适用', '不机械重装依赖、清缓存或杀进程', '生产、费用、数据库及他人进程另核权限', '干净环境验证不能代签队友实际复现']]);
+checks.push(['4J retains local protection and scope boundaries', scene4J, ['停止 4J 并转 4I', '禁止 `git reset --hard`', '已有未完成的 Merge/Rebase/Cherry-pick', '本场景不自动修改产品代码', '只有操作者确认']]);
+checks.push(['4K direct push loads the same completeness contract', scene4K, ['从已核工作流根读取PR提交与审查标准', '直推同样使用', '全部待上传历史', '参与原验收的忽略配置与资产', '排除后重验受影响行为', '目标内仍有待定成果时不声称“全部完成”']]);
+checks.push(['accepted local result maps to the actual delivery candidate', prStandard, ['本地已认可成果及运行条件 → 必要文件、依赖和资源 → 最终提交候选 → 远端可取得的交付内容', '候选能启动不能证明保留了原认可效果', '不因复现需要取得公开权限']]);
+checks.push(['remote checks follow push readiness and merge timing', syncChecks, ['Push前完成候选本地必要验证', '未来新Head尚无检查不循环阻断Push', 'Push后回读精确新Head', '未触发、运行中、失败、通过与不可观察', '网络不可观察记未知', 'Ready与合并前遵守实际团队门禁', '旧Head通过不能代签新Head', '结果待实际合并后回读']]);
+checks.push(['reviewer checklist keeps necessary steps without copying CI', prStandard, ['检查目的、前提与输入、具体操作、预期结果或事先约定的容差、明确失败条件', '无此需求时说明不适用', 'CI引用精确Head的实时检查入口', '复现所需的环境准备和操作命令不能因去重省略', '干净环境验证与接收成员实际复现分别记录', '| 检查目的 | 前提与输入（含入口/准备） | 具体操作 | 预期结果或约定容差 | 失败条件 |']]);
+checks.push(['unconditional pre-push future checks requirement is removed', [scene4K, syncChecks].every(text => !/远端动作前(?:还)?必须(?:逐项)?读取目标 Commit\/Head/.test(text)) ? 'NO_FUTURE_CHECK_DEADLOCK' : '', ['NO_FUTURE_CHECK_DEADLOCK']]);
 for (const [name, text, needles] of checks) {
   const missing = needles.filter(needle => !text.includes(needle));
   if (missing.length) { failed += 1; console.error(`FAIL: ${name}: missing ${missing.join(', ')}`); }
   else console.log(`PASS: ${name}`);
 }
+const syntheticCurrentReply = ({ currentRequest, candidateRequest, candidateOrigin, currentMessagePresent = true }) => {
+  if (!currentMessagePresent || !currentRequest) return 'OUTPUT_UNVERIFIED/BLOCKED';
+  if (candidateOrigin === 'previous-turn' || candidateRequest !== currentRequest) return 'OUTPUT_MISROUTED';
+  return 'MATCHED';
+};
+const currentReplyCases = [
+  ['previous remote-sync conclusion cannot answer a new cross-task request', { currentRequest: 'cross-task-dialogue', candidateRequest: 'remote-sync', candidateOrigin: 'previous-turn' }, 'OUTPUT_MISROUTED'],
+  ['current request with matching candidate remains usable', { currentRequest: 'cross-task-dialogue', candidateRequest: 'cross-task-dialogue', candidateOrigin: 'current-turn' }, 'MATCHED'],
+  ['missing current request cannot close with an old success', { currentRequest: '', candidateRequest: 'remote-sync', candidateOrigin: 'previous-turn' }, 'OUTPUT_UNVERIFIED/BLOCKED'],
+  ['late tool result cannot replace current user request', { currentRequest: 'cross-task-dialogue', candidateRequest: 'remote-sync', candidateOrigin: 'late-tool-result' }, 'OUTPUT_MISROUTED']
+];
+for (const [name, input, expected] of currentReplyCases) {
+  const actual = syntheticCurrentReply(input);
+  if (actual !== expected) { failed += 1; console.error('FAIL: synthetic current-request output ' + name + ': ' + actual + ' <> ' + expected); }
+  else console.log('PASS: synthetic current-request output ' + name);
+}
+if (!failed) console.log('PASS: current-request output cases are synthetic contract checks, not host interception');
 const syntheticRoute = ({ workflowReview, sourceBusiness, operatorAuthorized = false }) => ({
   workflow: workflowReview ? 'PROCESS_READ_ONLY' : 'NONE',
   business: sourceBusiness ? (operatorAuthorized ? 'AUTHORIZED_SCOPED' : 'BLOCKED') : 'NONE'
@@ -220,6 +281,60 @@ for (const [name, input, expected] of receiptCases) {
   else console.log(`PASS: synthetic cross-task receipt ${name}`);
 }
 if (!failed) console.log('PASS: cross-task receipt cases are synthetic contract checks, not live Agent behavior');
+const syntheticReportCompleteness = ({ requirements, rows, multipartComplete = true }) => {
+  if (!multipartComplete || !Array.isArray(requirements) || !requirements.length || !rows || typeof rows !== 'object') return 'REPORT_INCOMPLETE';
+  for (const requirement of requirements) {
+    const row = rows[requirement];
+    if (!row || !row.status || !row.evidence || !row.nextOwner || !row.classification) return 'REPORT_INCOMPLETE';
+  }
+  return 'REPORT_COMPLETE';
+};
+const reportCompletenessCases = [
+  ['missing requirement mapping blocks closeout', { requirements: ['R1', 'R2'], rows: { R1: { status: 'COMPLETED', evidence: 'e1', nextOwner: 'A', classification: 'FACT' } } }, 'REPORT_INCOMPLETE'],
+  ['complete requirement mapping is reportable', { requirements: ['R1', 'R2'], rows: { R1: { status: 'COMPLETED', evidence: 'e1', nextOwner: 'A', classification: 'FACT' }, R2: { status: 'NOT_RUN', evidence: 'e2', nextOwner: 'B', classification: 'FACT' } } }, 'REPORT_COMPLETE'],
+  ['incomplete multipart payload cannot close', { requirements: ['R1'], rows: { R1: { status: 'COMPLETED', evidence: 'e1', nextOwner: 'A', classification: 'FACT' } }, multipartComplete: false }, 'REPORT_INCOMPLETE'],
+  ['inference must be explicitly labeled', { requirements: ['R1'], rows: { R1: { status: 'UNKNOWN', evidence: 'e1', nextOwner: 'A', classification: 'INFERENCE' } } }, 'REPORT_COMPLETE']
+];
+for (const [name, input, expected] of reportCompletenessCases) {
+  const actual = syntheticReportCompleteness(input);
+  if (actual !== expected) { failed += 1; console.error('FAIL: synthetic cross-task report completeness ' + name + ': ' + actual + ' <> ' + expected); }
+  else console.log('PASS: synthetic cross-task report completeness ' + name);
+}
+if (!failed) console.log('PASS: cross-task report completeness cases are synthetic contract checks, not live Agent behavior');
+const syntheticVisibleReceipt = ({ eventArrived, nextVisibleText, firstTextIsReceipt, hostProducedTurn = true }) => {
+  if (!eventArrived) return 'NO_EVENT';
+  if (!hostProducedTurn) return 'HOST_NO_VISIBLE_TURN/UNKNOWN';
+  if (!nextVisibleText || !firstTextIsReceipt) return 'OUTPUT_UNVERIFIED/BLOCKED';
+  return 'VISIBLE_RECEIPT';
+};
+const visibleReceiptCases = [
+  ['queued event must surface before business continuation', { eventArrived: true, nextVisibleText: '已收到，排队处理', firstTextIsReceipt: true }, 'VISIBLE_RECEIPT'],
+  ['business output without receipt is not a valid closeout', { eventArrived: true, nextVisibleText: '主线已完成', firstTextIsReceipt: false }, 'OUTPUT_UNVERIFIED/BLOCKED'],
+  ['host without a visible turn remains unknown', { eventArrived: true, nextVisibleText: '', firstTextIsReceipt: false, hostProducedTurn: false }, 'HOST_NO_VISIBLE_TURN/UNKNOWN'],
+  ['no event does not require a receipt', { eventArrived: false, nextVisibleText: '', firstTextIsReceipt: false }, 'NO_EVENT']
+];
+for (const [name, input, expected] of visibleReceiptCases) {
+  const actual = syntheticVisibleReceipt(input);
+  if (actual !== expected) { failed += 1; console.error('FAIL: synthetic visible cross-task receipt ' + name + ': ' + actual + ' <> ' + expected); }
+  else console.log('PASS: synthetic visible cross-task receipt ' + name);
+}
+if (!failed) console.log('PASS: visible cross-task receipt cases are synthetic contract checks, not host interception');
+const syntheticBudgetBoundary = ({ phaseClosed, budgetAtLimit, scopeChanged, highRiskDependency }) => {
+  if (!phaseClosed) return 'CONTINUE_OR_REPORT';
+  if (!budgetAtLimit && !scopeChanged && !highRiskDependency) return 'NO_NEW_BUDGET';
+  return 'NEW_CANDIDATE_REQUIRED';
+};
+const budgetBoundaryCases = [
+  ['phase closeout within current bounds does not request budget', { phaseClosed: true, budgetAtLimit: false, scopeChanged: false, highRiskDependency: false }, 'NO_NEW_BUDGET'],
+  ['budget limit requires a new candidate', { phaseClosed: true, budgetAtLimit: true, scopeChanged: false, highRiskDependency: false }, 'NEW_CANDIDATE_REQUIRED'],
+  ['scope change requires a new candidate', { phaseClosed: true, budgetAtLimit: false, scopeChanged: true, highRiskDependency: false }, 'NEW_CANDIDATE_REQUIRED']
+];
+for (const [name, input, expected] of budgetBoundaryCases) {
+  const actual = syntheticBudgetBoundary(input);
+  if (actual !== expected) { failed += 1; console.error('FAIL: synthetic budget boundary ' + name + ': ' + actual + ' <> ' + expected); }
+  else console.log('PASS: synthetic budget boundary ' + name);
+}
+if (!failed) console.log('PASS: budget boundary cases are synthetic contract checks, not live Agent behavior');
 const rebaseOutcome = ({ sourceStable, impact, rebasePass }) => {
   if (!sourceStable) return 'REBASE_BLOCKED';
   if (!rebasePass) return 'REBASE_BLOCKED';
@@ -399,3 +514,12 @@ if (attrs.status !== 0 || fields.length !== managedPaths.length * 3 + 1 || manag
 }
 console.log(`Managed checkout line endings: PASS (${managedPaths.length} files)`);
 console.log(`Workflow refresh contract: PASS (${checks.length} cases)`);
+// These offline fixtures demonstrate observable Git/runtime counterexamples;
+// they do not prove a live agent or another member followed the prose above.
+const syncFixture = spawnSync(process.execPath, [path.join(root, '.github/scripts/Test-SyncScenarios.mjs')],
+  { cwd: root, encoding: 'utf8' }); // Fixture bounds Git/IPC by its deadline and cleans up in finally.
+if (syncFixture.status !== 0) {
+  console.error(`FAIL: offline sync fixtures: ${syncFixture.error?.message ?? ''}\n${syncFixture.stdout ?? ''}${syncFixture.stderr ?? ''}`);
+  process.exit(1);
+}
+console.log(syncFixture.stdout.trim());

@@ -7,7 +7,7 @@ const defaultRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '
 const repositoryPrefixes = ['.github/', '引用的外部工具/'];
 const required = [
   ...Array.from({ length: 12 }, (_, index) => `${String(index).padStart(2, '0')}-`),
-  '.github/scripts/HandoffSeal.mjs', '.github/scripts/Prepare-Handoff.mjs', '.github/scripts/HandoffWorkspaceScope.mjs',
+  '.github/scripts/HandoffSeal.mjs', '.github/scripts/Prepare-Handoff.mjs', '.github/scripts/HandoffWorkspaceScope.mjs', '.github/scripts/HandoffTransactionWorkspace.mjs',
   '.github/scripts/Inspect-WorkspaceTracking.mjs', '.github/scripts/Inspect-RuleRefresh.mjs',
   '.github/scripts/Mark-Handoff-Delivered.mjs', '.github/scripts/Inspect-QuotaProtection.mjs', '总指挥轻量交接启动配置.md',
   '规则刷新广播包.md', '规则刷新接收回执模板.md', 'templates/HANDOFF_STATE.schema.json',

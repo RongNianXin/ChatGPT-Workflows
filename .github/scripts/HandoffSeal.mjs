@@ -362,7 +362,8 @@ export function verifyChain(dir, options = {}) {
 
 function validateTransitionIntent(intent) {
   const errors = [];
-  if (!exactKeys(intent, ['record_type', 'previous_seal_digest', 'previous_sequence', 'previous_generation', 'previous_writer_id', 'next_generation', 'next_writer_id', 'event_id', 'prepared_at', 'previous_source_status', 'transition_digest', ...(intent.record_type === 'handoff-direct-transition-intent' ? ['authorization'] : [])])) return ['invalid transition intent fields'];
+  if (!exactKeys(intent, ['record_type', 'previous_seal_digest', 'previous_sequence', 'previous_generation', 'previous_writer_id', 'next_generation', 'next_writer_id', 'event_id', 'prepared_at', 'previous_source_status', 'transition_digest', ...(intent.record_type === 'handoff-direct-transition-intent' ? ['authorization', 'workspace_projection_sha256'] : [])])) return ['invalid transition intent fields'];
+  if (Object.hasOwn(intent, 'workspace_projection_sha256') && !HEX.test(intent.workspace_projection_sha256 || '')) fail(errors, 'invalid transaction workspace anchor');
   if (intent.record_type === 'handoff-direct-transition-intent') {
     errors.push(...validateDirectConfirmation(intent.authorization, { writerId: intent.next_writer_id, platformTaskId: intent.authorization?.recipient_platform_id, projectKey: intent.authorization?.project_key }, { seal_digest: intent.previous_seal_digest, generation: intent.previous_generation, writer_id: intent.previous_writer_id }));
     if (Date.parse(intent.authorization?.confirmed_at) > Date.parse(intent.prepared_at)) fail(errors, 'direct preparation precedes operator confirmation');
@@ -448,7 +449,7 @@ function recoverTransitionLocked(dir, { sourceRoot, externalControlPlaneRoot, ex
     return { recovery, path: finalPath };
   } finally { fs.closeSync(fd); fs.unlinkSync(lock); }
 }
-function prepareTransitionLocked(dir, { sourceRoot, externalControlPlaneRoot, expectedPreviousDigest, nextGeneration, nextWriterId, eventId, preparedAt = new Date().toISOString(), authorization } = {}) {
+function prepareTransitionLocked(dir, { sourceRoot, externalControlPlaneRoot, expectedPreviousDigest, nextGeneration, nextWriterId, eventId, preparedAt = new Date().toISOString(), authorization, workspace_projection_sha256 } = {}) {
   fs.mkdirSync(dir, { recursive: true });
   const lock = path.join(dir, '.handoff.lock');
   const fd = fs.openSync(lock, 'wx');
@@ -467,7 +468,8 @@ function prepareTransitionLocked(dir, { sourceRoot, externalControlPlaneRoot, ex
       record_type: authorization ? 'handoff-direct-transition-intent' : 'handoff-transition-intent', previous_seal_digest: previous.seal_digest, previous_sequence: previous.seal_sequence,
       previous_generation: previous.generation, previous_writer_id: previous.writer_id, next_generation: nextGeneration,
       next_writer_id: nextWriterId, event_id: eventId, prepared_at: preparedAt, previous_source_status: 'PASS', transition_digest: '',
-      ...(authorization ? { authorization: structuredClone(authorization) } : {})
+      ...(authorization ? { authorization: structuredClone(authorization) } : {}),
+      ...(workspace_projection_sha256 !== undefined ? { workspace_projection_sha256 } : {})
     };
     intent.transition_digest = transitionDigest(intent);
     const intentErrors = validateTransitionIntent(intent);
@@ -597,11 +599,21 @@ export function appendSeal(dir, draft, options = {}) {
   });
 }
 
+export function summarizeChain(result) {
+  const latest = result.latest;
+  return {
+    status: result.status, control_status: result.control_status, handoff_ready: result.handoff_ready,
+    latest_source_status: result.latest_source_status, transition_status: result.transition_status,
+    record_count: result.records?.length ?? 0, pending_intent_count: result.pending_intents?.length ?? 0,
+    latest: latest ? Object.fromEntries(['schema_version', 'generation', 'writer_id', 'seal_sequence', 'seal_digest', 'event_id', 'handoff_phase', 'switch_status', 'runtime_acceptance_status', 'professional_acceptance_status', 'restrictions'].filter(key => Object.hasOwn(latest, key)).map(key => [key, latest[key]])) : null,
+    errors: result.errors
+  };
+}
 if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1])) {
   const [command, target, sourceRoot, ...rest] = process.argv.slice(2);
-  if (command === 'verify' && target) { const historicalOnly = rest.includes('--history-only'); const externalControlPlaneRoot = rest.find(value => value.startsWith('--external-control-plane-root='))?.slice('--external-control-plane-root='.length); const result = verifyChain(path.resolve(target), { sourceRoot, externalControlPlaneRoot, verifyLatestSources: !historicalOnly }); console.log(JSON.stringify(result, null, 2)); process.exitCode = result.status === 'PASS' ? 0 : 1; }
+  if (command === 'verify' && target) { const historicalOnly = rest.includes('--history-only'); const externalControlPlaneRoot = rest.find(value => value.startsWith('--external-control-plane-root='))?.slice('--external-control-plane-root='.length); const result = verifyChain(path.resolve(target), { sourceRoot, externalControlPlaneRoot, verifyLatestSources: !historicalOnly }); console.log(JSON.stringify(rest.includes('--summary') ? summarizeChain(result) : result, null, 2)); process.exitCode = result.status === 'PASS' ? 0 : 1; }
   else if (command === 'prepare' && target && sourceRoot && rest.length >= 3) { const [nextGeneration, nextWriterId, eventId] = rest; const externalControlPlaneRoot = rest.find(value => value.startsWith('--external-control-plane-root='))?.slice('--external-control-plane-root='.length); const result = prepareTransition(path.resolve(target), { sourceRoot, externalControlPlaneRoot, nextGeneration: Number(nextGeneration), nextWriterId, eventId }); console.log(JSON.stringify(result, null, 2)); }
   else if (command === 'recover' && target && sourceRoot && rest.length >= 3) { const [previousDigest, intentDigest, eventId] = rest; const externalControlPlaneRoot = rest.find(value => value.startsWith('--external-control-plane-root='))?.slice('--external-control-plane-root='.length); const result = recoverTransition(path.resolve(target), { sourceRoot, externalControlPlaneRoot, expectedPreviousDigest: previousDigest, expectedIntentDigest: intentDigest, eventId }); console.log(JSON.stringify(result, null, 2)); }
   else if (command === 'append' && target && sourceRoot && rest.length >= 1) { const [draftPath, transitionTicket] = rest; const externalControlPlaneRoot = rest.find(value => value.startsWith('--external-control-plane-root='))?.slice('--external-control-plane-root='.length); const draft = JSON.parse(fs.readFileSync(draftPath, 'utf8')); const result = appendSeal(path.resolve(target), draft, { sourceRoot, externalControlPlaneRoot, transitionTicket }); console.log(JSON.stringify(result, null, 2)); }
-  else { console.error('usage: node HandoffSeal.mjs verify <seal-directory> <source-root> [--external-control-plane-root=<root>] [--history-only] | prepare <seal-directory> <source-root> <next-generation> <next-writer-id> <event-id> [--external-control-plane-root=<root>] | recover <seal-directory> <source-root> <previous-digest> <intent-digest> <recovery-event-id> [--external-control-plane-root=<root>] | append <seal-directory> <source-root> <draft-json> [transition-ticket] [--external-control-plane-root=<root>]'); process.exitCode = 2; }
+  else { console.error('usage: node HandoffSeal.mjs verify <seal-directory> <source-root> [--external-control-plane-root=<root>] [--history-only] [--summary] | prepare <seal-directory> <source-root> <next-generation> <next-writer-id> <event-id> [--external-control-plane-root=<root>] | recover <seal-directory> <source-root> <previous-digest> <intent-digest> <recovery-event-id> [--external-control-plane-root=<root>] | append <seal-directory> <source-root> <draft-json> [transition-ticket] [--external-control-plane-root=<root>]'); process.exitCode = 2; }
 }

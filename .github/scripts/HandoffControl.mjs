@@ -3,6 +3,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
+import { spawnSync } from 'node:child_process';
 
 const held = new Set();
 const transactions = new Set();
@@ -27,6 +28,17 @@ export function assertControlReady(seal, options) {
   if (fs.existsSync(paths.journal) && !transactions.has(paths.index)) {
     const journal = JSON.parse(fs.readFileSync(paths.journal, 'utf8'));
     if (journal.protocol_version !== 1 || journal.status !== 'COMPLETED') throw new Error('TAKEOVER_INCOMPLETE: recover the canonical control-plane transaction before using ACTIVE');
+  }
+}
+// Read-only; stop recommendations and commits share this storage gate.
+export function assertPrivateControlStorage(seal, options) {
+  const root = fs.realpathSync(options.sourceRoot), paths = controlPaths(seal, options);
+  for (const file of [paths.index, paths.lock, paths.journal, `${paths.index}.${process.pid}.tmp`, `${paths.journal}.${process.pid}.tmp`]) {
+    const relative = path.relative(root, file);
+    if (relative === '..' || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) continue;
+    const ignored = spawnSync('git', ['-C', root, 'check-ignore', '--quiet', '--', relative], { encoding: 'utf8' });
+    const tracked = spawnSync('git', ['-C', root, 'ls-files', '--', relative], { encoding: 'utf8' });
+    if (ignored.status !== 0 || tracked.status !== 0 || tracked.stdout.trim()) throw new Error('INPUT_REQUIRED: CONTROL_STORAGE: canonical control index, lock and journal must be ignored and untracked inside the code root; preserve originals and prepare an authorized private-layout candidate before takeover');
   }
 }
 export function withControlLock(seal, options, run) {

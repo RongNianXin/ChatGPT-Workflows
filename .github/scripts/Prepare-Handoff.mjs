@@ -6,9 +6,11 @@ import { spawnSync } from 'node:child_process';
 import { SCOPED_WORKSPACE_ALGORITHM, readScopedWorkspaceBaseline, validateScopedWorkspaceSources } from './HandoffWorkspaceScope.mjs';
 import { fileURLToPath } from 'node:url';
 import { appendSeal, sealDigest, validateControlPlaneRegistry, verifyChain, verifyControlIdentity } from './HandoffSeal.mjs';
+import { assertPrivateControlStorage } from './HandoffControl.mjs';
 
 export const REQUIRED_RULES = [
   '.github/scripts/HandoffControl.mjs',
+  '.github/scripts/HandoffTransactionWorkspace.mjs',
   '.github/scripts/Takeover-Handoff.mjs',
   '.github/scripts/HandoffWorkspaceScope.mjs',
   '.github/scripts/HandoffSeal.mjs',
@@ -40,9 +42,10 @@ const physicalTarget = target => {
   }
   return path.join(fs.realpathSync(cursor), ...suffix);
 };
-const verificationCommandPattern = /node\s+"[^"]*HandoffSeal\.mjs"\s+verify\s+"[^"]+"\s+"[^"]+"(?:\s+"[^"]+")?/;
+const verificationCommandPattern = /node\s+"[^"]*HandoffSeal\.mjs"\s+verify\s+"[^"]+"\s+"[^"]+"(?:\s+"--external-control-plane-root=[^"]+")?(?:\s+--summary)?/;
 
 const RULE_CRITICAL_PATHS = new Set(['.github/scripts/HandoffControl.mjs', '.github/scripts/Takeover-Handoff.mjs', '01-操作者操作手册.md', '02-总指挥核心规则.md', '04-状态、目标变更与交接规范.md', '07-总指挥交接记录模板.md', '09-自动化授权与风险分级.md', '10-自动状态索引规范.md', '总指挥轻量交接启动配置.md', 'templates/HANDOFF_STATE.schema.json', '.github/scripts/HandoffSeal.mjs', '.github/scripts/Prepare-Handoff.mjs', '.github/scripts/Verify-Handoff-Candidate.mjs', '.github/scripts/HandoffWorkspaceScope.mjs', '.github/scripts/Rebase-Handoff-Draft.mjs', '.github/scripts/Mark-Handoff-Delivered.mjs']);
+RULE_CRITICAL_PATHS.add('.github/scripts/HandoffTransactionWorkspace.mjs');
 const RULE_CRITICAL_NAMES = new Set([...RULE_CRITICAL_PATHS].map(value => path.posix.basename(value)));
 function ruleEpoch(value) {
   if (typeof value !== 'string') return null;
@@ -337,12 +340,37 @@ function hydrateSnapshotTemplate(template, { draft, sourceRoot, externalControlP
   // Synthetic unit-test manifests may intentionally contain only a minimal rule set;
   // production manifests are checked by Inspect-RuleRefresh before this path.
   if (rows.some(([, digest]) => !digest)) return template;
+  const inventory = draft.sources?.handoff_inventory ? readJson(machineRecord) : {};
+  if (!inventory || typeof inventory !== 'object' || Array.isArray(inventory)) throw new Error('INPUT_REQUIRED: handoff_inventory must be an object');
+  const linkSources = [
+    ['身份索引', 'status_index', 'STATUS_INDEX'], ['中央清单', 'central_work_items', 'CENTRAL_WORK_ITEMS'],
+    ['进度视图', 'current_view', 'CURRENT_VIEW'], ['本任务加载记录', 'loading_record', 'LOADING_RECORD'],
+    ['本轮任务契约', 'task_contract', 'TASK_CONTRACT']
+  ];
+  const links = [];
+  for (const [label, name, token] of linkSources) {
+    if (!template.includes(`[${label}]`) && !template.includes(`{{${token}}}`)) continue;
+    const source = draft.sources?.[name];
+    let file, evidence = '封条来源';
+    if (source) file = resolveSource(source, sourceRoot, externalControlPlaneRoot, name);
+    else if (name === 'task_contract' && inventory.task_contract) {
+      // A bound inventory may declare a pointer without sealing that file's
+      // bytes. Render it, never read it or claim its contents were verified.
+      const ref = inventory.task_contract;
+      if (typeof ref !== 'string' || !ref || path.isAbsolute(ref) || path.win32.isAbsolute(ref) || ref.split(/[\\/]+/).includes('..') || /[:<>\r\n\0]/.test(ref)) throw new Error('INPUT_REQUIRED: unsafe task_contract inventory pointer');
+      file = path.resolve(sourceRootFor(draft.sources.handoff_inventory, sourceRoot, externalControlPlaneRoot), ref.replaceAll('\\', '/'));
+      evidence = '机器记录指针，读取前核验';
+    } else throw new Error(`INPUT_REQUIRED: ${name} source required by snapshot template`);
+    if (/[<>\r\n\0]/.test(file)) throw new Error(`INPUT_REQUIRED: unsafe ${name} Markdown link`);
+    if (source && ['loading_record', 'task_contract'].includes(name) && inventory[name] !== undefined && (typeof inventory[name] !== 'string' || inventory[name].replaceAll('\\', '/') !== source.path_ref.replaceAll('\\', '/'))) throw new Error(`INPUT_REQUIRED: ${name} inventory/source mismatch`);
+    links.push({ label, token, file: file.replaceAll('\\', '/').replaceAll('#', '%23').replaceAll('?', '%3F'), evidence });
+  }
   const baseline = [
     '## 轻量加载基线', '',
     `完整读取“总指挥轻量交接启动配置.md”（版本${ruleManifest.rule_version}），自行建立加载记录。以下路径均相对规则根；指纹一致时候选不全文读取02/04/07/09/10，冲突或下一动作依赖才展开受影响正文。`, '',
     '| 文件 | SHA-256 |', '|---|---|',
     ...rows.map(([name, digest]) => `| ${name} | ${digest} |`), '',
-    `规则总清单：规则刷新manifest.json，SHA-256=${ruleManifestDigest}。必要未提交测试为${draft.workspace?.required_untracked?.map(item => item.path_ref).join('、') || '无'}；全部保留清单及工作区聚合指纹见机器记录与封条。`, ''
+    `规则总清单：规则刷新manifest.json，SHA-256=${ruleManifestDigest}。必要未跟踪保留文件：${draft.workspace?.required_untracked?.map(item => item.path_ref).join('、') || '无'}；已跟踪但未提交的代码、配置和测试见机器记录保留清单，工作区聚合指纹见封条。`, ''
   ].join('\n');
   let rendered = template.replace(/## 轻量加载基线[\s\S]*?(?=\n## 使用边界)/, baseline);
   const replacements = new Map([
@@ -353,6 +381,10 @@ function hydrateSnapshotTemplate(template, { draft, sourceRoot, externalControlP
     ['{{RECEIPT_PATH}}', receiptPath],
   ]);
   for (const [token, value] of replacements) rendered = rendered.replaceAll(token, value);
+  for (const { label, token, file, evidence } of links) {
+    rendered = rendered.replaceAll(`{{${token}}}`, file)
+      .replace(new RegExp(`^- \\[${label}\\]\\([^\\r\\n]*$`, 'gm'), `- [${label}](<${file}>)；${evidence}`);
+  }
   rendered = rendered.replace(/^- 项目根：.*$/m, `- 项目根：${sourceRoot}`)
     .replace(/^- 规则根：.*$/m, `- 规则根：${ruleRoot}`)
     .replace(/^- 本轮规则版本：.*$/m, `- 本轮规则版本：${ruleManifest.rule_version}`)
@@ -448,15 +480,6 @@ export function prepareFormalHandoff(configPath) {
   const duplicateIndexes = findActiveControlPlaneIndexes(sourceRoot, canonicalStatusIndex, registry);
   if (duplicateIndexes.length) throw new Error(`DUPLICATE_CONTROL_PLANE: active AI status indexes outside canonical source: ${duplicateIndexes.join(', ')}`);
 
-  // Validate and render the template before appending an immutable seal. A malformed
-  // delivery template must not advance the seal chain without producing an artifact.
-  let rendered = hydrateSnapshotTemplate(fs.readFileSync(templatePath, 'utf8'), {
-    draft, sourceRoot, externalControlPlaneRoot, ruleRoot, ruleManifest, ruleManifestDigest, sealDirectory, receiptPath
-  });
-  const snapshotId = path.basename(finalPath, '.md');
-  const templateTokens = ['{{SNAPSHOT_ID}}', '{{SEAL_DIGEST}}', '{{FACT_CUTOFF}}', '{{EVENT_ID}}'];
-  for (const token of templateTokens) if (!rendered.includes(token)) throw new Error(`snapshot template is missing placeholder: ${token}`);
-
   const sourceDigestErrors = [];
   for (const [name, source] of Object.entries(draft.sources ?? {})) {
     const sourcePath = resolveSource(source, sourceRoot, externalControlPlaneRoot, name);
@@ -464,8 +487,17 @@ export function prepareFormalHandoff(configPath) {
     if (Date.parse(source.fact_cutoff) > Date.parse(draft.fact_cutoff)) sourceDigestErrors.push(`${name}: source fact_cutoff is after draft fact_cutoff`);
   }
   if (sourceDigestErrors.length) throw new Error(`preflight source verification failed: ${sourceDigestErrors.join('; ')}`);
+  // Sources are verified before parsing their inventory or rendering links.
+  // A malformed delivery template must not advance the immutable seal chain.
+  let rendered = hydrateSnapshotTemplate(fs.readFileSync(templatePath, 'utf8'), {
+    draft, sourceRoot, externalControlPlaneRoot, ruleRoot, ruleManifest, ruleManifestDigest, sealDirectory, receiptPath
+  });
+  const snapshotId = path.basename(finalPath, '.md');
+  const templateTokens = ['{{SNAPSHOT_ID}}', '{{SEAL_DIGEST}}', '{{FACT_CUTOFF}}', '{{EVENT_ID}}'];
+  for (const token of templateTokens) if (!rendered.includes(token)) throw new Error(`snapshot template is missing placeholder: ${token}`);
   const identity = verifyControlIdentity(draft, { sourceRoot, externalControlPlaneRoot });
   if (identity.status !== 'PASS') throw new Error(`control identity preflight failed: ${identity.errors.join('; ')}`);
+  assertPrivateControlStorage(draft, { sourceRoot, externalControlPlaneRoot });
   const workspaceErrors = verifyWorkspaceBaseline(sourceRoot, draft.workspace, draft.sources, { externalControlPlaneRoot, ruleBaseline: draft.rule_baseline, workflowRepositoryRoot: workflowRoot });
   if (workspaceErrors.length) throw new Error(`preflight workspace verification failed: ${workspaceErrors.join('; ')}`);
   if (draft.remote?.status === 'PASS') {
@@ -550,7 +582,7 @@ export function prepareFormalHandoff(configPath) {
     '{{FACT_CUTOFF}}': seal.fact_cutoff,
     '{{EVENT_ID}}': seal.event_id
   };
-  const verificationCommand = `node "${path.join(scriptDir, 'HandoffSeal.mjs')}" verify "${realSealDirectory}" "${sourceRoot}"${externalControlPlaneRoot ? ` "--external-control-plane-root=${externalControlPlaneRoot}"` : ''}`;
+  const verificationCommand = `node "${path.join(scriptDir, 'HandoffSeal.mjs')}" verify "${realSealDirectory}" "${sourceRoot}"${externalControlPlaneRoot ? ` "--external-control-plane-root=${externalControlPlaneRoot}"` : ''} --summary`;
   if (!rendered.includes('{{VERIFICATION_COMMAND}}') && !verificationCommandPattern.test(rendered)) {
     throw new Error('snapshot template is missing verification command placeholder or entry');
   }
@@ -576,6 +608,7 @@ export function prepareFormalHandoff(configPath) {
     const finalVerification = verifyChain(realSealDirectory, { sourceRoot, externalControlPlaneRoot });
     if (finalVerification.status !== 'PASS' || !finalVerification.handoff_ready || finalVerification.latest?.seal_digest !== seal.seal_digest || finalVerification.latest_source_status !== 'PASS') throw new Error(`facts drifted while rendering the attachment: ${finalVerification.errors.join('; ')}`);
     const finalWorkspaceErrors = verifyWorkspaceBaseline(sourceRoot, seal.workspace, seal.sources, { externalControlPlaneRoot, ruleBaseline: seal.rule_baseline, workflowRepositoryRoot: workflowRoot });
+    assertPrivateControlStorage(seal, { sourceRoot, externalControlPlaneRoot });
     if (finalWorkspaceErrors.length) throw new Error(`workspace drifted while rendering the attachment: ${finalWorkspaceErrors.join('; ')}`);
     if (seal.remote?.status === 'PASS') {
       const finalLiveRemote = readLiveRemoteBaseline(sourceRoot, seal.remote.default_ref);

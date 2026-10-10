@@ -1,3 +1,75 @@
+## 2026-10-10.10：发布授权分流与连续执行
+
+- 09统一直接执行与准备/预览的授权判断；明确的范围内Push、提交PR要求可作为执行确认，AI在写入前补齐技术参数，不因候选形成或阶段切换重复索权。
+- 4A/4K、核心路由与PR准备/恢复入口复用同一规则；4K复制提示词明确同步动作及排除项，4A准备模板保留先预览路径。授权内修复不自动重置权限，实质漂移只补受影响差额。
+- 保留人工通读、明确最终载荷后另确认、分次确认、团队与隐私门禁；允许且获准的Push/Draft与后续Ready/正式审查分开，提交PR不含合并、部署、标签或删除。
+- 定点契约与独立审查核验规则一致性，不证明真实模型遵从、远端执行或Token收益。本地修改，无Commit、远端、来源业务或跨窗口外发。
+
+English: Direct remote execution requests and preparation-only requests now share one authorization rule. Agents resolve technical parameters before writing and reuse valid scoped operator confirmation. Preview-specific, human-review, team and privacy gates remain; authorized push/draft progress is separate from readiness, formal review and merge permissions. Static contracts and independent review do not certify live model compliance or token savings. Local changes only.
+
+## 2026-10-10.9：交接提交门禁与加载分层
+
+- 生成预检、候选停旧建议与正式提交共享私有存储检查；不合规布局提前报告输入缺口，私有索引、运行日志与历史证据保护不放宽。
+- 新事务工作区投影只容纳四目标的精确旧/新字节，完整证据摘要绑定不可变direct intent，拒绝日志篡改及删除；保留非事务内容、Git索引、原作用域及规则核验，完成封条绑定实际完成态。旧intent/日志沿原严格算法，不补签；旧读取器不识别新字段时暂停切换并更新，中断恢复、回滚和幂等保持。
+- 轻量角色恢复入口明示规范字段；普通刷新保留全部完整性核验与规则正文，未使用实现源码按需补读安全依赖，旧全文模式兼容。
+- 失败汇报区分材料准备、登记完成和行动方；仅正式完成后显示新任务提醒。隔离回归与独立审查不代签真实来源迁移、跨机器效果、模型遵从或Token收益。仅本地修改，无Commit、远端或跨窗口外发。
+
+English: Preparation, candidate stop recommendations and takeover share the private-storage gate. Versioned workspace projection accepts only exact planned control transitions while preserving unrelated evidence, the Git index, the original scope and historical journal semantics. Completion seals bind the verified final workspace. Rule text and full integrity checks remain required; unused implementation text is deferred until its execution or safety dependencies require it. Failure reports separate material readiness, registration and the recovery owner. Synthetic validation does not certify real project migration, model compliance, cross-machine effects or token savings. Local changes only.
+
+## 2026-10-10.8：单向同步与人工验收衔接
+
+- 场景入口接入既有交付完整性和复现标准：对应本地认可成果、候选与必要资源，远端到本地按目的分开报告代码同步、运行采用和效果验收；仅源码同步不强制启动。
+- Checks按Push前、Push后及Ready/合并门禁分别核验，避免等待尚不存在的未来Head检查；未知、失败与旧检查不代签通过，团队及远端最终确认保持。
+- PR主规范与模板提供最小人工验收单，保留准备步骤和明确失败条件；CI引用精确Head实时入口、异常及未覆盖范围，不复述日志，不代签成员复现。
+- 既有契约与离线Git/自有进程fixture覆盖原风险条件，独立审查与具体验证结果保存在既有私有记录。没有旧事故原件，不归因历史故障，不承诺跨机器完全一致或Token收益；只做本地修改，不提交、发布、联络或恢复自动化。
+
+English: Sync entries now use the existing delivery completeness and reproduction contracts. Accepted local results must map to the candidate and available resources; code inclusion, actual runtime adoption and effect acceptance remain separate and purpose-dependent. Checks follow pre-push, exact-head post-push and readiness/merge gates without waiting for nonexistent future checks. PRs provide actionable manual acceptance steps and reference CI evidence instead of copying logs. Offline Git/process fixtures and independent review cover scoped regressions, not real cross-machine acceptance, historical causation or measured token savings. Local changes only; no commit, publication, cross-task messaging or automation restart.
+
+## 2026-10-10.7：交接生成与接管读取精简
+
+- 快照副链接从已核来源与规范机器记录派生，统一分隔符；未封存的契约指针标注读取前核验，缺必要源在追加封条前拒绝。生成的完整验证命令带可选`--summary`，底层核验、全部错误、退出码和旧完整输出保持。
+- 新接管事务显式记录CURRENT渲染版本，清理旧准备状态并区分来源断点和旧加载记录；无版本历史日志继续旧字节算法，恢复、回滚及幂等回读不放宽。新加载记录仍由接收方独立建立。
+- 已有直接停旧及转权确认时使用接管入口内部组合核验，不再预跑一遍相同组合；CURRENT定点读取、同实例不变角色加载证据复用，新实例独立加载。锁内前后复核、授权、成果保全及完成门禁保持。
+- 合成回归与独立审查证据保存在既有私有工作项；覆盖历史日志、失败路径、并发、中断、旧入口和规则引用。未来真实交接耗时与Token收益待实测，不承诺零Bug。本地修改，不提交、不发布、不恢复自动化；既有发布隐私限制保留。
+
+English: Snapshot links now derive from verified sources and the bound inventory; unsealed contract pointers require verification before reading. Generated verification commands use optional `--summary`, retaining full checks, errors, readiness fields, exit codes and the original full-output CLI. New takeover journals version CURRENT rendering while historical journals retain their original byte transformation for recovery, rollback and retries. A confirmed direct takeover uses its internal candidate checks; CURRENT is read first, and unchanged loading evidence may be reused within the same instance. New instances still load independently. Identity, authorization, locks, preservation and completion readback remain required. Synthetic regressions and independent review cover compatibility and failure paths; real handoff time and token savings remain unmeasured. Local only: no commit, publication or automation restart; existing publication privacy restrictions remain.
+
+## 2026-10-10.6：交接未提交成果展示口径
+
+- 修正生成器把必要未跟踪文件误称为未提交测试的展示文字；明确已跟踪但未提交的代码、配置和测试仍按规范机器保留清单恢复。读写、schema与授权门禁不变。
+- 成品回读须逐项核当前机器记录、加载记录及契约链接，混合路径分隔符不得留下旧候选入口；历史原件保留，不覆盖。
+- 定点生成器、规则契约与引用检查；宿主遵从未实测，全仓质量另有发布隐私限制，不能冒称通过。
+
+## 2026-10-10.5：交接身份分流与阶段状态核账
+
+- 场景1C区分已证实普通/专项身份与工具不可用导致的核验未完成；后者只报告受影响动作和恢复条件，不引导误换场景，不放宽中央身份或唯一写者验证。
+- 10补阶段收口状态核账：按字段所有权更新中央清单、进度视图和索引并回读；业务摘要陈旧与身份有效性分开判断，冻结来源保持不可变，新候选必须重建并完整预检。
+- 增加两项文本契约反例检查；本项目登记恢复、必要未提交成果及正式材料的实际验证留私有交接记录。未验证未来模型遵从或宿主工具故障根治，不提交、不发布、不通知。
+- English: Scenario 1C now distinguishes verified non-commander identity from an incomplete lookup caused by unavailable tools. Stage closeout reconciles existing central records by field ownership and reads them back, while preserving frozen sources and all identity and permission gates. Text contracts do not prove enforcement by the host or future model behavior. No commit, remote publication, or cross-task notification is included.
+
+## 2026-10-10.4：阶段收口与预算边界
+
+- 采纳跨项目场景 5A 的最小公共层建议：阶段性收口不自动触发新预算或新授权请求，只有周期/预算到限、范围/权限/风险变化、明确停止条件或新增高风险依赖时才生成候选。
+- 项目专属的 R25 数字、矩阵和停止账保留在来源项目规则，不写入公共工作流。
+- 增加预算边界合成回归测试；本轮未向来源回传，未执行远端写入。
+## 2026-10-10.3：跨任务入站的可见收件反馈
+
+- 针对执行途中收到跨任务消息但操作者看不到任何 UI 反馈的样本，新增下一次可见文本优先报告“已收到/当前状态/处理计划”的硬门禁。
+- 新增 operator_feedback_status、HOST_NO_VISIBLE_TURN/UNKNOWN 和缺失反馈的 OUTPUT_UNVERIFIED/BLOCKED 出口；来源无需回执不再免除本窗口可见反馈。
+- 增加排队、业务结果抢先、宿主无可见回合和无事件的合成回归测试；本轮不修改来源项目、不发送跨窗口消息、不执行远端写入。
+## 2026-10-10.2：跨任务汇报的信息保真
+
+- 针对近期专项任务与总指挥窗口的只读样本，补足跨任务实质汇报契约：逐项映射原始要求、状态、结果、证据、未证明范围和下一行动方，保留工程参数与测试边界，区分事实、推断、建议和待确认。
+- 增加长载荷的 `part i/n` 完整性要求，以及 `REPORT_INCOMPLETE / INPUT_REQUIRED` 缺项出口；同步 02、09、10、轻量配置和规则清单。
+- 新增工作流契约与合成反例验证；本轮只做本地规则和记录修改，不提交、不推送、不发远端评论、不跨窗口通知。
+
+## 2026-10-10.1：当前请求优先与错投输出诊断门禁
+
+- 记录普通新用户回合把上一轮远端同步结论错投到“跨任务窗口的对话”请求的事实、证据边界和分层根因；不能把网络或压缩写成已证实唯一原因。
+- 在 02/09 增加当前请求优先、旧主答复隔离和 OUTPUT_MISROUTED / OUTPUT_UNVERIFIED / UNKNOWN 收口；压缩恢复保留原目标、队列、断点和未完成项，并重新核对可能产生副作用的计划。
+- 按独立对抗审查撤回无法连接宿主当前消息、工具事件和最终出口的伪检查器；新增合成反例只验证规则契约，不宣称宿主运行时拦截。
+- 已检索并去重官方 Codex 既有反馈，当前仅形成补充草稿；本轮不发表评论、Issue、PR、提交、推送或跨窗口通知。
+
 ## 2026-10-09.9：执行型指令的人话结果摘要
 
 - 统一要求读取、刷新、修改、测试、交接、回执等执行型指令先在主答复说明结果状态、执行效果或失败原因、下一步最推荐建议及行动方。

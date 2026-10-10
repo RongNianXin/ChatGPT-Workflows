@@ -93,7 +93,7 @@ function safePhysicalPath(root, ref, { directory = false } = {}) {
   return target;
 }
 
-function collectScopedWorkspaceBaseline(sourceRoot, requiredRefs, scope) {
+export function collectScopedWorkspaceBaseline(sourceRoot, requiredRefs, scope, includeEvidence = false) {
   const errors = validateInflightScope(scope, { requiredRefs });
   if (errors.length) throw new Error(errors.join('; '));
   const root = fs.realpathSync(sourceRoot);
@@ -147,7 +147,7 @@ function collectScopedWorkspaceBaseline(sourceRoot, requiredRefs, scope) {
     }
     if (!excluded(ref)) statuses.push(token);
   }
-  return {
+  const baseline = {
     head, tree, branch: branchResult.stdout.trim() || 'HEAD',
     staged_count: statuses.filter(item => item[0] !== ' ' && item.slice(0, 2) !== '??').length,
     tracked_modified_count: statuses.filter(item => item[1] !== ' ' && item.slice(0, 2) !== '??').length,
@@ -155,6 +155,7 @@ function collectScopedWorkspaceBaseline(sourceRoot, requiredRefs, scope) {
     inflight_scope: structuredClone(scope),
     worktree_fingerprint: { algorithm: SCOPED_WORKSPACE_ALGORITHM, tracked_diff_sha256: hash(Buffer.from(JSON.stringify(worktree))), untracked_digest: hash(Buffer.from(JSON.stringify(strictUntracked))), index_sha256: hash(Buffer.from(JSON.stringify(protectedIndex))) }
   };
+  return includeEvidence ? { baseline, evidence: { worktree, strictUntracked, protectedIndex, statuses } } : baseline;
 }
 
 export function readScopedWorkspaceBaseline(sourceRoot, requiredRefs, scope) {

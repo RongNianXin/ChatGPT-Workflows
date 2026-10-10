@@ -3,6 +3,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { verifyChain } from './HandoffSeal.mjs';
+import { assertPrivateControlStorage } from './HandoffControl.mjs';
 import { classifyRuleDrift, verifyRuleManifest, verifyWorkspaceBaseline, readLiveRemoteBaseline } from './Prepare-Handoff.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -41,6 +42,12 @@ export function verifyHandoffCandidate({ sealDirectory, sourceRoot, externalCont
     return result;
   }
   let liveManifest;
+  try { assertPrivateControlStorage(chain.latest, { sourceRoot, externalControlPlaneRoot }); }
+  catch (error) {
+    result.errors.push(error.message);
+    result.actions.push('材料链与登记存储分开判断：未停旧时不得建议停旧；已停旧时不得恢复旧调度。由获准执行方保留原件，准备私有布局及重新绑定候选。公共修复不代来源迁移，无需手拼参数');
+    return result;
+  }
   try { liveManifest = verifyRuleManifest(workflowRoot, manifestPath); }
   catch (error) { result.rule = { status: error.message.startsWith('INPUT_REQUIRED:') ? 'INPUT_REQUIRED' : 'FAIL' }; result.errors.push(`RULE_SOURCE_INVALID: ${error.message}`); return result; }
   const liveManifestDigest = liveManifest && fs.existsSync(manifestPath)
@@ -74,6 +81,7 @@ export function verifyHandoffCandidate({ sealDirectory, sourceRoot, externalCont
   // A stop recommendation must use an unchanged observation group, not the first cached chain.
   try {
     const finalChain = verifyChain(sealDirectory, { sourceRoot, externalControlPlaneRoot });
+    assertPrivateControlStorage(finalChain.latest, { sourceRoot, externalControlPlaneRoot });
     const finalManifest = verifyRuleManifest(workflowRoot, manifestPath);
     const finalManifestDigest = crypto.createHash('sha256').update(fs.readFileSync(manifestPath)).digest('hex');
     const finalWorkspaceErrors = verifyWorkspaceBaseline(sourceRoot, chain.latest.workspace, chain.latest.sources, { externalControlPlaneRoot, ruleBaseline: chain.latest.rule_baseline, workflowRepositoryRoot: path.resolve(workflowRoot, '../..') });

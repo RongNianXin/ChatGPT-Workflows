@@ -2,23 +2,16 @@
 // confirmation. This tool validates bindings and persistence, not human identity.
 import fs from 'node:fs';
 import path from 'node:path';
-import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { readChain, verifyChain, validateDirectConfirmation, prepareDirectTransition, appendSeal } from './HandoffSeal.mjs';
 import { verifyHandoffCandidate } from './Verify-Handoff-Candidate.mjs';
-import { byteDigest, resolveSource, controlPaths, withControlLock, withControlTransaction, assertControlReady, writeAtomic, writeJournal } from './HandoffControl.mjs';
-import { verifyRuleManifest, verifyWorkspaceBaseline, readLiveRemoteBaseline } from './Prepare-Handoff.mjs';
+import { byteDigest, resolveSource, controlPaths, withControlLock, withControlTransaction, assertControlReady, assertPrivateControlStorage, writeAtomic, writeJournal } from './HandoffControl.mjs';
+import { verifyRuleManifest, verifyWorkspaceBaseline, readGitWorkspaceBaseline, readLiveRemoteBaseline } from './Prepare-Handoff.mjs';
+import { captureTransactionWorkspace, verifyTransactionWorkspace } from './HandoffTransactionWorkspace.mjs';
 
 const assert = (condition, message) => { if (!condition) throw new Error(message); };
 function privateControlStorage(previous, options) {
-  const root = fs.realpathSync(options.sourceRoot), paths = controlPaths(previous, options);
-  for (const file of [paths.index, paths.lock, paths.journal, `${paths.index}.${process.pid}.tmp`, `${paths.journal}.${process.pid}.tmp`]) {
-    const relative = path.relative(root, file);
-    if (relative === '..' || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) continue;
-    const ignored = spawnSync('git', ['-C', root, 'check-ignore', '--quiet', '--', relative], { encoding: 'utf8' });
-    const tracked = spawnSync('git', ['-C', root, 'ls-files', '--', relative], { encoding: 'utf8' });
-    assert(ignored.status === 0 && tracked.status === 0 && !tracked.stdout.trim(), 'INPUT_REQUIRED: canonical control index, lock and journal must be ignored and untracked inside the code root; do not publish private transaction bytes');
-  }
+  assertPrivateControlStorage(previous, options);
 }
 function confirmed(options, previous) {
   const errors = validateDirectConfirmation(options.confirmation, options.recipient, previous);
@@ -49,6 +42,24 @@ function replaceCurrent(bytes, previous, recipient) {
   else after += `\n<!-- HISTORY:BEGIN -->\n## Previous commander (HISTORICAL_ONLY)\n${historical}\n`;
   return Buffer.from(after);
 }
+// Version 1 is frozen: historical journals are validated against their original
+// byte transformation, including recovery, rollback and completed readback.
+function renderCurrent(bytes, previous, recipient, version, eventId) {
+  assert([1, 2].includes(version), 'unsupported CURRENT render version');
+  const legacy = replaceCurrent(bytes, previous, recipient);
+  if (version === 1) return legacy;
+  return Buffer.from(legacy.toString('utf8').replace(/(<!-- CURRENT:BEGIN -->)([\s\S]*?)(<!-- CURRENT:END -->)/, (_, begin, old, end) => {
+    const current = old
+      .replace(/^# 当前交接准备\s*$/gm, '# 当前接管登记')
+      .replace(/^(?:状态|候选事件|完成事件|本任务加载记录|接续门禁|下一行动方)：[^\r\n]*\r?\n?/gm, '')
+      .replace(/^加载记录：/gm, '来源加载记录：')
+      .replace(/^任务契约与工具限定放行：/gm, '来源任务契约与工具限定放行：')
+      .replace(/^当前目标：/gm, '来源目标：')
+      .replace(/^精确断点：/gm, '来源精确断点：')
+      .replace(/^事实截点：/gm, '来源事实截点：');
+    return `${begin}${current}\n状态：TAKEOVER_COMPLETED（仅规范事务日志COMPLETED且完成回读一致后生效）\n完成事件：${eventId}\n本任务加载记录：待接收方独立建立，不继承来源已读\n接续门禁：来源目标、断点和队列保留；业务授权、依赖、预算及停止条件逐项重核\n下一行动方：接收方完成回读后核验原队列，继续当前有效授权范围内动作\n${end}`;
+  }));
+}
 function buildPlan(previous, options) {
   // Enablement is a navigation source, outside the four central write targets.
   // Older accepted documents may redundantly state the writer here. Detect that
@@ -61,13 +72,15 @@ function buildPlan(previous, options) {
     if (files.has(file)) { files.get(file).names.push(name); continue; }
     const before = fs.readFileSync(file);
     assert(byteDigest(before) === source.digest, 'source changed before transaction plan');
-    const after = replaceCurrent(before, previous, options.recipient);
+    const after = renderCurrent(before, previous, options.recipient, 2, options.eventId);
     files.set(file, { names: [name], root_ref: source.root_ref || 'source_root', path_ref: source.path_ref, before: before.toString('base64'), after: after.toString('base64'), before_sha256: byteDigest(before), after_sha256: byteDigest(after) });
   }
   return [...files.values()];
 }
 function checkJournal(journal, options, history) {
   assert(journal.protocol_version === 1 && journal.event_id === options.eventId && Array.isArray(journal.plan) && journal.plan.length > 0 && journal.plan.length <= 4, 'transaction journal mismatch');
+  const renderVersion = Object.hasOwn(journal, 'current_render_version') ? journal.current_render_version : 1;
+  assert([1, 2].includes(renderVersion), 'unsupported CURRENT render version');
   const previous = history.records.find(item => item.seal_digest === journal.previous_seal_digest);
   assert(previous, 'journal predecessor absent from immutable history');
   confirmed(options, previous);
@@ -76,6 +89,8 @@ function checkJournal(journal, options, history) {
   assert(intent && journal.intent_path === `handoff-transition.${intent.previous_sequence}.${intent.transition_digest}.json`, 'journal immutable intent evidence missing or changed');
   assert(intent.previous_seal_digest === previous.seal_digest && intent.previous_sequence === previous.seal_sequence && intent.previous_generation === previous.generation && intent.previous_writer_id === previous.writer_id && intent.next_generation === previous.generation + 1 && intent.next_writer_id === options.recipient.writerId && intent.event_id === options.eventId, 'journal intent target mismatch');
   if (intent.record_type === 'handoff-direct-transition-intent') assert(JSON.stringify(intent.authorization) === JSON.stringify(options.confirmation), 'journal direct intent confirmation mismatch');
+  if (Object.hasOwn(intent, 'workspace_projection_sha256')) assert(journal.workspace_projection && byteDigest(Buffer.from(JSON.stringify(journal.workspace_projection))) === intent.workspace_projection_sha256, 'workspace projection immutable anchor mismatch');
+  else assert(!Object.hasOwn(journal, 'workspace_projection'), 'unanchored workspace projection is not valid legacy evidence');
   const names = journal.plan.flatMap(item => item.names);
   assert(names.length === 4 && ['status_index', 'central_work_items', 'current_view', 'central_entry'].every(name => names.includes(name)), 'journal control write scope mismatch');
   for (const item of journal.plan) {
@@ -83,11 +98,15 @@ function checkJournal(journal, options, history) {
     assert(item.path_ref === original.path_ref && item.root_ref === (original.root_ref || 'source_root'), 'journal path does not match sealed source');
     assert(byteDigest(Buffer.from(item.before, 'base64')) === original.digest && item.before_sha256 === original.digest, 'journal old byte evidence mismatch');
     assert(byteDigest(Buffer.from(item.after, 'base64')) === item.after_sha256, 'journal new byte evidence mismatch');
-    assert(Buffer.from(item.after, 'base64').equals(replaceCurrent(Buffer.from(item.before, 'base64'), previous, options.recipient)), 'journal target bytes changed');
+    assert(Buffer.from(item.after, 'base64').equals(renderCurrent(Buffer.from(item.before, 'base64'), previous, options.recipient, renderVersion, options.eventId)), 'journal target bytes changed');
     for (const name of item.names) assert(resolveSource(previous.sources[name], options) === resolveSource(original, options), 'journal alias mismatch');
   }
   const draft = journal.draft;
-  for (const key of ['objective', 'prohibitions', 'workspace', 'rule_baseline', 'invalidation_conditions', 'runtime_acceptance_status', 'professional_acceptance_status']) assert(JSON.stringify(draft?.[key]) === JSON.stringify(previous[key]), `journal changed protected ${key}`);
+  if (Object.hasOwn(journal, 'workspace_projection')) {
+    assert(journal.workspace_projection?.version === 2, 'unsupported workspace projection version');
+    for (const key of ['root_ref', 'required_untracked', 'inflight_scope']) assert(JSON.stringify(draft.workspace?.[key]) === JSON.stringify(previous.workspace?.[key]), `journal changed protected workspace ${key}`);
+  } else assert(JSON.stringify(draft?.workspace) === JSON.stringify(previous.workspace), 'journal changed protected workspace');
+  for (const key of ['objective', 'prohibitions', 'rule_baseline', 'invalidation_conditions', 'runtime_acceptance_status', 'professional_acceptance_status']) assert(JSON.stringify(draft?.[key]) === JSON.stringify(previous[key]), `journal changed protected ${key}`);
   assert(draft?.schema_version === 4 && draft.generation === previous.generation + 1 && draft.writer_id === options.recipient.writerId && draft.event_id === options.eventId && draft.handoff_phase === 'TAKEOVER_COMPLETED' && draft.switch_status === 'COMPLETED' && draft.communications?.status === 'NONE', 'journal completion target mismatch');
   assert(Object.keys(draft.sources).sort().join(',') === Object.keys(previous.sources).sort().join(','), 'journal source set mismatch');
   for (const [name, source] of Object.entries(previous.sources)) {
@@ -96,12 +115,12 @@ function checkJournal(journal, options, history) {
   }
   return previous;
 }
-function recheckDependencies(journal, options) {
+function recheckDependencies(journal, options, previous) {
   const workflowRoot = options.workflowRoot || path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../总指挥工作流/第二代总指挥的工作模式');
   const manifestPath = options.manifestPath || path.join(workflowRoot, '规则刷新manifest.json');
   const manifest = verifyRuleManifest(workflowRoot, manifestPath);
   assert(manifest.rule_version === journal.draft.rule_baseline.rule_version && byteDigest(fs.readFileSync(manifestPath)) === journal.draft.rule_baseline.manifest_sha256, 'RULE_REBASE_PENDING: rules changed during transaction');
-  const errors = verifyWorkspaceBaseline(options.sourceRoot, journal.draft.workspace, journal.draft.sources, { externalControlPlaneRoot: options.externalControlPlaneRoot, ruleBaseline: journal.draft.rule_baseline, workflowRepositoryRoot: path.resolve(workflowRoot, '../..') });
+  const errors = journal.workspace_projection ? (verifyTransactionWorkspace(journal, previous, options), []) : verifyWorkspaceBaseline(options.sourceRoot, journal.draft.workspace, journal.draft.sources, { externalControlPlaneRoot: options.externalControlPlaneRoot, ruleBaseline: journal.draft.rule_baseline, workflowRepositoryRoot: path.resolve(workflowRoot, '../..') });
   assert(!errors.length, `workspace changed during transaction: ${errors.join('; ')}`);
   if (options.remoteRequired || journal.draft.remote.status === 'PASS') {
     let remote;
@@ -119,7 +138,7 @@ function commitJournal(journal, paths, options) {
     const actual = byteDigest(fs.readFileSync(resolveSource(item, options)));
     assert([item.before_sha256, item.after_sha256].includes(actual), 'control byte conflict during recovery');
   }
-  recheckDependencies(journal, options);
+  recheckDependencies(journal, options, previous);
   const committed = history.records.find(record => record.event_id === journal.event_id);
   if (committed) assert(committed.generation === previous.generation + 1 && committed.writer_id === options.recipient.writerId && committed.previous_seal_digest === previous.seal_digest && committed.transition?.intent_digest === journal.intent_digest, 'completed event conflicts with journal');
   else assert(history.latest === undefined || history.records.at(-1)?.seal_digest === previous.seal_digest, 'predecessor changed during transaction');
@@ -130,7 +149,14 @@ function commitJournal(journal, paths, options) {
     if (actual === item.before_sha256) writeAtomic(file, Buffer.from(item.after, 'base64'));
     options.fault?.(`after-write-${index}`);
   }
-  recheckDependencies(journal, options);
+  recheckDependencies(journal, options, previous);
+  if (journal.workspace_projection) {
+    const workspace = { ...previous.workspace, ...readGitWorkspaceBaseline(options.sourceRoot, previous.workspace.required_untracked?.map(item => item.path_ref) ?? [], previous.workspace.inflight_scope ?? null) };
+    recheckDependencies(journal, options, previous);
+    if (committed) assert(JSON.stringify(committed.workspace) === JSON.stringify(workspace), 'completed workspace conflicts with transaction evidence');
+    journal.draft.workspace = workspace;
+    writeJournal(paths.journal, journal);
+  }
   options.fault?.('before-seal');
   if (!committed) appendSeal(options.sealDirectory, journal.draft, { ...options, expectedPreviousDigest: previous.seal_digest, transitionTicket: journal.intent_path ? path.join(options.sealDirectory, journal.intent_path) : undefined });
   options.fault?.('after-seal');
@@ -160,17 +186,20 @@ export function takeoverHandoff(options) {
     const result = verifyHandoffCandidate({ ...options, nextGeneration: latest.generation + 1, nextWriterId: options.recipient.writerId, eventId: options.eventId });
     assert(['READY', 'READY_WITH_RESTRICTIONS'].includes(result.status) && !result.errors.length, `candidate verification failed: ${result.errors.join('; ')}`);
     const plan = buildPlan(latest, options);
+    let workspaceProjection = captureTransactionWorkspace(latest, plan, options);
     let intent;
     if (history.pending_intents.length) {
       assert(history.pending_intents.length === 1 && result.rotation.status === 'MATCHED', 'existing pending intent target mismatch');
       intent = history.pending_intents[0];
       if (intent.record_type === 'handoff-direct-transition-intent') assert(JSON.stringify(intent.authorization) === JSON.stringify(options.confirmation), 'pending direct confirmation mismatch');
-    } else intent = prepareDirectTransition(options.sealDirectory, { ...options, expectedPreviousDigest: latest.seal_digest }).intent;
+      if (Object.hasOwn(intent, 'workspace_projection_sha256')) assert(byteDigest(Buffer.from(JSON.stringify(workspaceProjection))) === intent.workspace_projection_sha256, 'pending workspace projection immutable anchor mismatch');
+      else workspaceProjection = undefined; // Preserve old intent bytes and strict old recovery semantics.
+    } else intent = prepareDirectTransition(options.sealDirectory, { ...options, expectedPreviousDigest: latest.seal_digest, workspace_projection_sha256: byteDigest(Buffer.from(JSON.stringify(workspaceProjection))) }).intent;
     const stamp = new Date().toISOString();
     const draft = structuredClone(latest);
     Object.assign(draft, { schema_version: 4, generation: latest.generation + 1, writer_id: options.recipient.writerId, old_writer_status: options.confirmation.old_writer_status, event_id: options.eventId, fact_cutoff: stamp, sealed_at: stamp, switch_status: 'COMPLETED', handoff_phase: 'TAKEOVER_COMPLETED', candidate_verification_status: result.status === 'READY' ? 'PASS' : 'PASS_WITH_RESTRICTIONS', control_handoff_confidence: 'HIGH', communications: { status: 'NONE' }, restrictions: result.remote.status === 'UNKNOWN' ? ['REMOTE_UNOBSERVED'] : [], remote: { ...draft.remote, status: result.remote.status, head: result.remote.head || null, observed_at: result.remote.observed_at || null }, transition: null, migration: null, seal_digest: '' });
     for (const item of plan) for (const name of item.names) { draft.sources[name].digest = item.after_sha256; draft.sources[name].fact_cutoff = stamp; }
-    const journal = { protocol_version: 1, status: 'PREPARED', event_id: options.eventId, previous_seal_digest: latest.seal_digest, confirmation: structuredClone(options.confirmation), intent_digest: intent.transition_digest, intent_path: `handoff-transition.${intent.previous_sequence}.${intent.transition_digest}.json`, plan, draft, prepared_at: stamp };
+    const journal = { protocol_version: 1, current_render_version: 2, ...(workspaceProjection ? { workspace_projection: workspaceProjection } : {}), status: 'PREPARED', event_id: options.eventId, previous_seal_digest: latest.seal_digest, confirmation: structuredClone(options.confirmation), intent_digest: intent.transition_digest, intent_path: `handoff-transition.${intent.previous_sequence}.${intent.transition_digest}.json`, plan, draft, prepared_at: stamp };
     // Durable evidence precedes the first central file mutation.
     writeJournal(paths.journal, journal); options.fault?.('after-journal');
     return withControlTransaction(latest, options, () => commitJournal(journal, paths, options));

@@ -135,7 +135,7 @@ function prepareCase(number, eventId) {
 try {
   fs.mkdirSync(sourceRoot, { recursive: true });
   spawnSync('git', ['init', '--quiet', sourceRoot], { stdio: 'inherit' });
-  fs.writeFileSync(path.join(sourceRoot, '.gitignore'), '.handoff-private/\n', 'utf8');
+  fs.writeFileSync(path.join(sourceRoot, '.gitignore'), `.handoff-private/\n${LONG_STATUS_PATH}\n${LONG_STATUS_PATH}.handoff-control.lock\n${LONG_STATUS_PATH}.handoff-transaction.json\n${LONG_STATUS_PATH}.*.tmp\n${LONG_STATUS_PATH}.handoff-transaction.json.*.tmp\n`, 'utf8');
   fs.writeFileSync(path.join(temp, 'snapshot-template.md'), '# {{SNAPSHOT_ID}}\nseal={{SEAL_DIGEST}}\ncutoff={{FACT_CUTOFF}}\nevent={{EVENT_ID}}\nverify={{VERIFICATION_COMMAND}}\n', 'utf8');
   const workflowFilesRoot = path.join(workflowRoot, '总指挥工作流', '第二代总指挥的工作模式');
   const ruleFilePath = path_ref => path.join(path_ref.startsWith('.github/') || path_ref.startsWith('总指挥工作流/') ? workflowRoot : workflowFilesRoot, path_ref);
@@ -212,6 +212,19 @@ try {
     assert.equal(preflightResult.workspace_protection.required_untracked_is_inventory, false);
     assert.equal(fs.existsSync(preflight.finalPath), false);
     assert.equal(fs.existsSync(path.join(sourceRoot, '.handoff-private', 'case-2')), false);
+  });
+  check('private storage failure is caught by preflight and formal generation before seals', () => {
+    const ignored = fs.readFileSync(path.join(sourceRoot, '.gitignore'));
+    fs.writeFileSync(path.join(sourceRoot, '.gitignore'), '.handoff-private/\n');
+    try {
+      assert.throws(() => prepareFormalHandoff(preflight.configPath), /CONTROL_STORAGE/);
+      const formalConfig = { ...preflightConfig, preflight_only: false };
+      writeJson(preflight.configPath, formalConfig);
+      assert.throws(() => prepareFormalHandoff(preflight.configPath), /CONTROL_STORAGE/);
+      assert.equal(fs.existsSync(preflight.finalPath), false);
+      const sealDir = path.join(sourceRoot, '.handoff-private', 'case-2');
+      assert.equal(fs.existsSync(sealDir) ? fs.readdirSync(sealDir).filter(name => name.startsWith('handoff-state.')).length : 0, 0);
+    } finally { fs.writeFileSync(path.join(sourceRoot, '.gitignore'), ignored); writeJson(preflight.configPath, preflightConfig); }
   });
 
   const badTemplate = prepareCase(11, 'formal-event-11');
@@ -494,8 +507,8 @@ try {
       assert.equal(fs.existsSync(input.config.seal_directory), false);
     } finally { fixtureGit(['remote', 'add', 'origin', sourceRoot]); }
   });
-  check('hydrated snapshot uses the verified public rule root and resolved receipt and source inventory', () => {
-    const input = restrictedCase(403);
+  function hydrationCase(number) {
+    const input = restrictedCase(number);
     const manifestPath = path.join(workflowFilesRoot, '规则刷新manifest.json');
     const liveManifest = readJsonForTest(manifestPath);
     const oldDigest = input.draft.rule_baseline.manifest_sha256;
@@ -504,14 +517,18 @@ try {
     const indexPath = path.join(sourceRoot, input.draft.sources.status_index.path_ref);
     fs.writeFileSync(indexPath, fs.readFileSync(indexPath, 'utf8').replaceAll(oldDigest, manifestDigest));
     input.draft.sources.status_index.digest = sha256(fs.readFileSync(indexPath));
-    const externalRoot = path.join(temp, '外部 中央');
+    const externalRoot = path.join(temp, `外部 中央-${number}`);
     fs.mkdirSync(externalRoot);
     const inventoryPath = path.join(sourceRoot, 'inventory.json');
-    fs.writeFileSync(inventoryPath, '{}\n');
+    fs.writeFileSync(inventoryPath, JSON.stringify({ loading_record: '材料\\loading.json', task_contract: '材料/task-contract.md' }));
+    fs.mkdirSync(path.join(sourceRoot, '材料'), { recursive: true });
+    fs.writeFileSync(path.join(sourceRoot, '材料/loading.json'), '{}\n');
+    fs.writeFileSync(path.join(sourceRoot, '材料/task-contract.md'), 'synthetic contract\n');
+    input.draft.sources.loading_record = { owner: 'synthetic', root_ref: 'source_root', path_ref: '材料/loading.json', digest: sha256(fs.readFileSync(path.join(sourceRoot, '材料/loading.json'))), fact_cutoff: stamp };
     input.draft.sources.handoff_inventory = { owner: 'synthetic', root_ref: 'source_root', path_ref: 'inventory.json', digest: sha256(fs.readFileSync(inventoryPath)), fact_cutoff: stamp };
     input.draft.workspace = { ...input.draft.workspace, ...readGitWorkspaceBaseline(sourceRoot) };
     const templatePath = path.join(path.dirname(input.configPath), 'hydration-template.md');
-    fs.writeFileSync(templatePath, '# {{SNAPSHOT_ID}}\nseal={{SEAL_DIGEST}}\ncutoff={{FACT_CUTOFF}}\nevent={{EVENT_ID}}\nverify={{VERIFICATION_COMMAND}}\n- 规则根：{{RULE_ROOT}}\n- 机器记录：{{MACHINE_RECORD}}\n- 独立生成回执：{{RECEIPT_PATH}}\n## 轻量加载基线\nstale baseline\n## 使用边界\nread only\n');
+    fs.writeFileSync(templatePath, '# {{SNAPSHOT_ID}}\nseal={{SEAL_DIGEST}}\ncutoff={{FACT_CUTOFF}}\nevent={{EVENT_ID}}\nverify={{VERIFICATION_COMMAND}}\n- 规则根：{{RULE_ROOT}}\n- 机器记录：{{MACHINE_RECORD}}\n- 独立生成回执：{{RECEIPT_PATH}}\n- [身份索引](<old-candidate\\index.md>)\n- [中央清单](old-candidate/list.md)\n- [进度视图](<old-candidate/view.md>)\n- [本任务加载记录](<old-candidate\\loading.json>)\n- [本轮任务契约](<old-candidate/task-contract.md>)\n## 轻量加载基线\nstale baseline\n## 使用边界\nread only\n');
     input.config.preflight_only = false;
     input.config.external_control_plane_root = externalRoot;
     input.config.rule_manifest_path = manifestPath;
@@ -519,12 +536,76 @@ try {
     input.config.receipt_output_path = path.relative(path.dirname(input.configPath), input.receiptPath);
     writeJson(input.config.draft_path, input.draft);
     writeJson(input.configPath, input.config);
+    return { ...input, inventoryPath, templatePath };
+  }
+  check('hydrated snapshot uses the verified public rule root and resolved receipt and source inventory', () => {
+    const input = hydrationCase(403);
     prepareFormalHandoff(input.configPath);
     const body = fs.readFileSync(input.finalPath, 'utf8');
     assert.ok(body.includes(`- 规则根：${workflowFilesRoot}`));
-    assert.ok(body.includes(`- 机器记录：${inventoryPath}`));
+    assert.ok(body.includes(`- 机器记录：${input.inventoryPath}`));
     assert.ok(body.includes(`- 独立生成回执：${input.receiptPath}`));
-    assert.doesNotMatch(body, /stale baseline|{{[A-Z_]+}}/);
+    for (const [label, name] of [['身份索引', 'status_index'], ['中央清单', 'central_work_items'], ['进度视图', 'current_view'], ['本任务加载记录', 'loading_record']]) {
+      assert.ok(body.includes(`[${label}](<${path.resolve(sourceRoot, input.draft.sources[name].path_ref).replaceAll('\\', '/')}>`));
+    }
+    assert.ok(body.includes(`[本轮任务契约](<${path.resolve(sourceRoot, '材料/task-contract.md').replaceAll('\\', '/')}>`));
+    assert.match(body, /机器记录指针，读取前核验/);
+    assert.match(body, /--summary/);
+    assert.doesNotMatch(body, /stale baseline|old-candidate|{{[A-Z_]+}}/);
+  });
+  let hydrationNumber = 410;
+  for (const [name, ref] of [['parent escape', '../outside.md'], ['absolute', 'C:/<OUTSIDE>/contract.md'], ['Markdown injection', 'contract>\n.md']]) check(`hydration refuses ${name} inventory pointer before sealing`, () => {
+    const input = hydrationCase(hydrationNumber++);
+    fs.writeFileSync(input.inventoryPath, JSON.stringify({ task_contract: ref }));
+    input.draft.sources.handoff_inventory.digest = sha256(fs.readFileSync(input.inventoryPath));
+    input.draft.workspace = { ...input.draft.workspace, ...readGitWorkspaceBaseline(sourceRoot) };
+    writeJson(input.config.draft_path, input.draft);
+    assert.throws(() => prepareFormalHandoff(input.configPath), /INPUT_REQUIRED.*unsafe task_contract/);
+    assert.deepEqual(fs.readdirSync(input.config.seal_directory), []); assert.equal(fs.existsSync(input.finalPath), false);
+  });
+  check('inventory is digest-verified before JSON parsing or link derivation', () => {
+    const input = hydrationCase(hydrationNumber++);
+    fs.writeFileSync(input.inventoryPath, 'not-json');
+    assert.throws(() => prepareFormalHandoff(input.configPath), /handoff_inventory: source digest mismatch/);
+    assert.deepEqual(fs.readdirSync(input.config.seal_directory), []);
+  });
+  check('required loading source cannot be replaced by an unbound inventory path', () => {
+    const input = hydrationCase(hydrationNumber++);
+    delete input.draft.sources.loading_record; writeJson(input.config.draft_path, input.draft);
+    assert.throws(() => prepareFormalHandoff(input.configPath), /INPUT_REQUIRED.*loading_record source required/);
+    assert.equal(fs.existsSync(input.finalPath), false);
+  });
+  check('inventory and sealed loading source disagreement is explicit input required', () => {
+    const input = hydrationCase(hydrationNumber++);
+    fs.writeFileSync(input.inventoryPath, JSON.stringify({ loading_record: 'old-loading.json', task_contract: '材料/task-contract.md' }));
+    input.draft.sources.handoff_inventory.digest = sha256(fs.readFileSync(input.inventoryPath));
+    input.draft.workspace = { ...input.draft.workspace, ...readGitWorkspaceBaseline(sourceRoot) };
+    writeJson(input.config.draft_path, input.draft);
+    assert.throws(() => prepareFormalHandoff(input.configPath), /INPUT_REQUIRED.*loading_record inventory\/source mismatch/);
+  });
+  check('null inventory is rejected as input required before sealing', () => {
+    const input = hydrationCase(hydrationNumber++);
+    fs.writeFileSync(input.inventoryPath, 'null');
+    input.draft.sources.handoff_inventory.digest = sha256(fs.readFileSync(input.inventoryPath));
+    input.draft.workspace = { ...input.draft.workspace, ...readGitWorkspaceBaseline(sourceRoot) };
+    writeJson(input.config.draft_path, input.draft);
+    assert.throws(() => prepareFormalHandoff(input.configPath), /INPUT_REQUIRED.*handoff_inventory must be an object/);
+    assert.deepEqual(fs.readdirSync(input.config.seal_directory), []);
+  });
+  check('sealed task contract replaces the pointer-only claim and must match inventory', () => {
+    const input = hydrationCase(hydrationNumber++);
+    input.draft.sources.task_contract = { owner: 'synthetic', root_ref: 'source_root', path_ref: '材料/task-contract.md', digest: sha256(fs.readFileSync(path.join(sourceRoot, '材料/task-contract.md'))), fact_cutoff: stamp };
+    writeJson(input.config.draft_path, input.draft);
+    assert.equal(prepareFormalHandoff(input.configPath).chain_status, 'PASS');
+    const body = fs.readFileSync(input.finalPath, 'utf8');
+    assert.match(body, /\[本轮任务契约\].*；封条来源/); assert.doesNotMatch(body, /机器记录指针，读取前核验/);
+  });
+  check('old hydration template without optional links remains supported', () => {
+    const input = hydrationCase(hydrationNumber++);
+    fs.writeFileSync(input.templatePath, fs.readFileSync(input.templatePath, 'utf8').replace(/^- \[[^\r\n]*\r?\n/gm, ''));
+    delete input.draft.sources.handoff_inventory; delete input.draft.sources.loading_record;
+    writeJson(input.config.draft_path, input.draft);
+    assert.equal(prepareFormalHandoff(input.configPath).chain_status, 'PASS');
   });
   check('rebase CLI resolves relative configuration from a separate source repository and unrelated cwd', () => {
     const input = restrictedCase(404);

@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "rule_version": "2026-10-09.9",
+  "rule_version": "2026-10-10.10",
   "scope": "core_workflow_full",
   "path_base": "rule_root",
   "repository_root_ref": "../..",
@@ -11,11 +11,11 @@
   "rules": [
     {
       "path_ref": ".github/scripts/HandoffSeal.mjs",
-      "sha256": "E4F0764FF880F1895E16E11559AFF22083CB29E9C7444E6A2154ED712A8FC85D"
+      "sha256": "21173E81998AEC894D228CDB3210E52C0CEA23B186CE2C6FD01A9B1B512459F5"
     },
     {
       "path_ref": ".github/scripts/Prepare-Handoff.mjs",
-      "sha256": "FF66DB01FB23C3F7B854264FF894030FBC1E5C506D8DBFF89476CBE7500A2BCE"
+      "sha256": "19B430D5A478BF8B10E03B7B3A7A6710BD36D4E5CA5532DA96A9E01BF8730F32"
     },
     {
       "path_ref": ".github/scripts/Inspect-WorkspaceTracking.mjs",
@@ -27,15 +27,15 @@
     },
     {
       "path_ref": "00-第二代工作流总览.md",
-      "sha256": "BAA78DBC013430A29EB06F0E5E3F4CA9B2E4092948CAC63D7BA6FA7ACD64E556"
+      "sha256": "ECD0CA0D6FCE22AD43EBE76C187CAA54DF0F9DEC3CD1DA013626935387908566"
     },
     {
       "path_ref": "01-操作者操作手册.md",
-      "sha256": "C2EA79843705E653BD481D4239736B2DB1777B051F6D868F47E3C128AB57A945"
+      "sha256": "1029AF332434D4C492D4C61166D3E1D213143EA634460DC69756E0C0F3A675A5"
     },
     {
       "path_ref": "02-总指挥核心规则.md",
-      "sha256": "A4C9D5CC81C8DA31C712DC0E9C5766ECE5A9FF639A45FDA9083B02592C6A1813"
+      "sha256": "AAD0E418EAB615824829EEA104E2054622A4527C83565899D50E980025F3FE47"
     },
     {
       "path_ref": "03-专项任务卡模板.md",
@@ -43,7 +43,7 @@
     },
     {
       "path_ref": "04-状态、目标变更与交接规范.md",
-      "sha256": "9A7592484FB69F8B115FC9D1D98FA9CEE6EED3826ABB8E8643797C59B01CA7F1"
+      "sha256": "6A4E5D754978CC063568AC3D7A39DEE8A30A1EE70A57068ADB36E25C341B6A73"
     },
     {
       "path_ref": "05-模型选择与资源策略.md",
@@ -51,7 +51,7 @@
     },
     {
       "path_ref": "06-复盘与优化规则.md",
-      "sha256": "23F131FD6D91E199C4B1E13BC1DF242D6D2C37D6074058A91D181CC07934DF2B"
+      "sha256": "7F053089C5C3C597291A0CCF719D3D166CB8075D64D13B91730A2C584A3FD0B7"
     },
     {
       "path_ref": "07-总指挥交接记录模板.md",
@@ -63,11 +63,11 @@
     },
     {
       "path_ref": "09-自动化授权与风险分级.md",
-      "sha256": "A30D4F7DDD646DCF1402BAC1FC61635D8672578F32791A82DEDAB97110AAA943"
+      "sha256": "03959D69003A33E1D2424AD2A755D2D138699595F1E055013BC1E38A468ECD5D"
     },
     {
       "path_ref": "10-自动状态索引规范.md",
-      "sha256": "F2F3EFF9DB67442F7E2C4D2234BD9FF54BE35B9920D63492997EAD5665D2F8DD"
+      "sha256": "F0D56882B87D740AA22C09640DAECEA7C05FDB2DCA6D1392F00D31CDD3042CE5"
     },
     {
       "path_ref": "11-操作者协作画像规范.md",
@@ -75,7 +75,7 @@
     },
     {
       "path_ref": "规则刷新广播包.md",
-      "sha256": "BD04F8B3454C35F50CFC8CF80C1A0BBF7E2E9ECDBE00D227B98DFCE867414EE1"
+      "sha256": "5FCCD5DE526588F526D179CC33AD2D4DFB7DDB0E24CD48703310B309CFBADD53"
     },
     {
       "path_ref": "规则刷新接收回执模板.md",
@@ -83,7 +83,7 @@
     },
     {
       "path_ref": "总指挥轻量交接启动配置.md",
-      "sha256": "F1CB6BC9941A6EDBBB72A71A7B81E3124555F5A17432F329420EBFDD4EF63BA7"
+      "sha256": "CCA77B910AB92184298FE751FF46974D1004685208EF2E1FDBAA6AADAB0204A9"
     },
     {
       "path_ref": "templates/HANDOFF_STATE.schema.json",
@@ -95,11 +95,11 @@
     },
     {
       "path_ref": "引用的外部工具/外部工具自动对接规范.md",
-      "sha256": "F233201459B3A2088E28D6E6879744857EDE724BF8FA22E57488DCC28A2279E7"
+      "sha256": "D07D3345D99C8000C5F94EC75CFFC718E98D9CEA61906CC4193123B43221BFD1"
     },
     {
       "path_ref": ".github/scripts/Inspect-RuleRefresh.mjs",
-      "sha256": "C1A1343C737DC4F4EFEE8D6D8F318A7D1C1E89761FFD75461249324971D5129B"
+      "sha256": "E780195D56FFB373D7C8186552280140E247A0AA5E3E9F894BB2E41AF425FD20"
     },
     {
       "path_ref": ".github/scripts/Rebase-Handoff-Draft.mjs",
@@ -107,7 +107,7 @@
     },
     {
       "path_ref": ".github/scripts/Verify-Handoff-Candidate.mjs",
-      "sha256": "0DF47C76613FF8BCDE6CCF6764B553336F2A520B714D4C247BC2233FFB7BA2F3"
+      "sha256": "EB38D5DD9C9483F2E45E5C80FD8EE9505B3C570EC740EE07F784CC6192A0B398"
     },
     {
       "path_ref": "docs/EXECUTION_AND_INDEPENDENT_REVIEW.md",
@@ -127,7 +127,7 @@
     },
     {
       "path_ref": ".github/scripts/HandoffWorkspaceScope.mjs",
-      "sha256": "BA543CBC28DB9A3612007792DDCD80C5E864DAD30BEE0E84B9DDA42A5AF70DC9"
+      "sha256": "D8A4736F8859BC849E1174755F98294CD73757DF3D8C84C350C9ECF0E7362838"
     },
     {
       "path_ref": ".github/scripts/Test-OperatorManualReferences.mjs",
@@ -135,19 +135,23 @@
     },
     {
       "path_ref": "templates/OPERATOR_MANUAL_REFERENCES.json",
-      "sha256": "30FCF983677E7A436750761BE86DCEE6A5AD3FB1C386A28E47D29E36FBD95187"
+      "sha256": "75A7D22D396C4E7BD861BE2403DEB986344CC9EC7F195E13334D4821A9608B06"
     },
     {
       "path_ref": ".github/scripts/HandoffControl.mjs",
-      "sha256": "C849187745262B2AE54A8980B2153D1EA1893A605D077B8C7ADF02833AB3C4BB"
+      "sha256": "BAE8F5CBA7327284293C36DA73726E79B61318B74C0617E1C4F037F73231260C"
     },
     {
       "path_ref": ".github/scripts/Takeover-Handoff.mjs",
-      "sha256": "E7C9C3F5DC28B0954D08C677B38210A63F4D8155D92648664CBB7084E4447831"
+      "sha256": "B2C28F311A7CCF9B1471C10351E44396200CD7C6241B7C06C67522698A37D9AD"
     },
     {
       "path_ref": ".github/scripts/Inspect-PrReviewPayload.mjs",
       "sha256": "C76DC691EAF69A93C22D464969DD446AB579D95188F8875E6ACC136C22548758"
+    },
+    {
+      "path_ref": ".github/scripts/HandoffTransactionWorkspace.mjs",
+      "sha256": "0E1DAA8E60AE64625A9392FA6D0D470EB02B541B7F82DA58F54E7347F414434E"
     }
   ]
 }

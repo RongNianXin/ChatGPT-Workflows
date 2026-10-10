@@ -16,7 +16,7 @@ const ruleRoot = path.join(root, 'rules', 'core');
 const hash = value => crypto.createHash('sha256').update(value).digest('hex');
 const names = [
   ...Array.from({ length: 12 }, (_, index) => `${String(index).padStart(2, '0')}-rule.md`),
-  ...['HandoffSeal', 'Prepare-Handoff', 'HandoffWorkspaceScope', 'Inspect-WorkspaceTracking', 'Inspect-RuleRefresh', 'Mark-Handoff-Delivered', 'Inspect-QuotaProtection'].map(name => `.github/scripts/${name}.mjs`),
+  ...['HandoffSeal', 'Prepare-Handoff', 'HandoffWorkspaceScope', 'HandoffTransactionWorkspace', 'Inspect-WorkspaceTracking', 'Inspect-RuleRefresh', 'Mark-Handoff-Delivered', 'Inspect-QuotaProtection'].map(name => `.github/scripts/${name}.mjs`),
   '总指挥轻量交接启动配置.md', '规则刷新广播包.md', '规则刷新接收回执模板.md', 'templates/HANDOFF_STATE.schema.json',
   '引用的外部工具/外部工具目录.md', '引用的外部工具/外部工具自动对接规范.md'
 ];

@@ -9,6 +9,7 @@ import { appendSeal, prepareTransition, verifyChain, verifyControlIdentity, vali
 import { readGitWorkspaceBaseline } from './Prepare-Handoff.mjs';
 import { takeoverHandoff, recoverTakeover, rollbackTakeover } from './Takeover-Handoff.mjs';
 import { controlPaths, withControlLock, withControlTransaction } from './HandoffControl.mjs';
+import { verifyHandoffCandidate } from './Verify-Handoff-Candidate.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const cache = path.join(root, '.codex-manual-cache');
@@ -20,7 +21,7 @@ const workflowRoot = path.join(root, '总指挥工作流/第二代总指挥的�
 const manifestPath = path.join(workflowRoot, '规则刷新manifest.json');
 const recipient = { writerId: 'SYNTHETIC-NEW', platformTaskId: '11111111-1111-4111-8111-111111111111', projectKey: 'SYNTHETIC' };
 let count = 0;
-function fixture(external = false, overrides = {}, englishDeclarations = false) {
+function fixture(external = false, overrides = {}, englishDeclarations = false, preparationFields = '', layout = '', scoped = false, existingChange = false) {
   const base = path.join(temp, String(++count)); fs.mkdirSync(base);
   const sourceRoot = path.join(base, 'source'); fs.mkdirSync(sourceRoot);
   const externalControlPlaneRoot = external ? path.join(base, 'external') : undefined;
@@ -39,12 +40,29 @@ function fixture(external = false, overrides = {}, englishDeclarations = false) 
       : { status_index: '.control/status_index.md', root_ref: rootRef, ...(name === 'workflow_enablement' ? { central_entry: '.control/central_entry.md', central_entry_root_ref: rootRef } : {}) };
     const body = `<!-- CURRENT:BEGIN -->\n<!-- ${name === 'status_index' ? 'CONTROL_IDENTITY' : 'CONTROL_NAVIGATION'}: ${JSON.stringify(metadata)} -->\n${name === 'status_index' ? '项目键：SYNTHETIC\n' : ''}${name === 'workflow_enablement' ? '状态：enabled\n' : ''}${englishDeclarations && (name !== 'workflow_enablement' || englishDeclarations === 'all') ? 'writer_id: SYNTHETIC-OLD\ngeneration=1\nplatform_task_id: UNKNOWN\n' : ''}<!-- CURRENT:END -->\n<!-- HISTORY:BEGIN -->\nPreserved synthetic history\n`;
     const pathRef = `.control/${name}.md`, file = path.join(externalControlPlaneRoot || sourceRoot, pathRef);
-    fs.mkdirSync(path.dirname(file), { recursive: true }); fs.writeFileSync(file, body);
-    sources[name] = { owner: 'synthetic', path_ref: pathRef, root_ref: rootRef, digest: hash(Buffer.from(body)), fact_cutoff: stamp };
+    const preparedBody = name === 'workflow_enablement' ? body : body.replace('<!-- CURRENT:END -->', `${preparationFields}<!-- CURRENT:END -->`);
+    fs.mkdirSync(path.dirname(file), { recursive: true }); fs.writeFileSync(file, preparedBody);
+    sources[name] = { owner: 'synthetic', path_ref: pathRef, root_ref: rootRef, digest: hash(Buffer.from(preparedBody)), fact_cutoff: stamp };
+  }
+  if (layout === 'untracked-entry') fs.writeFileSync(path.join(sourceRoot, '.gitignore'), '.control/*\n!.control/central_entry.md\n');
+  else if (layout) {
+    git(['add', '-f', '--', `.control/${layout === 'index' ? 'status_index' : 'central_entry'}.md`]);
+    git(['-c', 'user.name=Synthetic Test', '-c', 'user.email=test@example.invalid', 'commit', '--quiet', '-m', 'synthetic layout']);
   }
   const sealDirectory = path.join(base, 'seals');
+  if (existingChange) fs.appendFileSync(path.join(sourceRoot, 'probe.txt'), 'original accepted change\n');
+  let inflightScope = null;
+  if (scoped) {
+    fs.mkdirSync(path.join(sourceRoot, 'business'));
+    fs.writeFileSync(path.join(sourceRoot, 'business/probe.txt'), 'independent activity');
+    const ownershipRef = '.control/ownership.json', ownership = Buffer.from('{"owner":"synthetic-worker"}\n');
+    fs.writeFileSync(path.join(sourceRoot, ownershipRef), ownership);
+    sources.ownership = { owner: 'synthetic', path_ref: ownershipRef, digest: hash(ownership), fact_cutoff: stamp };
+    inflightScope = { excluded_roots: [{ path_ref: 'business', owner: 'synthetic-worker', reason: 'independent activity', ownership_source_ref: ownershipRef }] };
+  }
   const draft = { schema_version: 3, record_type: 'handoff-seal', generation: 1, writer_id: 'SYNTHETIC-OLD', old_writer_status: 'UNKNOWN', fact_cutoff: stamp, sealed_at: stamp, event_id: 'synthetic-material', sources, source_digest_status: 'PASS', rule_baseline: { rule_version: JSON.parse(fs.readFileSync(manifestPath)).rule_version, manifest_sha256: hash(fs.readFileSync(manifestPath)) }, objective: { summary: 'synthetic', breakpoint: 'read-only' }, prohibitions: ['remote-write'], communications: { status: 'NONE' }, workspace: { root_ref: '<PROJECT_ROOT>', ...readGitWorkspaceBaseline(sourceRoot), required_untracked: [] }, remote: { status: 'PASS', default_ref: 'refs/heads/main', head: git(['rev-parse', 'HEAD']), observed_at: stamp }, control_handoff_confidence: 'HIGH', candidate_verification_status: 'PASS', switch_status: 'READY', handoff_phase: 'MATERIAL_PREPARED', runtime_acceptance_status: 'NOT_RUN', professional_acceptance_status: 'NOT_APPLICABLE', transition: null, migration: null, invalidation_conditions: ['source drift'], seal_digest: '' };
   Object.assign(draft, overrides);
+  if (scoped) draft.workspace = { root_ref: '<PROJECT_ROOT>', ...readGitWorkspaceBaseline(sourceRoot, [], inflightScope), required_untracked: [] };
   const material = appendSeal(sealDirectory, draft, { sourceRoot, externalControlPlaneRoot });
   const confirmation = { protocol_version: 1, origin: 'CURRENT_OPERATOR_MESSAGE', evidence_ref: 'synthetic-direct-confirmation', confirmed_at: new Date().toISOString(), project_key: 'SYNTHETIC', previous_seal_digest: material.seal_digest, old_generation: 1, old_writer_id: 'SYNTHETIC-OLD', old_writer_status: 'STOPPED_DISPATCH', recipient_writer_id: recipient.writerId, recipient_platform_id: recipient.platformTaskId, scope: 'HANDOFF_PREPARE_COMMIT_ONLY', transfer_confirmed: true };
   return { sourceRoot, externalControlPlaneRoot, sealDirectory, workflowRoot, manifestPath, recipient, confirmation, eventId: 'synthetic-takeover', material, git };
@@ -53,6 +71,82 @@ let passed = 0;
 function check(name, fn) { fn(); passed++; console.log(`PASS: ${name}`); }
 
 const one = fixture();
+check('preflight refuses a tracked private index before recommending stop', () => {
+  const f = fixture(false, {}, false, '', 'index');
+  const result = verifyHandoffCandidate(f);
+  assert.equal(result.status, 'BLOCKED'); assert.equal(result.rotation.can_stop_old, false);
+  assert.match(result.errors.join(';'), /CONTROL_STORAGE|ignored and untracked/);
+  assert.match(result.actions.join(';'), /未停旧时不得建议停旧/);
+  assert.match(result.actions.join(';'), /已停旧时不得恢复旧调度/);
+  assert.equal(verifyChain(f.sealDirectory, f).records.length, 1);
+});
+check('tracked central entry completes without treating its own writes as drift', () => {
+  const f = fixture(false, {}, false, '', 'entry');
+  assert.equal(takeoverHandoff(f).status, 'COMPLETED');
+  assert.equal(takeoverHandoff(f).status, 'COMPLETED');
+  const live = verifyChain(f.sealDirectory, f);
+  assert.equal(live.status, 'PASS', live.errors.join(';'));
+  assert.deepEqual(live.latest.workspace.worktree_fingerprint, readGitWorkspaceBaseline(f.sourceRoot).worktree_fingerprint);
+});
+check('untracked central entry completes and records its new content baseline', () => {
+  const f = fixture(false, {}, false, '', 'untracked-entry');
+  assert.equal(takeoverHandoff(f).status, 'COMPLETED');
+  assert.equal(verifyChain(f.sealDirectory, f).status, 'PASS');
+  assert.equal(takeoverHandoff(f).status, 'COMPLETED');
+});
+for (const stage of ['after-journal', 'after-write-3', 'before-seal', 'after-seal']) {
+  check(`tracked entry recovers interruption at ${stage}`, () => {
+    const f = fixture(false, {}, false, '', 'entry');
+    assert.throws(() => takeoverHandoff({ ...f, fault: point => { if (point === stage) throw new Error('tracked interruption'); } }), /tracked interruption/);
+    assert.equal(recoverTakeover(f).status, 'COMPLETED');
+    assert.equal(verifyChain(f.sealDirectory, f).status, 'PASS');
+  });
+}
+check('tracked entry rollback preserves unrelated drift and exact originals', () => {
+  const f = fixture(false, {}, false, '', 'entry');
+  assert.throws(() => takeoverHandoff({ ...f, fault: point => { if (point === 'before-seal') throw new Error('tracked interruption'); } }));
+  fs.appendFileSync(path.join(f.sourceRoot, 'probe.txt'), 'unrelated drift');
+  assert.throws(() => recoverTakeover(f), /workspace changed/);
+  assert.equal(rollbackTakeover(f).status, 'ROLLED_BACK_STOPPED');
+  assert.equal(hash(fs.readFileSync(path.join(f.sourceRoot, '.control/central_entry.md'))), f.material.sources.central_entry.digest);
+  assert.match(fs.readFileSync(path.join(f.sourceRoot, 'probe.txt'), 'utf8'), /unrelated drift/);
+});
+check('same-count staging OID changes cannot hide behind unchanged worktree', () => {
+  const f = fixture(false, {}, false, '', 'entry');
+  assert.throws(() => takeoverHandoff({ ...f, fault: point => { if (point === 'after-journal') throw new Error('index interruption'); } }));
+  f.git(['add', '--', 'probe.txt']);
+  const staged = spawnSync('git', ['-C', f.sourceRoot, 'hash-object', '-w', '--stdin'], { input: 'different index-only bytes\n', encoding: 'utf8' });
+  assert.equal(staged.status, 0);
+  f.git(['update-index', '--cacheinfo', `100644,${staged.stdout.trim()},probe.txt`]);
+  assert.equal(fs.readFileSync(path.join(f.sourceRoot, 'probe.txt'), 'utf8'), 'base\n');
+  assert.throws(() => recoverTakeover(f), /worktree or index changed/);
+});
+for (const field of ['controlDiffs', 'index', 'controlModes', 'remove']) check(`immutable intent rejects forged workspace ${field} before any writes`, () => {
+  // Seal an existing unrelated change, then interrupt before the first central write.
+  const f = fixture(false, {}, false, '', 'entry', false, true);
+  assert.throws(() => takeoverHandoff({ ...f, fault: point => { if (point === 'after-journal') throw new Error('anchor interruption'); } }), /anchor interruption/);
+  const journalPath = controlPaths(f.material, f).journal, journal = JSON.parse(fs.readFileSync(journalPath));
+  if (field === 'controlDiffs') {
+    const diff = spawnSync('git', ['-C', f.sourceRoot, 'diff', '--binary', 'HEAD', '--', 'probe.txt']);
+    journal.workspace_projection.before.controlDiffs.push(diff.stdout.toString('base64'));
+    fs.writeFileSync(path.join(f.sourceRoot, 'probe.txt'), 'base\n');
+  } else if (field === 'index') {
+    f.git(['add', '--', 'probe.txt']);
+    journal.workspace_projection.before.index = spawnSync('git', ['-C', f.sourceRoot, 'ls-files', '--stage', '-z']).stdout.toString('base64');
+  } else if (field === 'controlModes') journal.workspace_projection.before.controlModes[0] = 'FORGED';
+  else delete journal.workspace_projection;
+  fs.writeFileSync(journalPath, JSON.stringify(journal));
+  assert.throws(() => recoverTakeover(f), /immutable anchor mismatch/);
+  for (const item of journal.plan) assert.equal(hash(fs.readFileSync(path.join(f.sourceRoot, item.path_ref))), item.before_sha256);
+});
+check('scoped tracked control entry preserves the original independent activity boundary', () => {
+  const f = fixture(false, {}, false, '', 'entry', true);
+  assert.equal(takeoverHandoff({ ...f, fault: point => { if (point === 'after-write-1') fs.appendFileSync(path.join(f.sourceRoot, 'business/probe.txt'), 'continued'); } }).status, 'COMPLETED');
+  const live = verifyChain(f.sealDirectory, f);
+  assert.equal(live.status, 'PASS', live.errors.join(';'));
+  assert.deepEqual(live.latest.workspace.inflight_scope, f.material.workspace.inflight_scope);
+  assert.equal(takeoverHandoff(f).status, 'COMPLETED');
+});
 check('one receiving call completes without a separately delivered ticket', () => {
   const result = takeoverHandoff(one); assert.equal(result.status, 'COMPLETED');
   const live = verifyChain(one.sealDirectory, one); assert.equal(live.status, 'PASS', live.errors.join('; '));
@@ -61,6 +155,66 @@ check('one receiving call completes without a separately delivered ticket', () =
   assert.equal(live.records[0].seal_digest, one.material.seal_digest);
 });
 check('same event retry is idempotent', () => { assert.equal(takeoverHandoff(one).status, 'COMPLETED'); assert.equal(verifyChain(one.sealDirectory, one).records.length, 2); });
+check('new CURRENT retires preparation fields without inheriting loading or business authority', () => {
+  const f = fixture(false, {}, false, '# 当前交接准备\n状态：ACTIVE_FROZEN_NOT_STOPPED；MATERIAL_PREPARED\n候选事件：old-candidate\n加载记录：old-loading.json\n任务契约与工具限定放行：old-contract.md\n精确断点：preserve-business-breakpoint\n非终态：8\n禁止项：remote-write\n下一行动方：return-to-old-writer\n');
+  const material = f.material;
+  assert.equal(takeoverHandoff(f).status, 'COMPLETED');
+  for (const source of Object.values(material.sources).filter(source => source !== material.sources.workflow_enablement)) {
+    const body = fs.readFileSync(path.join(f.sourceRoot, source.path_ref), 'utf8');
+    const current = body.split('<!-- CURRENT:BEGIN -->')[1].split('<!-- CURRENT:END -->')[0];
+    assert.doesNotMatch(current, /ACTIVE_FROZEN_NOT_STOPPED|MATERIAL_PREPARED|候选事件：|return-to-old-writer|# 当前交接准备/);
+    assert.match(current, /完成事件：synthetic-takeover/);
+    assert.match(current, /来源加载记录：old-loading.json/);
+    assert.match(current, /本任务加载记录：待接收方独立建立/);
+    assert.match(current, /preserve-business-breakpoint/);
+    assert.match(current, /非终态：8/); assert.match(current, /禁止项：remote-write/);
+    assert.match(body.split('<!-- HISTORY:BEGIN -->')[1], /ACTIVE_FROZEN_NOT_STOPPED/);
+  }
+});
+// Frozen pre-version fixture bytes, independent of the production renderer.
+function legacyJournal(f) {
+  prepareTransition(f.sealDirectory, { ...f, nextGeneration: 2, nextWriterId: recipient.writerId });
+  assert.throws(() => takeoverHandoff({ ...f, fault: stage => { if (stage === 'after-journal') throw new Error('legacy-fixture'); } }), /legacy-fixture/);
+  const journalPath = controlPaths(f.material, f).journal;
+  const journal = JSON.parse(fs.readFileSync(journalPath));
+  delete journal.current_render_version;
+  delete journal.workspace_projection;
+  for (const item of journal.plan) {
+    const before = Buffer.from(item.before, 'base64').toString('utf8');
+    const old = before.split('<!-- CURRENT:BEGIN -->')[1].split('<!-- CURRENT:END -->')[0];
+    const current = old.replace(/<!-- CONTROL_IDENTITY: .*? -->/, `<!-- CONTROL_IDENTITY: ${JSON.stringify({ generation: 2, writer_id: recipient.writerId, platform_task_id: recipient.platformTaskId })} -->`)
+      + '\n接管协议：DIRECT_OPERATOR_V1；TAKEOVER_COMPLETED（仅在规范事务日志COMPLETED且回读一致时生效）\n旧总指挥：世代1 STOPPED_DISPATCH；保留历史，不恢复旧授权\n';
+    const historical = old.replaceAll('<!-- CONTROL_IDENTITY:', '<!-- ARCHIVED_CONTROL_IDENTITY:').replaceAll('<!-- CONTROL_NAVIGATION:', '<!-- ARCHIVED_CONTROL_NAVIGATION:');
+    const after = before.replace(`<!-- CURRENT:BEGIN -->${old}<!-- CURRENT:END -->`, `<!-- CURRENT:BEGIN -->${current}<!-- CURRENT:END -->`)
+      .replace('<!-- HISTORY:BEGIN -->', `<!-- HISTORY:BEGIN -->\n\n## Previous commander (HISTORICAL_ONLY)\n${historical}\n`);
+    item.after = Buffer.from(after).toString('base64'); item.after_sha256 = hash(Buffer.from(after));
+    for (const name of item.names) journal.draft.sources[name].digest = item.after_sha256;
+  }
+  fs.writeFileSync(journalPath, JSON.stringify(journal));
+  return journal;
+}
+check('unversioned historical PREPARED journal recovers and COMPLETED retry stays idempotent', () => {
+  const f = fixture(false, {}, false, '# 当前交接准备\n状态：ACTIVE_FROZEN_NOT_STOPPED；MATERIAL_PREPARED\n加载记录：old-loading.json\n');
+  legacyJournal(f);
+  assert.equal(recoverTakeover(f).status, 'COMPLETED');
+  assert.equal(takeoverHandoff(f).status, 'COMPLETED');
+  assert.equal(recoverTakeover(f).status, 'COMPLETED');
+  assert.equal(verifyChain(f.sealDirectory, f).records.length, 2);
+});
+check('unversioned historical partial journal rolls back exact bytes and keeps stopped state', () => {
+  const f = fixture(), journal = legacyJournal(f);
+  fs.writeFileSync(path.join(f.sourceRoot, journal.plan[0].path_ref), Buffer.from(journal.plan[0].after, 'base64'));
+  assert.equal(rollbackTakeover(f).status, 'ROLLED_BACK_STOPPED');
+  for (const item of journal.plan) assert.equal(hash(fs.readFileSync(path.join(f.sourceRoot, item.path_ref))), item.before_sha256);
+});
+for (const version of [1, 0, 3, '2', null]) check(`changed CURRENT renderer version ${version} is rejected before writes`, () => {
+  const f = fixture(); assert.throws(() => takeoverHandoff({ ...f, fault: stage => { if (stage === 'after-journal') throw new Error('interrupt'); } }));
+  const journalPath = controlPaths(f.material, f).journal, journal = JSON.parse(fs.readFileSync(journalPath));
+  assert.equal(journal.current_render_version, 2); journal.current_render_version = version;
+  fs.writeFileSync(journalPath, JSON.stringify(journal));
+  assert.throws(() => recoverTakeover(f), /render version|target bytes changed/);
+  for (const item of journal.plan) assert.equal(hash(fs.readFileSync(path.join(f.sourceRoot, item.path_ref))), item.before_sha256);
+});
 check('supported English identity declarations follow the new canonical identity', () => {
   const f = fixture(false, {}, true); assert.equal(takeoverHandoff(f).status, 'COMPLETED');
   assert.equal(verifyControlIdentity(verifyChain(f.sealDirectory, f).latest, f).status, 'PASS');

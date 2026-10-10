@@ -83,8 +83,9 @@ try {
   git(['init', '--quiet', '--initial-branch=main']);
   // The production verifier also spawns Git; keep long-path support local to this fixture.
   git(['config', 'core.longpaths', 'true']);
+  fs.writeFileSync(path.join(sourceRoot, '.gitignore'), 'control/status_index.md\ncontrol/status_index.md.handoff-control.lock\ncontrol/status_index.md.handoff-transaction.json\ncontrol/status_index.md.*.tmp\ncontrol/status_index.md.handoff-transaction.json.*.tmp\n');
   fs.writeFileSync(path.join(sourceRoot, 'probe.txt'), 'base\n');
-  git(['add', '--', 'probe.txt']);
+  git(['add', '--', 'probe.txt', '.gitignore']);
   git(['-c', 'user.name=Synthetic Test', '-c', 'user.email=test@example.invalid', 'commit', '--quiet', '-m', 'synthetic fixture']);
   git(['remote', 'add', 'origin', sourceRoot]); // Local self-remote: no network or real remote write.
   workspace = { root_ref: '<PROJECT_ROOT>', ...readGitWorkspaceBaseline(sourceRoot), required_untracked: [] };

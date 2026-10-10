@@ -58,6 +58,19 @@ try {
   check('chain cannot start from a non-one sequence', () => assert.equal(verifyChain(gapDir, { sourceRoot }).status, 'BLOCKED'));
   const first = appendSeal(sealDir, draft(), { sourceRoot });
   check('valid chain accepts runtime UNKNOWN with control HIGH', () => { const result = verifyChain(sealDir, { sourceRoot }); assert.equal(result.status, 'PASS'); assert.equal(result.latest.runtime_acceptance_status, 'UNKNOWN'); });
+  check('summary CLI verifies the same chain without rendering source bodies', () => {
+    const run = flags => spawnSync(process.execPath, [path.join(scriptDir, 'HandoffSeal.mjs'), 'verify', sealDir, sourceRoot, ...flags], { encoding: 'utf8' });
+    const full = run([]), compact = run(['--summary']);
+    assert.equal(compact.status, full.status); assert.equal(compact.status, 0);
+    const result = JSON.parse(compact.stdout), original = JSON.parse(full.stdout);
+    assert.equal(result.status, original.status); assert.deepEqual(result.errors, original.errors);
+    assert.equal(result.handoff_ready, original.handoff_ready);
+    assert.equal(result.record_count, original.records.length);
+    assert.equal(result.latest.seal_digest, original.latest.seal_digest);
+    assert.equal(result.latest.handoff_phase, original.latest.handoff_phase);
+    assert.equal(result.records, undefined); assert.equal(result.latest.sources, undefined);
+    assert.ok(compact.stdout.length < full.stdout.length);
+  });
   const pinnedBaseline = draft(); pinnedBaseline.seal_sequence = 1; pinnedBaseline.previous_seal_digest = null; const pinnedSnapshotPath = path.join(sourceRoot, 'snapshots', 'rules.json'); fs.mkdirSync(path.dirname(pinnedSnapshotPath), { recursive: true }); fs.writeFileSync(pinnedSnapshotPath, 'pinned-rule-snapshot'); const pinnedSnapshotDigest = crypto.createHash('sha256').update(fs.readFileSync(pinnedSnapshotPath)).digest('hex'); pinnedBaseline.rule_baseline = { rule_version: '2026-10-05.21', manifest_sha256: 'e'.repeat(64), mode: 'PINNED_SNAPSHOT', source_role: 'CANDIDATE_PINNED_BASELINE', snapshot_ref: 'snapshots/rules.json', snapshot_sha256: pinnedSnapshotDigest, observed_live_rule_version: '2026-10-05.22', observed_live_manifest_sha256: 'a'.repeat(64), compatibility: 'NEWER_COMPATIBLE', action: 'CONTINUE' }; pinnedBaseline.seal_digest = sealDigest(pinnedBaseline);
   check('extended rule baseline records pinned candidate and observed live epochs', () => assert.deepEqual(validateSeal(pinnedBaseline), []));
   const pinnedDir = path.join(temp, 'pinned-seals'); appendSeal(pinnedDir, pinnedBaseline, { sourceRoot });
@@ -68,6 +81,18 @@ try {
   const externalSeal = appendSeal(externalDir, externalDraft, { sourceRoot, externalControlPlaneRoot: externalRoot });
   check('external control-plane sources require an explicit root and verify live bytes', () => { const result = verifyChain(externalDir, { sourceRoot, externalControlPlaneRoot: externalRoot }); assert.equal(result.status, 'PASS'); assert.equal(result.latest.seal_digest, externalSeal.seal_digest); });
   check('missing external control-plane root is an input gap, not source corruption', () => { const result = verifyChain(externalDir, { sourceRoot }); assert.equal(result.status, 'BLOCKED'); assert.equal(result.latest_source_status, 'NOT_CHECKED'); assert.ok(result.errors.some(error => error.includes('INPUT_REQUIRED'))); });
+  check('summary preserves all failure evidence and historical-only semantics', () => {
+    const run = flags => spawnSync(process.execPath, [path.join(scriptDir, 'HandoffSeal.mjs'), 'verify', externalDir, sourceRoot, ...flags], { encoding: 'utf8' });
+    for (const flags of [[], ['--history-only']]) {
+      const full = run(flags), compact = run([...flags, '--summary']);
+      assert.equal(compact.status, full.status);
+      const a = JSON.parse(full.stdout), b = JSON.parse(compact.stdout);
+      assert.equal(b.status, a.status); assert.deepEqual(b.errors, a.errors);
+      assert.equal(b.control_status, a.control_status); assert.equal(b.latest_source_status, a.latest_source_status);
+      assert.equal(b.handoff_ready, a.handoff_ready);
+      if (!flags.length) { assert.equal(compact.status, 1); assert.match(b.errors.join(';'), /INPUT_REQUIRED/); }
+    }
+  });
   check('filename sequence and digest are bound to record fields', () => { const original = fs.readdirSync(sealDir).find(name => name.startsWith('handoff-state.')); const wrong = original.replace('handoff-state.1.', 'handoff-state.9.'); fs.renameSync(path.join(sealDir, original), path.join(sealDir, wrong)); assert.equal(verifyChain(sealDir, { sourceRoot }).status, 'BLOCKED'); fs.renameSync(path.join(sealDir, wrong), path.join(sealDir, original)); });
   check('digest tampering blocks the chain', () => { const file = fs.readdirSync(sealDir).find(name => name.startsWith('handoff-state.')); const value = JSON.parse(fs.readFileSync(path.join(sealDir, file))); value.objective.summary = 'tampered'; fs.writeFileSync(path.join(sealDir, file), JSON.stringify(value)); assert.equal(verifyChain(sealDir, { sourceRoot }).status, 'BLOCKED'); });
   fs.rmSync(sealDir, { recursive: true, force: true }); fs.mkdirSync(sealDir);
