@@ -1,3 +1,58 @@
+## 2026-10-11.8：规则刷新读取计划与提前收口约束
+
+- 规则检查工具按当前文件生成必要正文清单及Unicode长度，保持“未证明已读”语义；未使用实现仍按需加载。
+- 0A要求保存实际读取范围与下一偏移，压缩后恢复；没有真实停止条件不得以正文未读完收口。
+- 成功、未完成和受阻均使用人话正文，技术字段放在执行细节；补充实物计划覆盖与契约检查。
+- 仅本地修改，不联系来源窗口、不修改来源项目、不提交或发布；真实窗口重新采用与模型遵从待观察。
+
+English: Rule inspection now emits the required text plan and Unicode lengths without attesting Agent reading. Refresh retains reading ranges and cursors across compaction and cannot close on unread text alone. Human-readable reporting covers every outcome. Local validation only; live adoption and model compliance remain unverified.
+
+## 2026-10-11.7：普通任务交接忽略操作者人工标题
+
+- 修复普通/专项任务接手时把新窗口人工标题、名称或数字后缀与交接材料编号不一致误判为身份冲突的问题。
+- 场景 1F 现在只依据主快照的任务类型、范围和当前可核验事实；平台实际任务 ID 只用于运行时定位和首次回执，不参与身份、授权或交接成败判断。
+- 普通交接输出同步使用五项人话外壳，详细字段放入“执行细节”，并增加标题干扰回归检查。
+
+English: Ordinary and special-task handoff no longer treats an operator-assigned window title or numeric suffix as an identity conflict. Scene 1F uses the handoff snapshot, scope and current evidence; the platform task ID is only for runtime routing and the first receipt. Human-readable five-item output and a regression check cover the fix.
+
+## 2026-10-11.6：统一执行型任务的人话输出与技术细节分层
+
+- 所有执行型场景统一先输出四项人话：执行结果、未完成内容、阻断项及原因、下一步操作建议；没有内容时明确写“无”。
+- 第五项固定为“执行细节”，用于放验证依据、错误、恢复条件和必要的规则字段，避免 manifest、哈希、状态码和内部登记信息干扰主答复。
+- 更新总览、操作者手册、核心规则、专项任务、交接、自动化授权、状态索引、刷新回执和契约检查；普通问答不强行套用完整模板。
+
+English: All execution scenarios now use a human-readable five-item shell: result, unfinished work, blockers and reasons, next action, then execution details. Technical evidence and internal fields stay in the final detail section. Local workflow rules and contract checks only; no remote writes, cross-window messaging or source-project changes.
+
+## 2026-10-11.4：在途调整方向的请求合并与局部取消门禁
+
+- 明确客户端“调整方向”按中途 steering 输入处理：增补、纠正和细化默认并入原活跃请求；只有明确指向的取消/替代才局部终止对应项；提问处理后回到原执行账。
+- 要求 steering 后重新核对原请求项与新增项的动作、证据和状态，最终汇报逐项列出完成、阻断、取消或替代，避免专项任务只处理插话内容后提前结束或漏报原任务。
+- 增加增补、局部取消、状态询问三类离线契约回归；仅修改本地规则与检查，不提交、远端写入、跨窗口联络或修改来源项目。
+
+English: In-flight “adjust direction” input is now treated as steering: additions, corrections and refinements merge into the active request by default; only explicit targeted cancellation or replacement stops the affected item; questions return to the original execution ledger. Steering requires a full item/action/evidence/status reconciliation and itemized closeout. Offline contracts cover additive, scoped cancellation and query-resume cases. Local rule and test changes only; no commit, remote write, cross-window messaging or source-project modification.
+
+## 2026-10-11.3：交接 CURRENT 语义一致性前置门禁
+
+- 接管事务在写入前逐个检查四个中央 CURRENT 目标的控制身份标记及已存在的世代、写者、平台任务 ID 字段，发现混合旧值时拒绝生成事务写入计划。
+- 增加四目标一致性回归用例，继续保持候选生成、中央接管、封条和完成回读的阶段分离。
+- 本地规则与契约修改，无 Commit、远端写入、跨窗口联络或来源项目修改。
+
+English: Takeover planning now validates the canonical identity marker and any existing generation, writer and platform-task declarations in all four transactional CURRENT targets before writing. Mixed old/new identity text is rejected before a transaction plan is committed. A regression case covers all four targets while preserving the separation between candidate preparation, central takeover, seals and completion readback. Local rule and contract changes only; no commit, remote write, cross-window messaging or source-project changes.
+
+## 2026-10-11.2：1C/1E准备与继任者解耦
+
+- 明确场景1C/1E只负责整理、冻结并核验来源侧交接材料，输出“可安全交付”或具体阻断；继任者、接收窗口、候选任务 ID 和平台 ID 由操作者在后续交付阶段自行指定，未知接收方不是准备阻断。
+- 接收位置可访问、实际接手、停旧确认和复现仍在操作者指定接收方后的1D/1F阶段核验；1D的真实接收身份与单写者校验不变。
+- 增加无继任者准备路径的契约回归断言，防止提示词再次把接收方误作1C/1E前置条件。本地修改，无Commit、远端写入或跨窗口联络。
+
+English: Scene 1C/1E preparation now only organizes, freezes and validates source-side handoff material. The operator chooses the successor and receiving window later; an unknown recipient is not a preparation blocker. Receiving-location access, actual takeover, old-writer stop confirmation and reproduction remain 1D/1F checks, and strict 1D identity gates are unchanged. Contract coverage guards the no-recipient preparation path. Local changes only; no commit, remote write or cross-window messaging.
+
+## 2026-10-11.1：5A交接 CURRENT 兼容字段分层
+
+- 接管 CURRENT 投影新增版本 3：来源规则加载记录、权限、切换状态、当前下一动作和调度阻断改用来源字段；未知字段与原队列表格保留并标明为来源历史投影，接收方状态和独立加载记录单独写入。
+- 旧版本事务日志继续使用原字节渲染算法；增加字段别名、未知表格保留、旧日志恢复和渲染版本篡改回归。
+- 私有布局迁移和备份登记仍需具体入口与真实布局材料，本次不把来源项目脚本升格为公共实现；不宣称真实跨窗口或跨机行为已修复。
+
 ## 2026-10-10.10：发布授权分流与连续执行
 
 - 09统一直接执行与准备/预览的授权判断；明确的范围内Push、提交PR要求可作为执行确认，AI在写入前补齐技术参数，不因候选形成或阶段切换重复索权。
@@ -2188,3 +2243,10 @@ The roadmap items above are candidates only. Before every commit, update this ch
 - 每次业务波次或周期停止时，必须汇报本轮完成目标、停止条件及证据、剩余目标和精确断点，并分开说明业务状态与平台 Goal 状态。
 - 明确 `CYCLE_STOPPED`、`PAUSE_REQUIRED`、`BLOCKED` 不等于 Goal 完成、取消或清除；只有操作者明确取消/替换且平台回读已清除，才可这样报告。
 - 规则版本升至 `2026-10-06.34`；契约测试和仓库质量检查通过。
+## 2026-10-11.5：0A规则刷新改为自动收口与人话回执
+
+- 0A在已核验专用字段、路径和本地写权限时于本次刷新内自动同步采用记录并回读；缺少条件只留内部 `SYNC_PENDING`，不再把“下一次维护窗口”转给操作者。
+- 0A补充角色中立入口：总指挥、普通任务和专项任务都可直接读取最新规则，不需要操作者提供总指挥名字或任务 ID；名称/ID不能授予身份或中央写权。
+- 默认回执压缩为四行人话，manifest、哈希、状态码、行动方和控制面建议留在既有记录；新增刷新契约断言。仅修改本地规则、模板和检查，未执行远端写入、跨窗口联络或来源项目动作。
+
+English: Scene 0A now completes adoption-record synchronization within the refresh when the dedicated field, path and local write permission are verified. Missing conditions remain internal `SYNC_PENDING` and no longer become an operator maintenance task. The entry is role-neutral and does not require a commander name or task ID; identifiers never grant authority. Default receipts are four human-readable lines, with manifest, hashes and control-plane details kept in the existing record. Local rules, templates and contract checks only; no remote, cross-window or source-project actions.

@@ -3,6 +3,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { captureRuleRefresh } from './Inspect-RuleRefresh.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const workflow = path.join(root, '总指挥工作流', '第二代总指挥的工作模式');
@@ -52,7 +53,7 @@ const checks = [
   ['ordinary refresh reads saved local text while pinned verification stays strict', read('规则刷新广播包.md'), ['普通本地刷新（默认）', '旧预期指纹或版本标签待同步', '不单独否决普通刷新', '精确版本核验', '不自动降为本地正文模式', '立即取消本批']],
   ['refresh separates bytes, reading and adoption', read('规则刷新广播包.md'), ['必要正文实际呈现', '补读' , '分段范围', 'text_reading=COMPLETE', '单次输出的截断只表示本段需要继续读取', '不能替代正文理解', '任一必需条目核验失败', '不得以“其余文件已读”宣称刷新完成', '外部工具目录与统一自动对接规范也是必需条目']],
   ['manual bootstrap carries saved local adoption and the dual-root rule', read('01-操作者操作手册.md'), ['请完整读取并采用规则目录中已保存的最新本地正文', '规则加载、项目接入、身份确认和控制面写入分开处理', '以 `.github/` 开头的文件，按规则根向上两级得到的仓库根读取', '不要猜测身份、授权或任务清单', '不执行远端写入']],
-  ['receipt is minimal pass or fail', read('规则刷新接收回执模板.md'), ['正常成功只回复', 'result：PASS', 'result：FAIL', 'RULE_REFRESH：PASS/FAIL', 'PROJECT_ENROLLMENT：ENROLLED/NOT_ENROLLED/UNKNOWN', 'IDENTITY_CONTROL_PLANE：VERIFIED/NOT_REQUESTED/UNKNOWN', '规则加载结果不使用 `WARN/BLOCKED`']],
+  ['receipt is minimal pass or fail', read('规则刷新接收回执模板.md'), ['正常成功给操作者按下面五项回复', '1. 执行结果：成功', 'RULE_SOURCE_LOCATOR：SOURCE_NOT_LOCATED / STALE_SOURCE_UNCONFIRMED / INPUT_REQUIRED', 'RULE_REFRESH：PASS/FAIL', 'PROJECT_ENROLLMENT：ENROLLED/NOT_ENROLLED/UNKNOWN', 'IDENTITY_CONTROL_PLANE：VERIFIED/NOT_REQUESTED/UNKNOWN', '规则加载结果不使用 `WARN/BLOCKED`']],
   ['project migration is independent', read('项目配置迁移清单.md'), ['不再随规则广播自动执行', '本清单存在缺口也不得降低规则加载结果']],
   ['project state cannot block rule loading', read('09-自动化授权与风险分级.md'), ['规则刷新是纯规则加载事件', '规则加载只允许两种最终结果：`PASS` 或 `FAIL`', '不得产生 `WARN/BLOCKED`']],
   ['affirmative reply binds the latest unique plan', `${read('02-总指挥核心规则.md')}\n${read('09-自动化授权与风险分级.md')}`, ['最近唯一、范围明确且可恢复的执行方案', '我同意你的做法', '不因缺少固定授权句式', '不得要求操作者改用固定授权口令']],
@@ -72,7 +73,7 @@ checks.push(['core rules carry the cross-project closeout hard gate', read('02-�
 checks.push(['same-window authority reuse preserves source and permission boundaries', `${read('规则刷新广播包.md')}\n${read('01-操作者操作手册.md')}`, ['当前窗口已核验且仍有效的权威来源绑定', '可回源', '未被撤销、替换', '不要求操作者重复确认路径', '裸历史路径和其他窗口声明仍不可用']]);
 checks.push(['refresh continuity preserves exact reading and real stop conditions', `${read('规则刷新广播包.md')}\n${read('02-总指挥核心规则.md')}\n${read('09-自动化授权与风险分级.md')}`, ['真实停止条件触发后正文没读完', '下一位置', '正常分段', '不能替代正文理解', 'NOT_ATTESTED', '--offset 0 --length 2000', '规则来源故障仅指规则根本身', '必须注明停止原因，不得写成规则来源故障', '状态的缺口不否定纯规则加载']]);
 checks.push(['refresh result belongs to its current event rather than old business', `${read('规则刷新接收回执模板.md')}\n${read('09-自动化授权与风险分级.md')}`, ['最终结果必须对应当前刷新事件', '旧业务答复', 'MESSAGE_ID', '待确认', '平台完成']]);
-checks.push(['rule refresh separates source authority, adoption record and identity control', `${read('规则刷新广播包.md')}\n${read('规则刷新接收回执模板.md')}\n${read('09-自动化授权与风险分级.md')}`, ['规则来源选择门禁', 'RULE_SOURCE_LOCATOR', 'SOURCE_NOT_LOCATED', 'STALE_SOURCE_UNCONFIRMED', '规则采用记录', 'RULE_ADOPTION=PASS', 'PROJECT_REGISTRATION=SYNC_PENDING', '不得修改总指挥、唯一写者、CURRENT', '正式交接前必须由项目唯一写者处理']]);
+checks.push(['rule refresh separates source authority, adoption record and identity control', `${read('规则刷新广播包.md')}\n${read('规则刷新接收回执模板.md')}\n${read('09-自动化授权与风险分级.md')}`, ['规则来源选择门禁', 'RULE_SOURCE_LOCATOR', 'SOURCE_NOT_LOCATED', 'STALE_SOURCE_UNCONFIRMED', '规则采用记录', 'RULE_ADOPTION=PASS', 'PROJECT_REGISTRATION=SYNC_PENDING', '本次不需要额外处理', '自动原子更新', '不得修改总指挥、唯一写者、CURRENT']]);
 checks.push(['rule drift has automatic rebase without operator version choice', `${read('规则刷新广播包.md')}\n${read('01-操作者操作手册.md')}\n${read('02-总指挥核心规则.md')}\n${read('04-状态、目标变更与交接规范.md')}\n${read('10-自动状态索引规范.md')}`, ['rule_baseline', 'RULE_REBASE_PENDING', 'SUPERSEDED_BY_RULE_REBASE', '不要求操作者选择版本', '只暂停受影响阶段', 'PINNED_CURRENT / RULE_REBASE_PENDING / REBASED / REBASE_BLOCKED']]);
 checks.push(['feedback triages before costly 2C and repairs within scope', `${read('01-操作者操作手册.md')}\n${read('docs/PIPELINE_DIAGNOSIS_AND_ALGORITHM_TUNING_STANDARD.md')}`, ['先描述现象；AI 定点核对后决定是否进入 2C', '最小定点核对后仍无法定位', '原因及修复边界已有可靠证据的，在现有授权内局部修复与回归', '已有同一问题的修复授权时直接修复与回归', '仅报结果且没有开放目标', '一次列明拟改范围、影响和验证以请求差额授权']]);
 checks.push(['workflow entry points load triage before full diagnosis', `${read('00-第二代工作流总览.md')}\n${read('02-总指挥核心规则.md')}\n${read('docs/WORKFLOW_OVERVIEW.md')}`, ['先读 `docs/PIPELINE_DIAGNOSIS_AND_ALGORITHM_TUNING_STANDARD.md` 的 2.1 做最小分流', '先读取 `docs/PIPELINE_DIAGNOSIS_AND_ALGORITHM_TUNING_STANDARD.md` 的 2.1 并完成最小定点核对', '2E 失败反馈先按 2.1 最小分流']]);
@@ -104,7 +105,19 @@ checks.push(['scenario 0B operator prompt is Chinese-first', read('01-操作者�
 const manual = read('01-操作者操作手册.md');
 const scene0A = manual.split('### 场景 0A：')[1]?.split('### 场景 0B：')[0] || '';
 const scene0B = manual.split('### 场景 0B：')[1]?.split('### 兼容分支：')[0] || '';
-checks.push(['0A acts only on its direct receiver', scene0A, ['这条指令只针对当前正在与我对话的 AI', '无论你是总指挥、普通任务还是专项任务', '不要替其他对话更新，也不要盘点其他对话、向它们广播或转达指令', '只暂停需要确认身份才能执行的动作，仍可完成普通规则刷新', 'RULE_SOURCE_STATUS', 'PROJECT_ADOPTION_RECORD', 'live_rule_epoch', '不要让我在版本之间选择']]);
+checks.push(['0A acts only on its direct receiver', scene0A, ['这条指令只针对当前正在与我对话的 AI', '无论你是总指挥、普通任务还是专项任务', '不需要我提供总指挥名字或任务 ID', '名字或 ID 只能用于核对，不能作为身份或写入授权', '不要替其他对话更新，也不要盘点其他对话、向它们广播或转达指令', '只暂停需要确认身份才能执行的动作，仍可完成普通规则刷新', 'RULE_SOURCE_STATUS', 'PROJECT_ADOPTION_RECORD', 'live_rule_epoch', '不要让我在版本之间选择']]);
+checks.push(['0A keeps operator output human-first and bounded', `${scene0A}\n${read('规则刷新接收回执模板.md')}`, ['最终主答复按五项输出', '默认不向操作者展示 manifest 摘要', '逐文件哈希', '维护窗口', '完整技术字段写入既有加载记录', '项目登记无法安全同步时']]);
+checks.push(['0A cannot close before required text is read', `${scene0A}\n${read('10-自动状态索引规范.md')}`, ['硬完成门', '同一回合继续按有界分段读取', '不得以“部分完成”“规则刷新未完成”或“请继续发送”收口', '可举证的终止条件', '尚未读完”不能单独作为阻断原因']]);
+checks.push(['0A preserves the read cursor across compaction', read('规则刷新广播包.md'), ['rule_version', '不得用猜测的', 'version', 'reading_plan', '实际已呈现且未截断的范围', 'next_offset', '上下文压缩后从既有记录恢复', '有缺口就继续读', '待执行步骤，不是阻断']]);
+const planCapture = captureRuleRefresh(workflow);
+const expectedPlan = Object.keys(planCapture.texts).filter(ref => !ref.endsWith('.mjs'));
+const actualPlan = planCapture.report.reading_plan;
+if (actualPlan.length !== expectedPlan.length || expectedPlan.some(ref => {
+  const item = actualPlan.find(row => row.path_ref === ref);
+  return !item || item.total !== Array.from(planCapture.texts[ref]).length || item.offset_unit !== 'unicode_code_point';
+}) || actualPlan.some(item => item.path_ref.endsWith('.mjs')) || planCapture.report.text_reading !== 'NOT_ATTESTED') {
+  throw new Error('Rule reading plan must cover every required text without attesting Agent reading');
+}
 checks.push(['0B is commander-only and project-scoped', scene0B, ['只发给已核验的本项目现任总指挥', '可以只指定一个专项', '不得跨项目转达', '不是或无法确认时停止转达', '由AI核对唯一对象']]);
 checks.push(['0A requires source locator and task-id discovery evidence', `${scene0A}\n${read('10-自动状态索引规范.md')}`, ['本条指令明确路径 > 当前项目启用声明', 'RULE_SOURCE_LOCATOR', 'SOURCE_NOT_LOCATED', 'STALE_SOURCE_UNCONFIRMED', 'PLATFORM_TASK_ID_STATUS=UNAVAILABLE_AFTER_PROBES', '没有执行探针不得写“平台未暴露”']]);
 checks.push(['dual-root resolution cannot report false missing files', read('规则刷新广播包.md'), ['repository_root_ref', '解析后的根（规则根或仓库根）', '禁止把仓库根条目直接拼到规则根后再报告缺失']]);
@@ -128,11 +141,12 @@ checks.push(['handoff closeout distinguishes pending work from blockers', read('
 checks.push(['handoff content reconciles before sealing', `${read('01-操作者操作手册.md')}\n${read('04-状态、目标变更与交接规范.md')}`, ['内容一致性回读', '中央 CURRENT、AI 状态索引、实际 Git/工作区/远端', '旧编号、旧世代、旧工作区计数或交付状态残留', '封条或哈希通过不能代替', '以候选当前消息实际收到附件作为送达事实']]);
 checks.push(['handoff preflight closes before snapshot', `${read('01-操作者操作手册.md')}\n${read('02-总指挥核心规则.md')}\n${read('总指挥轻量交接启动配置.md')}`, ['场景 1B：交接预处理与收口判断', '不生成 `final-*`', '不存在“场景 EC”', '1B→1C', '本地与远端尚未同步', '低风险、可回滚']]);
 checks.push(['handoff identity gate rejects mis-sent commander prompt', `${read('00-第二代工作流总览.md')}\n${read('01-操作者操作手册.md')}\n${read('02-总指挥核心规则.md')}`, ['1C 是总指挥必经入口并自带最小可行性预检和身份硬门禁', '当前窗口不是总指挥，可能误发了场景 1C', '不得生成、覆盖、删除 `final-*`', '普通或专项任务即使收到 1C 提示词，也不得升级身份', '改用场景 1E/1F']]);
+checks.push(['handoff preparation does not require a successor', `${read('01-操作者操作手册.md')}\n${read('04-状态、目标变更与交接规范.md')}\n${read('交接阶段矩阵.md')}`, ['继任窗口、继任者身份和接收任务由操作者在后续交付阶段自行指定', '尚未指定继任者而全局阻断', '准备阶段不要求填写或核验继任者、接收窗口或候选任务 ID', '接收位置可访问、实际接手和复现由操作者指定接收方后', '候选任务 ID：不需要']]);
 checks.push(['handoff continuation and scoped automation', `${read('01-操作者操作手册.md')}\n${read('02-总指挥核心规则.md')}`, ['“继续”只有在上一轮明确给出可进入下一阶段且当前基线未漂移时才沿用', '只记录与本任务或项目有明确绑定证据的自动化', '不得扫描或列出账户级、其他项目或无绑定证据的自动化', '无；未扫描账户级任务']]);
 checks.push(['handoff baseline separates pinned snapshot, live epoch and adoption record', `${read('01-操作者操作手册.md')}\n${read('04-状态、目标变更与交接规范.md')}\n${read('总指挥轻量交接启动配置.md')}\n${read('交接阶段矩阵.md')}\n${read('07-总指挥交接记录模板.md')}`, ['候选 `rule_baseline` 快照', '公共规则源 `live_rule_epoch`', '项目登记采用记录', '`RULE_REBASE_PENDING`', '`NEWER_COMPATIBLE`', '`AFFECTED_RECHECK`', '`SUPERSEDED_BY_RULE_REBASE`', '不要求操作者选择旧/新版本']]);
-checks.push(['workflow enablement does not confuse rule source with project adoption', `${read('../工作流启用声明.md')}\n${fs.readFileSync(path.join(root, 'AGENTS.md'), 'utf8')}\n${read('规则刷新广播包.md')}\n${read('规则刷新接收回执模板.md')}`, ['RULE_SOURCE_STATUS', 'PROJECT_ADOPTION_RECORD', '项目登记旧指纹或待同步不否定规则刷新', 'RULE_ADOPTION_RECORD：SYNCED / SYNC_PENDING', '只有依赖控制面的动作标记 `UNKNOWN/BLOCKED`']]);
+checks.push(['workflow enablement does not confuse rule source with project adoption', `${read('../工作流启用声明.md')}\n${fs.readFileSync(path.join(root, 'AGENTS.md'), 'utf8')}\n${read('规则刷新广播包.md')}\n${read('规则刷新接收回执模板.md')}`, ['RULE_SOURCE_STATUS', 'PROJECT_ADOPTION_RECORD', '项目登记旧指纹或待同步不否定规则刷新', 'RULE_ADOPTION_RECORD：SYNCED/SYNC_PENDING', '只有依赖控制面的动作标记 `UNKNOWN/BLOCKED`']]);
 checks.push(['handoff verification is executable and layered', `${read('07-总指挥交接记录模板.md')}\n${read('01-操作者操作手册.md')}`, ['封条验证入口', '直接使用其中的完整命令', '`INPUT_REQUIRED`', '不得把调用缺参写成来源损坏']]);
-checks.push(['handoff candidate reply is human-first', `${read('01-操作者操作手册.md')}\n${read('04-状态、目标变更与交接规范.md')}\n${read('总指挥轻量交接启动配置.md')}\n${read('07-总指挥交接记录模板.md')}`, ['默认用四句人话', '真正阻断', '默认不展示机器字段', '只有操作者明确要求详细核验', '不得把 `NOT_RUN`、`GENERATED_NOT_DELIVERED`', '不阻止当前候选阶段，写入“补充限制”而不是“真正阻断”', '下列字段只供机器记录和异常定位']]);
+checks.push(['handoff candidate reply is human-first', `${read('01-操作者操作手册.md')}\n${read('04-状态、目标变更与交接规范.md')}\n${read('总指挥轻量交接启动配置.md')}\n${read('07-总指挥交接记录模板.md')}`, ['统一使用 02 规定的五项外壳', '真正阻断', '默认不展示机器字段', '只有操作者明确要求详细核验', '不得把 `NOT_RUN`、`GENERATED_NOT_DELIVERED`', '写入第 2 或第 3 项的人话说明', '下列字段只供机器记录和异常定位']]);
 checks.push(['handoff preflight is first gate and candidate is unique', `${read('04-状态、目标变更与交接规范.md')}\n${read('10-自动状态索引规范.md')}\n${read('06-复盘与优化规则.md')}`, ['把 `preflight_only` 当作第一道机器门', '固定 `fact_cutoff`', 'SUPERSEDED', '有限重试和退避', '当前唯一 active candidate', '附件与封条保持两阶段']]);
 checks.push(['handoff scoring separates control confidence from switch and acceptance states', `${read('04-状态、目标变更与交接规范.md')}\n${read('总指挥轻量交接启动配置.md')}`, ['控制面必要证据全部通过且没有真实控制面冲突或缺口时必须记为 `HIGH`', '候选阶段旧写者 `IDLE/UNKNOWN`', '运行/专业状态 `UNKNOWN/NOT_RUN/FAIL` 不得降低控制面评分', '“尚未正式切换”本身不是降分理由']]);
 checks.push(['goal handoff stops business execution and verifies available platform controls', read('01-操作者操作手册.md'), ['不得开始新的业务步骤', '平台恢复成功', '不能把该命令作为跨版本通用恢复方式', '确认平台已暂停', '暂停后才执行收口', '没有我的“恢复 Goal”或“从断点继续”指令及平台恢复证据，不得恢复']]);
@@ -162,8 +176,9 @@ const ordinaryManual = read('01-操作者操作手册.md');
 const ordinaryPrepare = ordinaryManual.split('### 场景 1E：')[1]?.split('### 场景 1F：')[0] || '';
 const ordinaryTakeover = ordinaryManual.split('### 场景 1F：')[1]?.split('### 场景 1G：')[0] || '';
 checks.push(['shared delivery contract has one named main entry and bounded links', ordinaryDelivery, ['唯一主快照', '任务名称', '交接快照', 'Handoff', '合法 slug 必须包含已核实任务名称', '可点击链接', '必读', '用途', '访问条件', '辅助文件', '不自动携带', '原记录的投影', '无待续任务', '材料可安全交付', '不等于接收方已接手', '只暂停依赖缺口的动作', '不增加', '受限资料', '重新联系旧窗口']]);
-checks.push(['ordinary sender copy block delivers the main file and next scene', ordinaryPrepare.split('```text')[1]?.split('```')[0] || '', ['唯一主快照', '任务名称', '可点击链接', '是否可以安全交接', '只把', '场景 1F', '阻断项', '最小解决动作']]);
+checks.push(['ordinary sender copy block delivers the main file and next scene', ordinaryPrepare.split('```text')[1]?.split('```')[0] || '', ['唯一主快照', '任务名称', '可点击链接', '准备阶段不要求继任者、接收窗口或候选任务 ID', '是否可以安全交接', '只转交主快照', '场景 1F', '阻断项', '最小解决动作']]);
 checks.push(['ordinary recipient copy block consumes bounded main entry without rotation tickets', ordinaryTakeover.split('```text')[1]?.split('```')[0] || '', ['唯一主快照', '明确用途', '必读链接', '不递归', '只暂停依赖缺口的动作', '不要求中央轮换票据', '不得继承旧窗口的远端写入']]);
+checks.push(['ordinary recipient ignores operator-assigned title during handoff', `${ordinaryTakeover}\n${read('04-状态、目标变更与交接规范.md')}`, ['不要读取或比较当前对话标题', '人工任务名称', '只是显示文字', '不能改变专项/普通任务身份', '不因此暂停', '不作为身份匹配、授权或交接成败依据', '平台实际任务 ID 只用于运行时定位和首次回执']]);
 checks.push(['manual provides one explicit stop-and-transfer input', read('01-操作者操作手册.md'), ['正常换任只发一次', '我已根据交接来源记录确认并停止旧总指挥的调度', '仅取得本次交接准备与提交权限', '完成回读前没有业务调度权', '不要求我另取唯一票据', '请保持旧总指挥停止接收和执行新任务']]);
 checks.push(['lightweight entry separates readiness from authority and hides internal preparation', read('总指挥轻量交接启动配置.md'), ['只表示材料通过', 'DIRECT_PREPARE_AVAILABLE', 'can_stop_old=true', '没有独立票据不称材料失败', '操作者只实际停旧并一次发送附件与1D', '不转交正常准备请求或票据']]);
 checks.push(['lightweight handoff reuses deterministic checks without weakening control gates', read('总指挥轻量交接启动配置.md'), ['先定位唯一CURRENT', 'HISTORY仅在来源冲突或必要恢复时定点展开', '同实例已完整读取', '新实例独立读必要正文并核权', '无变化不再先重复运行组合入口', '--summary', '仍执行完整核验并保留全部错误', '锁内前后复核及完成回读保持', '历史日志按原渲染版本核验']]);
@@ -173,11 +188,12 @@ checks.push(['workflow regression is wired into the real repository quality entr
 checks.push(['in-flight scope preserves strict defaults and live source separation', read('04-状态、目标变更与交接规范.md'), ['在途专项与交接保护范围', 'git-scoped-index-worktree-sha256-v2', 'ownership_source_ref', '候选不能临时扩大排除范围', '分别核验 Git 索引与工作树', '旧票据恢复只登记旧来源漂移', '旧封条、票据及恢复记录不改签', '交接保存可靠阶段观察']]);
 checks.push(['scope behavioral regression is part of repository quality', fs.readFileSync(path.join(root, '.github/scripts/Test-Repository.ps1'), 'utf8'), ["& node (Join-Path $PSScriptRoot 'Test-HandoffWorkspaceScope.mjs')"]]);
 checks.push(['handoff final applies only to current undelivered takeover', read('总指挥轻量交接启动配置.md'), ['本轮正在办理的切换/接管', '已完成但尚未向操作者最终交付', '已完成且已最终交付的交接仅是业务前置事实', '业务途中压缩恢复', '不得再次输出旧交接结论']]);
-checks.push(['handoff output defaults to human summary with optional technical template', read('总指挥轻量交接启动配置.md'), ['四句人话摘要是默认最终出口', '以下四标题技术模板仅在操作者明确要求技术详情或真实异常需要定位时使用']]);
-checks.push(['core entry uses scoped human final source', read('02-总指挥核心规则.md'), ['轻量启动配置第 8 节', '默认四句人话摘要', '普通业务压缩恢复不套用交接汇报']]);
-checks.push(['recovery entry does not close an already delivered takeover again', read('04-状态、目标变更与交接规范.md'), ['轻量启动配置第 8 节', '默认四句人话摘要', '已最终交付的交接不因中断恢复而重新收口']]);
+checks.push(['handoff output defaults to human summary with optional technical template', read('总指挥轻量交接启动配置.md'), ['统一使用 02 规定的五项外壳', '前四项人话是默认最终出口', '以下四标题技术模板仅在操作者明确要求技术详情或真实异常需要定位时使用']]);
+checks.push(['core entry uses scoped human final source', read('02-总指挥核心规则.md'), ['轻量启动配置第 8 节', '所有执行型场景默认使用同一套人话外壳', '普通业务压缩恢复不套用交接汇报']]);
+checks.push(['recovery entry does not close an already delivered takeover again', read('04-状态、目标变更与交接规范.md'), ['轻量启动配置第 8 节', '统一按五项人话外壳输出', '已最终交付的交接不因中断恢复而重新收口']]);
 checks.push(['cross-task final verifies current substance rather than a nonempty shell', read('09-自动化授权与风险分级.md'), ['当前请求—实际动作—证据—状态', '本事件的实质判断和剩余交付', '来源回信成功或已经采纳不能代替', '已完成且已交付的交接', '新来信插入原任务']]);
 checks.push(['current-request output rule rejects stale final conclusions', read('02-总指挥核心规则.md') + '\n' + read('09-自动化授权与风险分级.md'), ['当前请求的对象', '上一回合的 PRIMARY_OUTPUT、工具结果和未执行计划只能作为历史证据', 'OUTPUT_MISROUTED', '当前用户消息优先于迟到的工具结果']]);
+checks.push(['in-flight steering merges additions and reports scoped cancellations', read('02-总指挥核心规则.md'), ['在途“调整方向”输入的增量合并与局部取消门禁', '中途 steering 输入', '不会自动重写已经输出的内容', '不会替 AI 把原请求标记为完成', '增补 / 纠正 / 细化（默认）', '保留原有未完成项', '明确局部取消 / 替代', '`CANCELLED` 或 `SUPERSEDED`', '提问 / 状态询问', '回到原执行账继续', '无法判定', '原请求项 + 新增项—实际动作—证据—状态', '已取消，未执行', '不声称客户端已有宿主级拦截器']]);
 checks.push(['cross-task substantive reports preserve requirements and evidence', `${read('02-总指挥核心规则.md')}\n${read('09-自动化授权与风险分级.md')}`, ['跨任务实质汇报的信息保真门禁', '逐项映射', 'REPORT_INCOMPLETE', 'INPUT_REQUIRED', 'NOT_RUN', '证据入口', '下一行动方', '`part i/n`', '合理推断']]);
 checks.push(['visible cross-task receipt is required before continuation', `${read('02-总指挥核心规则.md')}\n${read('09-自动化授权与风险分级.md')}`, ['跨任务入站的操作者可见收件硬门禁', '下一次可以产生的操作者可见文本', 'operator_feedback_status', 'HOST_NO_VISIBLE_TURN/UNKNOWN', '不能声称已读取', '来源写明“无需回复”只免除向来源回传']]);
 checks.push(['phase closeout does not invent a new budget', read('02-总指挥核心规则.md'), ['阶段收口本身不自动产生新预算或新授权请求', '周期或预算到限', '范围/权限/风险发生变化', '明确停止条件命中', '新增高风险依赖']]);
@@ -404,7 +420,7 @@ const operatorManual = read('01-操作者操作手册.md');
 if (!coreRules.includes('### 用户可见输出契约') ||
     !coreRules.includes('均登记为本轮 `PRIMARY_OUTPUT`') ||
     !coreRules.includes('必须在面向操作者的主答复正文中直接呈现') ||
-    !coreRules.includes('若某项输出未完成、待确认或受阻，必须在主答复中直接标明状态、原因、影响和恢复条件') ||
+    !coreRules.includes('若某项输出未完成、待确认或受阻，必须在第 1—3 项直接标明状态、原因、影响和恢复条件') ||
     !operatorManual.includes('提示词中明文要求的结果必须直接出现在 AI 面向你的主答复里')) {
   console.error('FAIL: explicit prompt outputs must be delivered in the visible primary response');
   process.exit(1);
@@ -413,11 +429,12 @@ console.log('PASS: explicit prompt outputs have a visible primary-response gate'
 const workflowOverview = read('00-第二代工作流总览.md');
 const riskRules = read('09-自动化授权与风险分级.md');
 if (!coreRules.includes('对执行型指令（包括规则刷新、读取核验、修改、测试、交接、回执和外部动作）') ||
-    !coreRules.includes('结果`（成功 / 部分完成 / 失败 / 待确认 / 未执行 / 不适用 / 受阻之一）') ||
-    !coreRules.includes('下一步最推荐建议') ||
-    !workflowOverview.includes('所有执行型场景都先给操作者一段简短人话结果') ||
-    !operatorManual.includes('你可以先看主答复的三行') ||
-    !riskRules.includes('执行型动作的操作者主答复先写“结果｜执行效果或失败原因｜下一步最推荐建议”')) {
+    !coreRules.includes('1. 执行结果：成功 / 执行了一部分 / 失败 / 待确认 / 未执行 / 不适用 / 受阻') ||
+    !coreRules.includes('4. 下一步操作建议：只给最推荐的一条，并写明行动方') ||
+    !coreRules.includes('5. 执行细节：放验证依据、错误、恢复条件和场景要求的技术字段') ||
+    !workflowOverview.includes('所有执行型场景都先按 02 的统一五项外壳') ||
+    !operatorManual.includes('你可以先看主答复的前四项') ||
+    !riskRules.includes('执行型动作的操作者主答复统一按五项顺序输出')) {
   console.error('FAIL: execution-oriented scenes must lead with a human result summary');
   process.exit(1);
 }
@@ -523,3 +540,34 @@ if (syncFixture.status !== 0) {
   process.exit(1);
 }
 console.log(syncFixture.stdout.trim());
+
+// The steering fixture is a small executable contract for the three regression
+// cases: additive steering, scoped cancellation, and a question that must
+// return to the original queue. It does not claim to intercept a live client.
+const applySteering = (ledger, event) => {
+  const next = ledger.map(item => ({ ...item }));
+  if (event.kind === 'ADD') next.push({ id: event.id, status: 'OPEN' });
+  if (event.kind === 'CANCEL') {
+    const item = next.find(candidate => candidate.id === event.id);
+    if (!item) throw new Error(`unknown cancellation target: ${event.id}`);
+    item.status = 'CANCELLED';
+  }
+  if (event.kind === 'QUERY') return next;
+  return next;
+};
+const additive = applySteering([{ id: 'A', status: 'OPEN' }, { id: 'B', status: 'OPEN' }], { kind: 'ADD', id: 'C' });
+if (additive.map(item => `${item.id}:${item.status}`).join(',') !== 'A:OPEN,B:OPEN,C:OPEN') {
+  console.error('FAIL: additive steering replaced or lost an original request item');
+  process.exit(1);
+}
+const cancellation = applySteering([{ id: 'A', status: 'OPEN' }, { id: 'B', status: 'OPEN' }], { kind: 'CANCEL', id: 'B' });
+if (cancellation.map(item => `${item.id}:${item.status}`).join(',') !== 'A:OPEN,B:CANCELLED') {
+  console.error('FAIL: scoped cancellation changed an unrelated request item');
+  process.exit(1);
+}
+const query = applySteering([{ id: 'A', status: 'OPEN' }, { id: 'B', status: 'OPEN' }], { kind: 'QUERY' });
+if (query.map(item => `${item.id}:${item.status}`).join(',') !== 'A:OPEN,B:OPEN') {
+  console.error('FAIL: a status question altered the original request queue');
+  process.exit(1);
+}
+console.log('Active-request steering fixtures: PASS (additive, scoped cancellation, query-resume)');

@@ -171,6 +171,40 @@ check('new CURRENT retires preparation fields without inheriting loading or busi
     assert.match(body.split('<!-- HISTORY:BEGIN -->')[1], /ACTIVE_FROZEN_NOT_STOPPED/);
   }
 });
+check('new CURRENT keeps source-owned fields and marks retained queue projections', () => {
+  const f = fixture(false, {}, false, '# 当前交接准备\n状态：ACTIVE_FROZEN_NOT_STOPPED；MATERIAL_PREPARED\n规则加载记录：old-rule-loading.json\n当前权限：old-scope\n切换状态：MATERIAL_PREPARED\n当前唯一下一动作：return-to-old-writer\n当前调度阻断：old-blocker\n| 稳定 ID | 状态 |\n|---|---|\n| old | pending |\n');
+  assert.equal(takeoverHandoff(f).status, 'COMPLETED');
+  const source = f.material.sources.status_index;
+  const body = fs.readFileSync(path.join(f.sourceRoot, source.path_ref), 'utf8');
+  const current = body.split('<!-- CURRENT:BEGIN -->')[1].split('<!-- CURRENT:END -->')[0];
+  assert.match(current, /来源规则加载记录：old-rule-loading\.json/);
+  assert.match(current, /来源权限：old-scope/);
+  assert.match(current, /来源切换状态：MATERIAL_PREPARED/);
+  assert.match(current, /来源唯一下一动作：return-to-old-writer/);
+  assert.match(current, /来源调度阻断：old-blocker/);
+  assert.match(current, /来源当前内容：以下未被重命名的队列表格和业务字段保留为来源历史投影/);
+  assert.match(current, /\| 稳定 ID \| 状态 \|/);
+  assert.match(current, /状态：TAKEOVER_COMPLETED/);
+});
+check('all four transactional CURRENT targets keep one semantic identity', () => {
+  const f = fixture(false, {}, true); assert.equal(takeoverHandoff(f).status, 'COMPLETED');
+  for (const name of ['status_index', 'central_work_items', 'current_view', 'central_entry']) {
+    const source = f.material.sources[name];
+    const current = fs.readFileSync(path.join(f.sourceRoot, source.path_ref), 'utf8').split('<!-- CURRENT:BEGIN -->')[1].split('<!-- CURRENT:END -->')[0];
+    if (name === 'status_index') {
+      assert.match(current, /CONTROL_IDENTITY: \{"generation":2,"writer_id":"SYNTHETIC-NEW","platform_task_id":"11111111-1111-4111-8111-111111111111"\}/);
+    } else {
+      assert.match(current, /writer_id: SYNTHETIC-NEW/);
+      assert.match(current, /generation=2/);
+      assert.match(current, /platform_task_id: 11111111-1111-4111-8111-111111111111/);
+    }
+    if (name !== 'status_index') {
+      assert.match(current, /当前唯一中央写者：SYNTHETIC-NEW|writer_id: SYNTHETIC-NEW/);
+      assert.match(current, /当前总指挥世代：2|generation=2/);
+      assert.match(current, /当前任务 ID：11111111-1111-4111-8111-111111111111|platform_task_id: 11111111-1111-4111-8111-111111111111/);
+    }
+  }
+});
 // Frozen pre-version fixture bytes, independent of the production renderer.
 function legacyJournal(f) {
   prepareTransition(f.sealDirectory, { ...f, nextGeneration: 2, nextWriterId: recipient.writerId });
@@ -207,10 +241,10 @@ check('unversioned historical partial journal rolls back exact bytes and keeps s
   assert.equal(rollbackTakeover(f).status, 'ROLLED_BACK_STOPPED');
   for (const item of journal.plan) assert.equal(hash(fs.readFileSync(path.join(f.sourceRoot, item.path_ref))), item.before_sha256);
 });
-for (const version of [1, 0, 3, '2', null]) check(`changed CURRENT renderer version ${version} is rejected before writes`, () => {
+for (const version of [1, 0, 4, '2', null]) check(`changed CURRENT renderer version ${version} is rejected before writes`, () => {
   const f = fixture(); assert.throws(() => takeoverHandoff({ ...f, fault: stage => { if (stage === 'after-journal') throw new Error('interrupt'); } }));
   const journalPath = controlPaths(f.material, f).journal, journal = JSON.parse(fs.readFileSync(journalPath));
-  assert.equal(journal.current_render_version, 2); journal.current_render_version = version;
+  assert.equal(journal.current_render_version, 3); journal.current_render_version = version;
   fs.writeFileSync(journalPath, JSON.stringify(journal));
   assert.throws(() => recoverTakeover(f), /render version|target bytes changed/);
   for (const item of journal.plan) assert.equal(hash(fs.readFileSync(path.join(f.sourceRoot, item.path_ref))), item.before_sha256);

@@ -85,10 +85,15 @@ export function captureRuleRefresh(ruleRoot = defaultRoot, { mode = 'local', exp
   if (expected && snapshotHash !== expected.toLowerCase()) fail('SOURCE_CHANGED', 'Current saved snapshot differs from the text baseline');
   const synchronized = versionConsistent && rules.every(item => item.matches_manifest);
   if (mode === 'pinned' && !synchronized) fail('MANIFEST_MISMATCH', 'Pinned verification requires synchronized versions and manifest hashes');
+  const readingPlan = captures.filter(item => !item.path_ref.endsWith('.mjs')).map(item => ({
+    path_ref: item.path_ref, file_sha256: item.sha256,
+    total: Array.from(item.bytes.toString('utf8')).length, offset_unit: 'unicode_code_point'
+  }));
   return {
     report: { result: 'PASS', mode, declared_version: manifest.rule_version, manifest_synchronized: synchronized,
       manifest_sha256: manifestHash, snapshot_sha256: snapshotHash, rules,
-      text_reading: 'NOT_ATTESTED', editor_buffers: 'NOT_OBSERVED' },
+      text_reading: 'NOT_ATTESTED', editor_buffers: 'NOT_OBSERVED', reading_plan: readingPlan,
+      implementation_on_demand: captures.filter(item => item.path_ref.endsWith('.mjs')).map(item => item.path_ref) },
     texts: Object.fromEntries(captures.map(item => [item.path_ref, item.bytes.toString('utf8')]))
   };
 }

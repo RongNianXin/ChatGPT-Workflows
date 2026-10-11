@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "document_ref": "01-操作者操作手册.md",
-  "manual_sha256": "1029af332434d4c492d4c61166d3e1d213143ea634460dc69756e0c0f3a675a5",
+  "manual_sha256": "d75c24a430f834ccbd2b0750f415dea313c76fb451e08ee045e67586ae70991a",
   "sections": [
     {
       "anchor": null,
@@ -180,7 +180,9 @@
     },
     {
       "anchor": "scenario-commander-takeover",
-      "references": {},
+      "references": {
+        "scenario-commander-takeover": "1D"
+      },
       "history": []
     },
     {
