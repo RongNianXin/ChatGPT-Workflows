@@ -243,6 +243,17 @@ export function validateSeal(seal, { checkDigest = true, requireExtensions = fal
   return errors;
 }
 
+// Validate a draft with the same extension requirements used by appendSeal.
+// Drafts are not numbered or digested until append, so use append-safe
+// placeholders for those two fields while preserving every other value.
+export function validateSealDraftForAppend(draft) {
+  const candidate = structuredClone(draft);
+  if (!Number.isInteger(candidate.seal_sequence) || candidate.seal_sequence < 1) candidate.seal_sequence = 1;
+  if (candidate.previous_seal_digest === undefined) candidate.previous_seal_digest = null;
+  candidate.seal_digest = sealDigest(candidate);
+  return validateSeal(candidate, { requireExtensions: true });
+}
+
 function sealFiles(dir) {
   return fs.readdirSync(dir).filter(name => /^handoff-state\.\d+\.[0-9a-f]{64}\.json$/.test(name)).sort((a, b) => Number(a.split('.')[1]) - Number(b.split('.')[1]));
 }

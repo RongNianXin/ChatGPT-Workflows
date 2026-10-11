@@ -11,11 +11,11 @@
   "rules": [
     {
       "path_ref": ".github/scripts/HandoffSeal.mjs",
-      "sha256": "21173E81998AEC894D228CDB3210E52C0CEA23B186CE2C6FD01A9B1B512459F5"
+      "sha256": "29D5D0104524808C1C126EDF2DB176A0E257B2E8F71A17C5393CBFE7B0BBC09B"
     },
     {
       "path_ref": ".github/scripts/Prepare-Handoff.mjs",
-      "sha256": "19B430D5A478BF8B10E03B7B3A7A6710BD36D4E5CA5532DA96A9E01BF8730F32"
+      "sha256": "01FBCDE80870D4B602A3B1066C84E8B2BA74A37AFB4A10FBEFB074B7C5D8DA4E"
     },
     {
       "path_ref": ".github/scripts/Inspect-WorkspaceTracking.mjs",
@@ -43,7 +43,7 @@
     },
     {
       "path_ref": "04-状态、目标变更与交接规范.md",
-      "sha256": "2E3295BDC7220A82E2D9BD332431E8CA12CB94747BE4EE50475799C2949324D4"
+      "sha256": "AD4162CE82FB4D32404DCCEB53E4F7405F2F16CDA7C5C688B0AE10BCA12DB656"
     },
     {
       "path_ref": "05-模型选择与资源策略.md",

@@ -5,7 +5,7 @@ import crypto from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import { SCOPED_WORKSPACE_ALGORITHM, readScopedWorkspaceBaseline, validateScopedWorkspaceSources } from './HandoffWorkspaceScope.mjs';
 import { fileURLToPath } from 'node:url';
-import { appendSeal, sealDigest, validateControlPlaneRegistry, verifyChain, verifyControlIdentity } from './HandoffSeal.mjs';
+import { appendSeal, sealDigest, validateControlPlaneRegistry, validateSealDraftForAppend, verifyChain, verifyControlIdentity } from './HandoffSeal.mjs';
 import { assertPrivateControlStorage } from './HandoffControl.mjs';
 
 export const REQUIRED_RULES = [
@@ -495,6 +495,10 @@ export function prepareFormalHandoff(configPath) {
   const snapshotId = path.basename(finalPath, '.md');
   const templateTokens = ['{{SNAPSHOT_ID}}', '{{SEAL_DIGEST}}', '{{FACT_CUTOFF}}', '{{EVENT_ID}}'];
   for (const token of templateTokens) if (!rendered.includes(token)) throw new Error(`snapshot template is missing placeholder: ${token}`);
+  const verificationCommand = `node "${path.join(scriptDir, 'HandoffSeal.mjs')}" verify "${realSealDirectory}" "${sourceRoot}"${externalControlPlaneRoot ? ` "--external-control-plane-root=${externalControlPlaneRoot}"` : ''} --summary`;
+  if (!rendered.includes('{{VERIFICATION_COMMAND}}') && !verificationCommandPattern.test(rendered)) {
+    throw new Error('snapshot template is missing verification command placeholder or entry');
+  }
   const identity = verifyControlIdentity(draft, { sourceRoot, externalControlPlaneRoot });
   if (identity.status !== 'PASS') throw new Error(`control identity preflight failed: ${identity.errors.join('; ')}`);
   assertPrivateControlStorage(draft, { sourceRoot, externalControlPlaneRoot });
@@ -533,6 +537,8 @@ export function prepareFormalHandoff(configPath) {
         }
     }
   }
+  const draftErrors = validateSealDraftForAppend(draft);
+  if (draftErrors.length) throw new Error(`draft preflight validation failed: ${draftErrors.join('; ')}`);
   if (preflightOnly) return {
     status: draft.switch_status === 'READY_WITH_RESTRICTIONS' ? 'READY_WITH_RESTRICTIONS' : 'READY',
     mode: 'PREFLIGHT_ONLY',
@@ -582,10 +588,6 @@ export function prepareFormalHandoff(configPath) {
     '{{FACT_CUTOFF}}': seal.fact_cutoff,
     '{{EVENT_ID}}': seal.event_id
   };
-  const verificationCommand = `node "${path.join(scriptDir, 'HandoffSeal.mjs')}" verify "${realSealDirectory}" "${sourceRoot}"${externalControlPlaneRoot ? ` "--external-control-plane-root=${externalControlPlaneRoot}"` : ''} --summary`;
-  if (!rendered.includes('{{VERIFICATION_COMMAND}}') && !verificationCommandPattern.test(rendered)) {
-    throw new Error('snapshot template is missing verification command placeholder or entry');
-  }
   replacements['{{VERIFICATION_COMMAND}}'] = verificationCommand;
   for (const [token, value] of Object.entries(replacements)) {
     if (token === '{{VERIFICATION_COMMAND}}' && !rendered.includes(token)) continue;

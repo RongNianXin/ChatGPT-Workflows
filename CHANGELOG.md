@@ -2250,3 +2250,10 @@ The roadmap items above are candidates only. Before every commit, update this ch
 - 默认回执压缩为四行人话，manifest、哈希、状态码、行动方和控制面建议留在既有记录；新增刷新契约断言。仅修改本地规则、模板和检查，未执行远端写入、跨窗口联络或来源项目动作。
 
 English: Scene 0A now completes adoption-record synchronization within the refresh when the dedicated field, path and local write permission are verified. Missing conditions remain internal `SYNC_PENDING` and no longer become an operator maintenance task. The entry is role-neutral and does not require a commander name or task ID; identifiers never grant authority. Default receipts are four human-readable lines, with manifest, hashes and control-plane details kept in the existing record. Local rules, templates and contract checks only; no remote, cross-window or source-project actions.
+## 2026-10-11.9：交接预检与模板写入前门禁
+
+- 预检现在复用正式追加的扩展字段校验，缺少来源 owner、规则基线、工作区扩展字段等问题会在任何封条写入前报告。
+- 验证命令占位符和模板静态结构在追加前检查，避免模板错误留下未交付封条。
+- 增加缺 owner 与缺验证命令的回归测试；保留现有同事件重试和封条回读语义。
+
+English: Handoff preflight now reuses append-time extension validation, and static template checks run before any seal is appended. Regression coverage verifies missing source owners and missing verification commands leave no seal behind.

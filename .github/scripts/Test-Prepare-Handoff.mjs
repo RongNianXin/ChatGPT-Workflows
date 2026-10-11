@@ -213,6 +213,18 @@ try {
     assert.equal(fs.existsSync(preflight.finalPath), false);
     assert.equal(fs.existsSync(path.join(sourceRoot, '.handoff-private', 'case-2')), false);
   });
+  const invalidOwner = prepareCase(20, 'preflight-invalid-owner');
+  const invalidOwnerConfig = readJsonForTest(invalidOwner.configPath);
+  invalidOwnerConfig.preflight_only = true;
+  const invalidOwnerDraft = readJsonForTest(invalidOwnerConfig.draft_path);
+  delete invalidOwnerDraft.sources.current_view.owner;
+  writeJson(invalidOwnerConfig.draft_path, invalidOwnerDraft);
+  writeJson(invalidOwner.configPath, invalidOwnerConfig);
+  check('preflight rejects append-only source shape errors before any seal write', () => {
+    assert.throws(() => prepareFormalHandoff(invalidOwner.configPath), /draft preflight validation failed:.*invalid source: current_view/);
+    const sealDir = path.join(sourceRoot, '.handoff-private', 'case-20');
+    assert.equal(fs.existsSync(sealDir) ? fs.readdirSync(sealDir).filter(name => name.startsWith('handoff-state.')).length : 0, 0);
+  });
   check('private storage failure is caught by preflight and formal generation before seals', () => {
     const ignored = fs.readFileSync(path.join(sourceRoot, '.gitignore'));
     fs.writeFileSync(path.join(sourceRoot, '.gitignore'), '.handoff-private/\n');
@@ -241,6 +253,18 @@ try {
     assert.equal(fs.existsSync(badTemplate.receiptPath), false);
     const sealsAfterTemplateFailure = fs.existsSync(badSealDir) ? fs.readdirSync(badSealDir).length : 0;
     assert.equal(sealsAfterTemplateFailure, sealsBeforeTemplateFailure);
+  });
+
+  const missingVerification = prepareCase(21, 'formal-event-21');
+  const missingVerificationConfig = readJsonForTest(missingVerification.configPath);
+  const missingVerificationTemplate = path.join(path.dirname(missingVerification.configPath), 'missing-verification-template.md');
+  fs.writeFileSync(missingVerificationTemplate, '# {{SNAPSHOT_ID}}\nseal={{SEAL_DIGEST}}\ncutoff={{FACT_CUTOFF}}\nevent={{EVENT_ID}}\n', 'utf8');
+  missingVerificationConfig.snapshot_template_path = missingVerificationTemplate;
+  writeJson(missingVerification.configPath, missingVerificationConfig);
+  const missingVerificationSealDir = path.resolve(sourceRoot, '.handoff-private', 'case-21');
+  check('missing verification command is rejected before appending a seal', () => {
+    assert.throws(() => prepareFormalHandoff(missingVerification.configPath), /missing verification command placeholder or entry/);
+    assert.equal(fs.existsSync(missingVerificationSealDir) ? fs.readdirSync(missingVerificationSealDir).filter(name => name.startsWith('handoff-state.')).length : 0, 0);
   });
 
   const retryable = prepareCase(12, 'formal-event-12');
