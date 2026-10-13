@@ -31,7 +31,33 @@ const REFRESH_REQUIRED_RULES = [
   '引用的外部工具/外部工具目录.md',
   '引用的外部工具/外部工具自动对接规范.md'
 ];
+const reaRoot = path.join(root, '引用的外部工具', 'rea');
+const reaReadme = fs.readFileSync(path.join(reaRoot, 'README.md'), 'utf8');
+const reaGuide = fs.readFileSync(path.join(reaRoot, '调用指南.md'), 'utf8');
+const reaMaintenance = fs.readFileSync(path.join(reaRoot, '安装与维护记录.md'), 'utf8');
+const toolRegistry = fs.readFileSync(path.join(root, '引用的外部工具', '外部工具目录.md'), 'utf8');
+const reaRows = toolRegistry.split('\n').filter(line => /^\| `EXT-004` \|/.test(line));
+if (reaRows.length !== 1 || !reaRows[0].includes('(rea/README.md)') ||
+    !reaRows[0].includes('(rea/安装与维护记录.md)')) {
+  throw new Error('REA must have one registry row with its unique README and maintenance entry');
+}
 const checks = [
+  ['REA is discoverable without claiming installation or adoption', `${reaRows[0]}\n${reaReadme}`, ['Reverse Engineer Anything', 'morluto/rea', 'rea-agents', 'DOCUMENTED_ONLY', 'NOT_INSTALLED', '已加载新版工具目录', '不需要操作者记编号或命令', '本次没有广播或远端发布']],
+  ['REA design routing keeps independent delivery and explicit acceptance separate', `${reaReadme}\n${reaGuide}`, ['先研究同类游戏的公开资料', '未安装 REA 不阻断不依赖它的策划', '不以替代方法宣称已使用', 'SKIPPED / NOT_NEEDED', '不把估计数值写成原作真实参数', '不声称取得原作内部设计书']],
+  ['REA retains execution data and recovery boundaries', reaGuide, ['运行游戏、附加进程、浏览器交互、抓包、设备操作、安装、外发和远端写入分别核权', '不是安全沙箱', '不可信输入', '发送给模型服务', 'cleanup_incomplete', '客户端超时不等于引擎停止', '无 Goal 不自动创建']],
+  ['REA maintenance does not promote static evidence to live readiness', reaMaintenance, ['不解码 IL2CPP 元数据', '实验性 P0', '不应用 REA 配置事务', 'npx 仍可能下载、缓存并执行软件包', 'NOT_VERIFIED', '真实工具调用', '本次不把存在测试断言', '不能由本记录自行广播']],
+  ['tool discovery accepts goals without requiring an explicit tool name', `${fs.readFileSync(path.join(root, '引用的外部工具', 'README.md'), 'utf8')}\n${toolRegistry}`, ['按工具名称或任务目标识别候选后', '不以发现候选代替安装、权限或实际调用核验', 'rea/README.md']],
+  ['tool directory is a shared goal-first summary rather than a second manual', toolRegistry, ['# 外部工具通讯录', '人和 AI 共用', '用途标签', '适用场景 / 基本用法', '登记快照', '只读选中工具的 README', '不另建第二份名单', '没有对口项时', '视频动作拆解通常不选它', '具体技能主动调用限制优先']],
+  ['tool overview routes to the unique list without duplicating tools', fs.readFileSync(path.join(root, '引用的外部工具', 'README.md'), 'utf8'), ['先看[外部工具通讯录]', '人和 AI 共用这一份名单', '本导览不重复列举工具', '资源随用随取', '缺少安装等权限时只暂停依赖动作']],
+  ['on-demand acquisition preserves runnable dependencies and existing boundaries', fs.readFileSync(path.join(root, '引用的外部工具', '外部工具自动对接规范.md'), 'utf8'), ['轻量通讯录与随用随取', '不先逐个翻阅所有工具', '基础能力足够的简单任务', '普通按需调用不改变0A规则刷新或正式交接的必要读取范围', '最小可运行资源', '依赖要求完整包', '不直接落进公开文档子目录', '收益未实测不报告已节省', '仓库内实物须已忽略且未跟踪', '不能靠新增忽略规则放行已跟踪的软件包', '仓库外另核精确目标路径写入许可', '不要求命中本仓库 `.gitignore`']],
+  ['new tools supply directory summaries and correct copied parent links', fs.readFileSync(path.join(root, '引用的外部工具', '外部工具接入模板.md'), 'utf8'), ['通讯录用途标签', '通讯录适用场景 / 基本用法', '../外部工具目录.md', '../外部工具自动对接规范.md', '不默认完整克隆、下载或安装']],
+  ['generic external-tool wording resolves the directory, not an arbitrary tool', `${toolRegistry}\n${fs.readFileSync(path.join(root, '引用的外部工具', '外部工具自动对接规范.md'), 'utf8')}`, ['“外部工具”“工具通讯录”“外部工具通讯录”“外部工具目录”', '不指定某个具体工具', '不要求补全名称', '仅要求查看或讨论时只做选择与说明', '不因泛称获得执行、安装或配置权限']],
+  ['goal-only tasks select tools without forcing repeated reading or new permissions', fs.readFileSync(path.join(root, '引用的外部工具', '外部工具自动对接规范.md'), 'utf8'), ['完全未提工具名时仍走第1.1节', '不以操作者提醒作为启动条件', '未提工具名时仍按目标判断', '确需外部增强时查简短通讯录，不等待提醒', '当前目标满足具体工具的有效触发依据、能力适配且所需权限齐备时，实际读取并使用', '同任务优先复用有效选择与已读证据', '明确要求主动调用的工具仍须相应请求', '不创建后台检索进程', '真实窗口行为、读取成本及质量收益需另有观察证据']],
+  ['operator entry removes the second-command requirement without claiming universal adoption', fs.readFileSync(path.join(root, '引用的外部工具', 'README.md'), 'utf8'), ['只记得“外部工具”也可以', '完全不提工具名', '不要求操作者再发一次调用指令', '尚未加载新版的窗口不保证自动采用']],
+  ['copy delivery is bound to the checked edition without mandatory per-answer storage', read('docs/DOCUMENT_REVIEW_STANDARD.md'), ['可回读的检查版', '聊天复制块直接取自该版', '采用待确认', '普通短答不强制逐条落盘或计算哈希', '远端写入仍分别核权']],
+  ['language and TeX checks retain their actual acceptance limits', read('docs/DOCUMENT_REVIEW_STANDARD.md'), ['最终实际交付文本', '专业词和误报需人工复核', '目标引擎、模板、编码和章节结构', '编译成功均不等于文字无错', '不把合法 Unicode 一律判错']],
+  ['missing origins do not prove attribution', read('docs/DOCUMENT_REVIEW_STANDARD.md'), ['其他文件无错不能证明聊天必然有错', '不能据此确定操作者或 AI 的责任', '只报告已核范围和待确认项', '不把推断或自责当作原因证据']],
+  ['shared document validation follows effective write scope and concurrency', `${read('docs/DOCUMENT_REVIEW_STANDARD.md')}\n${read('02-总指挥核心规则.md')}`, ['实际写入边界、协作并发风险和拟声明范围', '整个实际写入范围', '写前重核目标最新内容或版本', '不声称已消除并发风险', '文件数量相同不能证明其他内容未变', '不盲目回滚他人新内容']],
   ['0A separates full integrity and rule reading from unused implementation text', read('10-自动状态索引规范.md'), ['RULE_TEXT_AND_IMPLEMENTATION_ON_DEMAND_V1', '全部文件仍核可读性', 'TEXT_DEFERRED', '安全依赖', '旧完整模式继续有效', '不得把延后阅读写成“源码已读”']],
   ['refresh and operator entries share the layered contract', read('01-操作者操作手册.md') + read('规则刷新广播包.md'), ['RULE_TEXT_AND_IMPLEMENTATION_ON_DEMAND_V1', 'TEXT_DEFERRED', '全部清单条目仍核摘要及稳定性', '分段补读与停止条件不变']],
   ['takeover recovery retains private storage and versioned exact write scope', read('04-状态、目标变更与交接规范.md'), ['同一只读存储检查', 'workspace_projection.version=2', 'workspace_projection_sha256', '恢复拒绝日志证据篡改、删除或无锚点投影', '只采用无投影的旧严格算法', '不得降级删字段', '不提供任意跳检/排除参数', '公共工具维护完成不表示来源项目迁移完成']],
@@ -63,7 +89,9 @@ const checks = [
   ['state index separates logical phase from seal phase', read('10-自动状态索引规范.md'), ['逻辑交接阶段', '封条 `handoff_phase`', 'RECEIVED_VERIFIED']],
   ['schema v3 requires source root_ref', fs.readFileSync(path.join(workflow, 'templates', 'HANDOFF_STATE.schema.json'), 'utf8'), ['sourceV3', '"root_ref"']]
 ];
+checks.push(['one-time event outputs bind to their triggering round', `${read('02-总指挥核心规则.md')}\n${read('01-操作者操作手册.md')}`, ['一次性事件限定输出只在该轮生效', '只在触发事件实际发生的那一轮输出一次', '后续业务轮、维护轮、规则修改轮或上下文压缩恢复中', '该提醒只在触发正式完成的那一轮输出一次，后续业务轮、维护轮或上下文压缩不重复']]);
 checks.push(['local-to-remote route keeps release separate', `${read('01-操作者操作手册.md')}\n${read('02-总指挥核心规则.md')}`, ['场景 4K：将本地最新成果同步到远端', '不必先决定是否提 PR', '同步源码不会自动生成下载页中的新 Release', '精确纳入/排除范围']]);
+checks.push(['local-to-remote sync checks public entry freshness without adding publication permission', read('02-总指挥核心规则.md').split('### 场景 4K：本地最新成果同步到远端')[1]?.split('### ')[0] || '', ['每次同步都检查首页与展示入口是否需要刷新', '中英文 README、SHOWCASE', '不为每次 Push 机械改页', '未实施方案', '本条不产生下一次远端写入、素材公开或发布权限']]);
 checks.push(['PR scope and local sync follow project rules', `${read('01-操作者操作手册.md')}\n${read('02-总指挥核心规则.md')}`, ['操作者不必先划定可验收范围', '个人项目可以建议直接 Push', '团队项目必须先遵守团队规则', '多个功能不自动合成一个 PR', '不能绕过隐私、验证和远端最终确认']]);
 checks.push(['handoff identity conflict has migration split', read('项目配置迁移清单.md'), ['CONTROL_PLANE_MIGRATION_REQUIRED', 'CONTROL_IDENTITY_CONFLICT', '操作者称呼或确认本身不能替代', '不覆盖旧记录、不生成新封条']]);
 checks.push(['platform thread failure freezes handoff writes', read('04-状态、目标变更与交接规范.md'), ['thread not found', '暂停控制面写入、封条追加和正式切换', '不能据此证明或否定', '重新读取状态索引']]);
@@ -181,6 +209,8 @@ checks.push(['ordinary sender copy block delivers the main file and next scene',
 checks.push(['ordinary recipient copy block consumes bounded main entry without rotation tickets', ordinaryTakeover.split('```text')[1]?.split('```')[0] || '', ['唯一主快照', '明确用途', '必读链接', '不递归', '只暂停依赖缺口的动作', '不要求中央轮换票据', '不得继承旧窗口的远端写入']]);
 checks.push(['ordinary recipient ignores operator-assigned title during handoff', `${ordinaryTakeover}\n${read('04-状态、目标变更与交接规范.md')}`, ['不要读取或比较当前对话标题', '人工任务名称', '只是显示文字', '不能改变专项/普通任务身份', '不因此暂停', '不作为身份匹配、授权或交接成败依据', '平台实际任务 ID 只用于运行时定位和首次回执']]);
 checks.push(['manual provides one explicit stop-and-transfer input', read('01-操作者操作手册.md'), ['正常换任只发一次', '我已根据交接来源记录确认并停止旧总指挥的调度', '仅取得本次交接准备与提交权限', '完成回读前没有业务调度权', '不要求我另取唯一票据', '请保持旧总指挥停止接收和执行新任务']]);
+checks.push(['takeover mints a fresh identity and never reuses outgoing writer or platform id', `${read('01-操作者操作手册.md')}\n${read('04-状态、目标变更与交接规范.md')}\n${read('总指挥轻量交接启动配置.md')}`, ['附件来源世代必须等于中央当前世代', '三者都禁止沿用附件或中央 CURRENT 中的旧值', '中央登记必须铸造全新身份', '禁止复用交接包或中央 CURRENT 中的旧值', 'RESOLVED_FROM_CURRENT_CONTROL_PLANE', '中央回读必须显示新世代、新写者和本窗口平台任务 ID', '仍指向旧窗口身份时只报告具体阻断', '新身份登记：<新世代、新 writer_id、本窗口平台任务 ID；三者均不得沿用旧值>', '中央仍指向旧窗口身份时只报受阻，不得显示完成']]);
+checks.push(['compaction resumes from durable state without full re-read or identity re-verification', `${read('02-总指挥核心规则.md')}\n${read('10-自动状态索引规范.md')}`, ['上下文压缩后的恢复与增量读取', '不重复全文读取，也不重复确认身份', '重核范围限于受影响部分', '不逐文件全文重读', '不为修复一个缺陷引入新缺陷', '不损害其他功能']]);
 checks.push(['lightweight entry separates readiness from authority and hides internal preparation', read('总指挥轻量交接启动配置.md'), ['只表示材料通过', 'DIRECT_PREPARE_AVAILABLE', 'can_stop_old=true', '没有独立票据不称材料失败', '操作者只实际停旧并一次发送附件与1D', '不转交正常准备请求或票据']]);
 checks.push(['lightweight handoff reuses deterministic checks without weakening control gates', read('总指挥轻量交接启动配置.md'), ['先定位唯一CURRENT', 'HISTORY仅在来源冲突或必要恢复时定点展开', '同实例已完整读取', '新实例独立读必要正文并核权', '无变化不再先重复运行组合入口', '--summary', '仍执行完整核验并保留全部错误', '锁内前后复核及完成回读保持', '历史日志按原渲染版本核验']]);
 checks.push(['shared role loading reuses only verified evidence from the same instance', fs.readFileSync(path.join(root, '引用的外部工具/外部工具自动对接规范.md'), 'utf8'), ['新实例独立读取所需角色正文', '同实例已有可核的完整读取记录', '实物、适用职责和依赖未变', '核目标、版本、实物、当前权限及原消费', '不继承其他实例“已读”']]);
@@ -440,6 +470,10 @@ if (!coreRules.includes('对执行型指令（包括规则刷新、读取核验�
   process.exit(1);
 }
 console.log('PASS: execution-oriented scenes have a human result-summary gate');
+for (const needle of ['先说明它为什么与当前目标有关', '是否只用假数据', '不等于正在交接对话', '测试目录选错不等于产品功能失败', '不能把本地检查要求说成远端平台的新要求', '请求授权时只列真实权限差额', '这不放宽仓库外写入、隐私、远端和其他安全门禁']) {
+  if (!coreRules.includes(needle)) throw new Error(`Missing goal-bound validation explanation: ${needle}`);
+}
+console.log('PASS: internal validation explanations distinguish synthetic tests from real actions (document contract, not live behavior)');
 const diagnosisEntry = coreRules.match(/^9\. 命中“输出异常的链路排查触发门禁”时，(.+)$/m)?.[1];
 const diagnosisMethod = coreRules.match(/^1\. 输出质量不符合预期时，(.+)$/m)?.[1];
 const diagnosisCollaboration = coreRules.match(/^5\. 操作者可以只用日常语言描述现象或“不确定”。(.+)$/m)?.[1];
@@ -465,12 +499,14 @@ if (!bilateralRoute?.startsWith('进入 4I 方案') ||
 }
 console.log('PASS: bilateral integration routes to 4I with legacy compatibility');
 const modelSuggestions = read('01-操作者操作手册.md').split(/\r?\n/).filter(line => line.includes('**模型建议：**'));
-const unversionedSuggestions = modelSuggestions.filter(line => /\b(?:Sol|Luna|Astra|Terra)\b/.test(line.replace(/GPT-\d+(?:\.\d+)? (?:Sol|Luna|Astra|Terra)\b/g, '')));
-if (modelSuggestions.length < 40 || unversionedSuggestions.length) {
-  console.error(`FAIL: model suggestions need explicit versions (${modelSuggestions.length} found, ${unversionedSuggestions.length} ambiguous)`);
+const tiers = ['快速档', '标准档', '高质量档', '极限档'];
+const brandedSuggestions = modelSuggestions.filter(line => /GPT-\d|Luna|Sol|Astra|Terra/.test(line));
+const tierlessSuggestions = modelSuggestions.filter(line => !tiers.some(t => line.includes(t)));
+if (modelSuggestions.length < 40 || brandedSuggestions.length || tierlessSuggestions.length) {
+  console.error(`FAIL: model suggestions must use neutral tiers without brand names (${modelSuggestions.length} found, ${brandedSuggestions.length} branded, ${tierlessSuggestions.length} missing tier)`);
   process.exit(1);
 }
-console.log(`PASS: model suggestions name their version (${modelSuggestions.length} scenarios)`);
+console.log(`PASS: model suggestions use neutral tiers (${modelSuggestions.length} scenarios)`);
 const v3SourceRef = schema.allOf?.find(rule => rule.if?.properties?.schema_version?.const === 3)?.then?.properties?.sources?.additionalProperties?.$ref;
 if (schema.properties?.sources?.additionalProperties?.$ref !== '#/$defs/source' || v3SourceRef !== '#/$defs/sourceV3') {
   console.error('FAIL: schema must keep legacy source compatibility and bind v3 sources to sourceV3');

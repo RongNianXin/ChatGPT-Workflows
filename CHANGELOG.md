@@ -1,3 +1,141 @@
+## 2026-10-13.11：内部验证说明绑定当前业务目标
+
+- 在 02 既有输出契约补明：先解释内部验证为什么与当前目标有关，区分假数据测试与真实业务动作、测试位置问题与产品失败、本地检查与远端要求；必要术语配当前任务解释，授权只核真实差额，不放宽安全门禁或新建审批流程。
+- 06 保存最小复盘，静态契约补对应断言；五处版本头及 manifest 同步。首页和展示页沿本批已完成刷新，无新增展示成果不机械改页。实际测试、推送与远端检查结果留对应执行证据，不由本条代签。
+
+English: The existing output contract now requires explaining how internal validation relates to the current goal, separating synthetic tests from real actions, fixture-location problems from product failures, and local checks from remote-platform requirements. Necessary terms are explained in context; existing permission and safety boundaries remain intact. The incident summary, static contract, five version headers and manifest are updated. Home and showcase pages retain the current batch refresh; actual test, push and remote-check results require separate evidence.
+
+## 2026-10-13.10：同步候选整理与首页展示维护
+
+- 汇总本地已完成的规则、外部工具说明、提示词与故障案例；中英文首页更新本批入口和限制，REA 仍为仅登记、未安装及未运行验收，不把跨平台程序化方案写成已实现。
+- 核实会话工作台 dev.10 已有公开预发布，SHOWCASE 更正旧的本地候选措辞，保留截图时点和非稳定版限制；没有新增真实截图或发布资产。
+- 02 的 4K 增加每次同步前检查中英文首页、展示入口和更新记录的要求；无新变化不机械改页，也不产生后续远端授权。契约检查补对应断言，五处版本头与 manifest 同步。
+- 待发布复盘另制脱敏公开内容，保留初步判断被后续证据修正的过程；原始差异、私有计划和未确认草稿留本地。同步及 CI 的实际结果以对应提交和本地执行记录为准，不能以此条预告代签通过。
+
+English: Consolidates completed local workflow, tool, prompt and troubleshooting changes. Bilingual home pages describe the current entries and limits; REA remains documented-only, not installed or runtime-validated, and portability/automation proposals are not presented as implemented. SHOWCASE now reflects the existing public dev.10 prerelease without adding screenshots or release assets. The 4K rule checks public-entry freshness on each sync without requiring cosmetic edits or granting future publication rights. The static contract, five version headers and manifest are synchronized. Incident summaries are deidentified while retaining the correction of earlier hypotheses; originals, private plans and an unconfirmed draft stay local. Actual push and CI results require their own recorded evidence.
+
+## 2026-10-13.9：外部工具泛称与无提醒选择
+
+- “外部工具”“工具通讯录”等泛称指向唯一通讯录，不要求操作者记完整名称；不提工具名时，沿已有默认门禁按目标判断，必要时查摘要、读候选并在可用与授权范围内调用。
+- 中英导览取消要求操作者再发一次调用指令的措辞；简单任务跳过、同阶段复用、具体技能主动调用限制及正式刷新范围保持。没有安装、后台检索、其他窗口刷新或广播，不把规则配置冒充宿主强制执行或最低 Token 成本证明。
+- 06 保存决策，五处版本头与 manifest 同步至 2026-10-13.9，既有契约补泛称、无名任务与权限边界断言。范围内验证和独立审查证据留本地记录。仅本地，未 Commit 或 Push。
+
+English: Generic external-tool wording resolves the unique directory without requiring its full name. Goal-only tasks use the existing default gate: assess current capabilities, consult the summary when useful, and read and invoke selected tools only when available and authorized. Bilingual guidance removes the second-command requirement while preserving simple-task bypass, reuse, explicit-invocation restrictions, and formal refresh scope. Version/manifest and static contracts are synchronized. This is rule configuration, not a host interceptor, background search, installation, cross-window refresh, or proof of minimum token cost. Local only; no commit or push.
+
+## 2026-10-13.8：外部工具通讯录与按需取用
+
+- 外部工具入口改用“通讯录”名称；保留原物理路径与旧标题锚点，复用唯一登记表，补齐用途标签、适用场景和基本用法。中英 README 只导览，不维护平行工具名单。
+- 共同规范与接入模板同步：先查摘要再读选中工具；简单任务跳过、同阶段复用和正式刷新必读范围不变。登记不默认克隆或安装，软件资源与公开说明分离，必要时在有效授权内取得最小可运行资源。
+- 06 保存决策，版本头与 manifest 更新至 2026-10-13.8；现有检查增加通讯录结构及缺失/重复反例。验证与独立审查证据留本地任务记录，不代签真实窗口遵从、安装、调用或 Token 收益。仅本地，未安装、Commit、Push 或广播。
+
+English: Renames the visible external-tool entry to a shared directory for people and AI while preserving physical paths and legacy heading anchors. The unique registry gains task tags, use cases, and starting steps; bilingual overviews do not duplicate the tool list. The common contract and template require summary-first, selected-detail reading and authorized on-demand acquisition without changing simple-task bypass, reuse, or formal refresh requirements. Public guidance stays separate from local packages and private outputs. Version/manifest and static negative fixtures are synchronized; evidence does not certify live adoption, installation, invocation, or token savings. Local only, with no installation, commit, push, or broadcast.
+
+## 2026-10-13.7：REA 外部工具登记与按目标分流
+
+- 新增 EXT-004：REA 的中英文入口、调用指南和维护记录，接入唯一工具目录与既有按需选择规则；状态为 DOCUMENTED_ONLY / NOT_INSTALLED，不自动安装、注册 MCP/Skill 或运行目标。
+- 说明同类游戏设计先做公开资料与可观察行为研究，具体制品问题才考虑逆向；缺工具不阻断无依赖交付，显式必用不能冒充。保留目标权利、数据外发、运行副作用、Windows/IL2CPP 和发布版边界。
+- 06 保存决策；版本头与 manifest 更新至 2026-10-13.7，既有契约增加登记与分流断言。检查结果留本地任务记录，不代签真实调用、跨项目采用或模型兼容。仅本地，未 Commit、Push 或广播。
+
+English: Registers REA as EXT-004 with bilingual operator entries, an AI guide and a maintenance record, discoverable through the existing goal-based tool registry. It remains documented-only and not installed. Game-design research starts with public material and observable behavior; artifact analysis is conditional, independent work continues without REA, and an explicit REA requirement cannot be reported as satisfied by another method. Permission, data disclosure, runtime, platform and release boundaries remain separate. Version/manifest and static contracts are updated; no installation, live compatibility certification, broadcast, commit or push.
+
+## 2026-10-13.6：协作文稿交付一致性与证据边界
+
+- 文档评审规范升至版本 5：共享或可执行复制片段绑定可回读检查版，不检查一版却交付另一版；语言、符号和 LaTeX 检查面向实际交付文本，普通短答不强制落盘或计算哈希。
+- 补明归因与验证范围：原交付缺失不能从其他文件无错确定责任；02 的验证粒度改为实际写入边界、协作并发风险和拟声明范围；共享修订核对版本漂移，不以文件计数证明内容未变。
+- 06 保存通用审查结论和不采纳项；既有规则刷新契约增加四组静态断言，五处版本头与 manifest 同步至 2026-10-13.6。检查结果留既有任务记录，不代签来源事故、真实模型遵从或效率收益。仅本地，未 Commit、Push。
+
+English: Document-review standard v5 binds shared or executable copy blocks to a readable checked edition and targets language and TeX checks at the actual delivered text. 02 now bounds validation by effective write scope, collaboration concurrency and the intended claim; the document standard clarifies attribution limits and version drift. Ordinary short answers do not require per-answer files or hashes. Four static contract checks and the existing version/manifest entries are synchronized. Local only; no commit or push. Source incidents, live-agent adherence and efficiency gains are not certified by these checks.
+
+## 2026-10-13.5：压缩后恢复增量化与不引入新缺陷原则
+
+- 针对来源反馈的压缩后重复核验，02 新增“上下文压缩后的恢复与增量读取（默认）”：先回读持久化最小状态，复用仍有效的身份、指纹与正文证据，只重核受影响部分；10 的压缩/恢复触发改为回读短状态与关键章节，正式交接仍全量。不把规则修订当作缓存问题或 Token 收益已被运行验证。
+- 02 工作流改进候选新增第 5 条：不为修复一个缺陷引入新缺陷、不为优化局部伤害全局；改前列出受影响行为与必须保留的既有功能，改后按原失败条件、反例及受影响旧功能回归核验。
+- 规则刷新契约新增对应断言；版本头与 manifest 同步至 2026-10-13.5；契约、操作者手册引用与仓库质量检查回读通过。仅本地记录，未 Commit、Push。
+
+English: Responds to reports of repeated post-compaction verification by adding incremental recovery to 02: read minimal durable state, reuse still-valid identity, fingerprints and text evidence, and recheck affected parts. 10 separates compaction/recovery from formal handover, which retains full reading. This rule change does not certify resolution of caching behavior or measured token savings. 02 also adds a fifth improvement rule: do not fix one bug by introducing another, or optimize locally at the cost of the whole. The refresh contract and version/manifest were updated at that stage, before publication.
+
+## 2026-10-13.4：总指挥接管铸造全新身份硬门禁
+
+- 场景5A复核后更正早期事故判断：接收方执行过接管写入，但沿用了旧世代、旧写者和旧平台任务身份，中央未指向真实接收窗口，完成回读因此误判。专项任务依据中央解析对象，不能把误投归因于其违规。
+- 01场景1D提示词、04身份登记、轻量配置第8节新增：新世代=中央世代+1且writer_id新造、平台任务ID必须为本窗口实测值，三者禁止沿用旧值；附件来源世代与中央当前世代不一致报来源冲突；中央回读仍指向旧窗口身份时报BLOCKED/INPUT_REQUIRED，不得报完成。
+- 规则刷新契约新增对应断言；版本头与manifest同步至2026-10-13.4；契约、操作者手册引用与仓库质量检查回读通过。仅本地记录，未Commit、Push。
+
+English: Scenario-5A verification corrected the initial incident assessment: the receiver did execute takeover writes but reused the old generation, writer and platform task identity, so the central pointer never moved to the receiving window. A task resolving the recipient from central state was not thereby violating the rules. 01/04/lightweight-config now require a freshly minted identity (generation+1, new writer_id, the receiver's own verified platform identity), treat an attachment-source generation mismatch as a source conflict, and forbid reporting completion while the central readback still points at the old window. The refresh contract asserts the new gates. Version headers and the manifest move to 2026-10-13.4 with checks passing. This entry records the local state at that stage; publication status is recorded separately.
+
+## 2026-10-13.3：交接身份错误与汇报误投的初步复盘
+
+- 初步将误投定位到中央交接链：专项任务依据中央状态解析对象，消息仍发往旧身份。后续复核确认不是完全未执行写入，而是接管写入复用了旧身份；以 2026-10-13.4 的更正为准。
+- 结论与候选修复写入 06：完成汇报必附中央回读实证、专项汇报先回报解析对象、归档旧窗口前确认中央指向新世代、无本机写权必须报 INPUT_REQUIRED。本轮只记录，未改任何规则正文。
+- 版本头与规则刷新 manifest 同步至 2026-10-13.3；契约、操作者手册引用与仓库质量检查回读通过。仅本地记录，未 Commit、Push。
+
+English: The initial review located the misroute in the central handover chain: a task resolving the commander from central state still reached the outgoing identity. Subsequent verification found that takeover writes had occurred but reused the old identity; the 2026-10-13.4 correction supersedes the earlier no-write hypothesis. Initial conclusions and candidate safeguards were recorded in 06, including central readback evidence and INPUT_REQUIRED when necessary local access is unavailable. Version headers and the manifest moved to 2026-10-13.3 at that stage; publication status is recorded separately.
+
+## 2026-10-13.2：模型建议档位制与跨模型通用执行约束
+
+- 01 全部场景的“模型建议”和 05 场景起步表由具体型号改为快速/标准/高质量/极限四档，新增 05 2.3 档位映射表与操作者默认偏好（知识问答类快速档，其余高质量档，取更高者不降档）。
+- 02 新增跨模型通用执行约束，作为默认而非死命令；换模型后重报能力清单，不继承旧模型结论。契约测试同步改为“模型建议使用中性档位”。
+- 版本头与规则刷新 manifest 同步至 2026-10-13.2；契约、操作者手册引用与仓库质量检查回读通过。仅本地记录，未 Commit、Push。
+
+English: Model suggestions in 01 and the starter table in 05 now use four neutral tiers instead of concrete model names, and 05 gains a tier mapping table with operator defaults (knowledge Q&A uses the fast tier, everything else the high-quality tier, never auto-downgraded). 02 adds cross-model execution constraints as defaults rather than rigid commands. The contract test asserts neutral tiers. Version headers and the refresh manifest move to 2026-10-13.2 with contract and repository checks passing. Local only.
+
+## 2026-10-13.1：跨模型适配讨论结论入档
+
+- 完整读取两个已读窗口在 DeepSeek 轮的收尾对话；共同故障模式与四指标优先级结论写入 06，候选方案（模型建议去品牌化、通用执行约束）仅登记，未改任何规则正文。
+- 版本头与规则刷新 manifest 同步至 2026-10-13.1；契约检查与 git diff --check 通过。仅本地记录，未 Commit、Push。
+
+English: The final DeepSeek rounds of the two referenced task windows were read in full. The shared failure pattern and four-metric priority conclusion are recorded in 06; candidate changes (model-neutral model advice and a generic execution constraint) are registered only, with no rule text changed. Version headers and the refresh manifest move to 2026-10-13.1 with contract checks passing. Local only, no commit or push.
+
+## 2026-10-12.6：一次性事件限定输出门禁
+
+- 交叉审查轮误把 1D 的加粗停旧提醒带进业务汇报；该提醒只绑定正式完成轮，来源真实但作用域错误。
+- 02新增一次性事件限定输出条款：只输出一次的固定内容只在触发事件发生的那一轮输出，后续轮不因历史指令重复；1D提示词同步写明提醒的一次性边界。
+- 规则刷新契约新增对应断言，版本头与manifest同步至2026-10-12.6；契约、外部入口与整仓质量检查回读通过。
+
+English: A one-time 1D reminder leaked into a later business round. 02 now scopes one-time fixed outputs to the round in which their triggering event occurs, and the 1D prompt states the reminder's single-round boundary. The refresh contract asserts the new rule; version headers and the manifest move to 2026-10-12.6 with checks passing.
+
+## 2026-10-12.5：交叉审查吸收与交付维护拆分
+
+- 完整读取并审查独立交叉审查附件；故障分类、分层验证、自然语言入口和默认工具选择等已存在，不重复建设，只吸收最小增量。
+- 02新增工作流改进候选与业务交付拆分：改进建议与当前业务分开，非紧急候选集中评估，验证过收益的修改限受影响文件与检查，未验证不升格规则或推广。
+- 06记录附件审查结论、已覆盖项、本轮增量与不执行项；不把附件加入AGENTS.md或全局必读清单。
+- 五处版本头与规则刷新manifest同步至2026-10-12.5；契约、外部入口与整仓质量检查回读通过。
+
+English: The independent cross-review attachment was read in full and audited. Existing mechanisms were reused; the minimal increment adds a delivery/maintenance split to 02 and an audit entry to 06, without adding the attachment to global required reading. Version headers and the refresh manifest move to 2026-10-12.5 with contract checks passing.
+
+## 2026-10-12.4：提示词复制框与默认工具选择入口
+
+- 7份技巧提示词使用独立可复制文本框，说明留在框外；除通用第一性原理提示词外，原提示词正文仅统一换行和末尾空行。文字流程图接口保持不变。
+- 精简通用提示词，将按需选择落实为触发与权限齐备后的实际使用；简单任务直接处理，同阶段复用，不全库扫描。
+- 工作流常驻入口统一引用默认工具选择契约，不依赖手动粘贴；覆盖现有与未来场景，保留具体技能的主动调用、权限和停止边界。仅已启用并实际加载新版的任务生效。
+- 沿既有文档契约和阅读器验证机制检查；实际模型后续遵从、其他阅读器兼容及系统剪贴板仍需单独观察。
+
+English: Seven prompt documents now provide fenced copy blocks while preserving six original payloads and the text-flowchart interface. The shorter generic prompt and persistent workflow entries share default, scoped tool selection with actual use when trigger and permission conditions hold. Live model adherence, other readers and the system clipboard remain separately unverified.
+
+## 2026-10-12.3：跨场景角色与技能协作及无工具降级
+
+- 在外部工具共同规范建立所有现有与未来场景的协作契约：场景限定目标、权限和停止点，角色与Skill按需补方法，复用同一计划、证据与整体汇报。
+- 分开处理可选工具缺失、方法不适配、显式必用与副作用未知；不自动安装、不绕过必要验证、不制造全局阻断。
+- 升级通用第一性原理提示词并在既有接入模板与检查中补跨场景验收；没有外部工具或未启用工作流的项目也可按普通任务执行。
+
+English: A shared contract composes existing and future workflow scenarios with optional roles and skills into one task. Missing tools, unsuitable methods, mandatory tool requests and unknown side effects have distinct scoped recovery paths. The generic prompt, onboarding template and static checks retain permissions, evidence and stop boundaries. Live behavior remains separately unverified.
+
+## 2026-10-12.2：Matt Pocock Skills按需接入
+
+- 新增EXT-003来源、自然语言操作者入口与安装维护说明；不复制第三方技能正文进入公共仓库。
+- 安装实物与项目初始化分开，明确已有同名版本保留、按需加载、主动调用限制及权限边界；首次推荐只读解释练习。
+- 本地用户环境新增22份正式技能，逐文件核对来源，保留5份已有技能；混合版本编排、宿主发现和真实项目首次使用尚未验证。
+
+English: EXT-003 adds a source index, natural-language entry and maintenance boundaries for Matt Pocock Skills. Installation is separate from project setup. Twenty-two new stable skills were verified in the authorized user environment; five existing skills were retained. Host discovery, mixed-version orchestration and first live project use remain unverified. No remote publication.
+
+## 2026-10-12.1：外部工具按需选择与渐进解释
+
+- 统一以目标、阶段和实际能力缺口选择工具，同阶段复用有效读取证据；简单任务不扫描工具库，失效只定点重核，重叠方法去重。
+- 自然语言即可开始；保留具体工具的主动调用、安装和权限边界。解释按需展开，回答学习问题后回到原任务，不要求记命令或新建学习档案。
+- 在既有接入模板补适用/排除、复用与验收条件；复用既有检查覆盖关键文档契约，不新增工具、台账、自动化或固定人工步骤。
+- 本地文档与契约检查；真实窗口选择、恢复行为和Token收益仍待观察，未安装新工具、Commit或发布。
+
+English: External tools share goal- and capability-based routing, valid evidence reuse, overlap reduction and targeted rechecks. Natural-language requests and progressive explanations retain invocation and permission boundaries and return to unfinished work. Existing templates and document checks cover the contract; live model behavior and cost benefits remain unverified. No new tool installation, commit or publication.
+
 ## 2026-10-11.8：规则刷新读取计划与提前收口约束
 
 - 规则检查工具按当前文件生成必要正文清单及Unicode长度，保持“未证明已读”语义；未使用实现仍按需加载。

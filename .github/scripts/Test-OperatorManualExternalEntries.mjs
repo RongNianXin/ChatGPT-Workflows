@@ -18,6 +18,28 @@ const read = file => fs.readFileSync(file, 'utf8');
 const fail = message => { console.error(`FAIL: ${message}`); failures += 1; };
 let failures = 0;
 
+// Validate the one summary table; this does not prove live AI tool selection.
+const inspectDirectory = text => {
+  const begin = '<!-- TOOL_DIRECTORY:BEGIN -->';
+  const end = '<!-- TOOL_DIRECTORY:END -->';
+  const issues = [];
+  if (text.split(begin).length !== 2 || text.split(end).length !== 2 ||
+      text.indexOf(begin) > text.indexOf(end)) return { issues: ['directory markers must be unique and ordered'], rows: [] };
+  const table = text.slice(text.indexOf(begin) + begin.length, text.indexOf(end));
+  const rows = table.split('\n').filter(line => /^\|\s*`EXT-\d{3}`\s*\|/.test(line))
+    .map(line => line.split('|').slice(1, -1).map(cell => cell.trim()));
+  if (!rows.length) issues.push('directory is empty');
+  const ids = rows.map(row => row[0]);
+  if (new Set(ids).size !== ids.length) issues.push('duplicate directory ID');
+  for (const row of rows) {
+    if (row.length !== 7 || row.some(cell => !cell)) { issues.push(`missing summary fields: ${row[0]}`); continue; }
+    if (!/DOCUMENTED_ONLY|READY_FOR_ACTIVATION|UNKNOWN|RETIRED/.test(row[4])) issues.push(`missing state: ${row[0]}`);
+    if (!/https:\/\//.test(row[5]) || !/\]\([^)]*\/README\.md\)/.test(row[5]) ||
+        !/\]\([^)]*\/安装与维护记录\.md\)/.test(row[6])) issues.push(`missing source or unique detail links: ${row[0]}`);
+  }
+  return { issues, rows };
+};
+
 for (const file of files) {
   if (!fs.existsSync(file)) fail(`required document is missing: ${path.relative(root, file)}`);
 }
@@ -55,6 +77,7 @@ if (!failures) {
 
 if (!failures) {
   const registry = read(path.join(root, '引用的外部工具', '外部工具目录.md'));
+  for (const issue of inspectDirectory(registry).issues) fail(issue);
   const ids = [...registry.matchAll(/\|\s*`(EXT-\d{3})`\s*\|/g)].map(match => match[1]);
   if (new Set(ids).size !== ids.length) fail(`external tool registry has duplicate IDs: ${ids.join(', ')}`);
   if (!registry.includes('`EXT-001`') || !registry.includes('Agency Agents')) fail('external tool registry does not expose EXT-001 Agency Agents');
@@ -77,9 +100,30 @@ if (!failures) {
 
 if (!failures) {
   const externalReadme = read(path.join(root, '引用的外部工具', 'README.md'));
-  for (const needle of ['用户只需要打开具体工具目录里的 `README.md`', '标准使用路径', 'NOT_INSTALLED', '只读适配判断']) {
+  for (const needle of ['先看[外部工具通讯录]', '选中后再打开具体工具目录里的 `README.md`', '标准使用路径', 'NOT_INSTALLED', '只读适配判断', '本导览不重复列举工具', '<a id="外部工具调用入口"></a>']) {
     if (!externalReadme.includes(needle)) fail(`external tool root README is missing: ${needle}`);
   }
+  const english = read(path.join(root, '引用的外部工具', 'README.en.md'));
+  if (!english.includes('<a id="external-tool-entry"></a>')) fail('external overview lost its legacy English heading anchor');
+}
+
+{
+  const row = '| `EXT-999` | Sample tool | Test / review | First read the selected guide | `DOCUMENTED_ONLY / NOT_INSTALLED` | [source](https://example.invalid/tool); [details](sample/README.md) | [maintenance](sample/安装与维护记录.md) |';
+  const wrap = rows => `<!-- TOOL_DIRECTORY:BEGIN -->\n${rows}\n<!-- TOOL_DIRECTORY:END -->`;
+  const cases = [
+    ['complete summary', wrap(row), true],
+    ['duplicate ID', wrap(`${row}\n${row}`), false],
+    ['missing task tags', wrap(row.replace('Test / review', '')), false],
+    ['missing starting step', wrap(row.replace('First read the selected guide', '')), false],
+    ['missing status', wrap(row.replace('DOCUMENTED_ONLY / NOT_INSTALLED', '')), false],
+    ['missing selected README', wrap(row.replace('sample/README.md', 'sample/other.md')), false],
+    ['empty table', wrap(''), false],
+    ['duplicate marker', `${wrap(row)}\n<!-- TOOL_DIRECTORY:BEGIN -->`, false]
+  ];
+  for (const [name, text, expected] of cases) {
+    if ((inspectDirectory(text).issues.length === 0) !== expected) fail(`directory fixture: ${name}`);
+  }
+  console.log(`Tool directory summary fixtures: ${cases.length} checked (static, not live routing)`);
 }
 
 const markdownLink = /!?\[[^\]]*\]\(([^)]+)\)/g;
@@ -258,6 +302,49 @@ for (const file of files) {
     const resolved = path.join(root, ...displayed.split('/'));
     if (!fs.existsSync(resolved)) fail(`broken repository-root path display: ${path.relative(root, file)} -> ChatGPT-Workflows/${match[1]}`);
   }
+}
+
+// These are document contracts, not proof that a live model selects or reuses tools.
+const routingGuide = read(path.join(root, '引用的外部工具', '外部工具自动对接规范.md'));
+const routingStart = routingGuide.indexOf('### 1.1 统一按需选择与读取');
+const routingEnd = routingGuide.indexOf('\n## 2.', routingStart);
+if (routingStart < 0 || routingEnd < 0) fail('unified routing contract has no bounded entry');
+const routing = routingGuide.slice(routingStart, routingEnd);
+for (const [scenario, needles] of [
+  ['simple task and same-phase feedback', ['不重新扫描工具库', '同任务优先复用有效选择与已读证据']],
+  ['new capability and explicit invocation boundary', ['实际能力缺口', '具体工具的有效触发依据', '不能把候选推荐当成调用授权']],
+  ['overlapping capabilities and independent review', ['同一已验证事项', '独立审查不能由同一实例换角色代签']],
+  ['stale evidence and new instance recovery', ['只补受影响核验', '新实例独立读取本次必要正文', '不能继承旧实例']],
+  ['plain-language operation and mandatory full refresh', ['不以背诵编号', '教学不抢占原任务', '不改变0A规则刷新或正式交接']],
+  ['honest verification limits', ['只能证明静态一致性', '不能承诺零Token成本或绝不遗漏']]
+]) {
+  for (const needle of needles) if (!routing.includes(needle)) fail(`unified routing contract missing ${scenario}: ${needle}`);
+}
+for (const needle of ['不依赖操作者粘贴通用提示词', '当前宿主已提供的工具简介', '实际读取并使用，不停在推荐', '基础能力足够时直接完成', '未接入或未加载新版的聊天不保证自动采用', '明确要求主动调用的工具仍须相应请求']) {
+  if (!routing.includes(needle)) fail(`default tool selection boundary missing: ${needle}`);
+}
+if ((routingGuide.match(/id="tool-default-routing"/g) || []).length !== 1) fail('default tool selection requires one authoritative anchor');
+for (const file of ['AGENTS.md', ...['00-第二代工作流总览.md', '02-总指挥核心规则.md'].map(name => path.join('总指挥工作流', '第二代总指挥的工作模式', name))]) {
+  if (!read(path.join(root, file)).includes('#tool-default-routing')) fail(`default tool selection entry missing: ${file}`);
+}
+const compositionStart = routingGuide.indexOf('### 1.2 所有场景与角色、技能的协作契约');
+const compositionEnd = routingGuide.indexOf('\n## 2.', compositionStart);
+if (compositionStart < 0 || compositionEnd < 0) fail('scene/skill composition contract has no bounded entry');
+const composition = routingGuide.slice(compositionStart, compositionEnd);
+for (const needle of ['所有现有场景及未来新增场景', '同一当前任务', '具体技能要求主动调用', '不重复启动门禁', '缺失的必要步骤才补齐', '方法不适合', '可选增强', '明确要求必须由指定工具完成', '副作用未知', '单一整体汇报', '不能保证未来场景永不冲突']) {
+  if (!composition.includes(needle)) fail(`scene/skill composition missing: ${needle}`);
+}
+const reusablePrompt = read(path.join(root, '其他 Codex 技巧性提示词', '【万能咒语】第一性原理和对抗式审查.md'));
+for (const needle of ['例如Agency Agents、Matt Pocock Skills', '遵守具体技能的主动调用限制', '未启用工作流时按普通任务执行', '未安装、不可访问或方法不适配', '不自动安装', '不降低必要验证', '继续原任务', '触发条件和权限齐备时实际使用', '基础能力足够时直接完成', '交付前检查实际产物与验证证据']) {
+  if (!reusablePrompt.includes(needle)) fail(`portable generic prompt missing: ${needle}`);
+}
+const learning = read(path.join(root, '总指挥工作流', '第二代总指挥的工作模式', '06-复盘与优化规则.md'));
+for (const needle of ['关键处短解释', '没有必要新概念时不强制附课', '回答后回到原未完成项', '明确取消或替代的项仍须在收口中说明', '不自动启用画像', '解释精简不削减风险']) {
+  if (!learning.includes(needle)) fail(`progressive explanation contract missing: ${needle}`);
+}
+const onboarding = read(path.join(root, '引用的外部工具', '外部工具接入模板.md'));
+for (const needle of ['必须主动调用的限制', '重叠/互补职责', '失效后定点重核', '换窗恢复不丢原任务']) {
+  if (!onboarding.includes(needle)) fail(`tool onboarding contract missing: ${needle}`);
 }
 
 if (failures) process.exit(1);

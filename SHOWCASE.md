@@ -33,9 +33,9 @@ Scene 2C reconstructs the actual execution path as stable, reviewable steps and 
 
 ## Codex 会话交接评估 / Codex session handoff assessment
 
-Windows 工作台支持保存任务 ID、自动读取名称与项目、排序、双语查询和历史恢复。基本报告与详细报告分区展示；不再使用时点击“退出工具”，仅关闭网页不会停止后台服务。截图对应 `0.2.0-dev.10` 本地发布候选；公开下载仍以已发布版本为准。
+Windows 工作台支持保存任务 ID、自动读取名称与项目、排序、双语查询和历史恢复。基本报告与详细报告分区展示；不再使用时点击“退出工具”，仅关闭网页不会停止后台服务。截图对应 `0.2.0-dev.10`；该版本已有[公开预发布下载](https://github.com/RongNianXin/ChatGPT-Workflows/releases/tag/windows-sessiondesk-v0.2.0-dev.10)，不是正式稳定版。截图仍是拍摄时刻的界面，不证明当前环境的运行结果。
 
-The Windows desk saves task IDs, detects names and projects, and provides ordering, bilingual queries and history restoration. Basic and detailed reports are separate. Select Exit tool when finished; closing the page alone does not stop the service. The screenshot shows the local `0.2.0-dev.10` release candidate; public downloads remain tied to published releases.
+The Windows desk saves task IDs, detects names and projects, and provides ordering, bilingual queries and history restoration. Basic and detailed reports are separate. Select Exit tool when finished; closing the page alone does not stop the service. The screenshot shows `0.2.0-dev.10`, which has a [public prerelease download](https://github.com/RongNianXin/ChatGPT-Workflows/releases/tag/windows-sessiondesk-v0.2.0-dev.10), not a stable release. It remains a captured interface, not proof of results in the current environment.
 
 [打开工具说明 / Open the tool guide](实用小工具/Codex会话交接评估/README.md)
 

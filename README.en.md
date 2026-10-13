@@ -37,10 +37,11 @@ Most of the repository is Markdown and PowerShell rather than a hosted service o
 
 ## What this update does for you
 
-- **Safer handoffs:** before moving to a new task, the workflow checks the current state, unsaved work, and remote version so work is less likely to be mixed up or overwritten.
-- **Clearer cross-task messages:** it distinguishes “sent,” “received,” and “confirmed,” so you can see how far a request has actually progressed.
-- **Easier troubleshooting:** common problems are grouped by what you see, with a clear distinction between verified fixes and open leads.
-- **Safer external-tool trials:** the workflow checks whether a tool fits the goal first, then explains installation, permissions, verification, and rollback instead of installing a tool just because its name appears.
+- **Find tools by purpose:** the [External Tool Directory](引用的外部工具/外部工具目录.md) summarizes use cases. AI tasks that have loaded the updated workflow should select necessary tools from the goal without requiring the full directory name or a second reminder; simple tasks remain lightweight.
+- **Document reverse-engineering tools before acquiring them:** [REA](引用的外部工具/rea/README.en.md) has use cases, an invocation guide and safety boundaries, but is not installed or runtime-validated. Game-design research starts with public material and observable behavior, not automatic reverse engineering or a full repository download.
+- **Verify the receiving identity:** handoffs require a new generation, a new writer and the receiving window's own verified platform identity. A central readback still pointing to the outgoing window cannot count as completion.
+- **Check delivered text and model choices:** shared writing is checked against the actual delivered edition, and model suggestions use capability tiers. Updated rules do not certify every model, client or professional outcome.
+- **A new model-switch troubleshooting case:** [invalid historical tool names](故障排查与解决经验/06-工具调用与上下文协议/TRB-011-切换模型后工具名称校验失败/ERR-TRB-011-历史工具名称包含非法字符.md) documents the verified cause, preservation and recovery steps, while distinguishing recovery from untested conditions.
 
 This is a concise synthesis of the visible history and current files. See the [changelog](CHANGELOG.md) for exact status, unverified limits, and candidate roadmap items.
 
@@ -66,7 +67,7 @@ Specific model names, prices, and reasoning levels are not permanent prerequisit
 | Understand the rule architecture | [Workflow overview (Chinese)](总指挥工作流/第二代总指挥的工作模式/00-第二代工作流总览.md) |
 | Troubleshoot Codex or CC Switch | [Troubleshooting notes](故障排查与解决经验/) |
 | Reuse a focused prompt | [Prompt collection](其他%20Codex%20技巧性提示词/) |
-| Discover external tools | [External-tool integration](引用的外部工具/README.md) |
+| Find tools by task | [External Tool Directory](引用的外部工具/README.en.md) |
 | Try a local helper | [Local utilities](实用小工具/) |
 | Save tasks and query Codex session snapshots (Windows dev.10) | [Session handoff assessment](实用小工具/Codex会话交接评估/README.en.md) |
 | See real-world results | [Showcase](SHOWCASE.md) |
@@ -102,7 +103,7 @@ The detailed rules remain canonical in Chinese. Use the [English entry](总指�
 - [ChatGPT-Web](ChatGPT-Web/README.en.md): reviewable userscripts, installation steps, and browser-permission notes for ChatGPT on the web.
 - [Second-generation commander workflow](总指挥工作流/第二代总指挥的工作模式/): task intake, authorization, delegation, validation, state recovery, and handoff for Codex work.
 - [Prompt collection](其他%20Codex%20技巧性提示词/): reusable prompts for first-principles reviews, complex tasks, image work, automated testing, and text flowcharts.
-- [External-tool integration](引用的外部工具/README.md): registration, suitability checks, permission boundaries, validation, and maintenance records for third-party roles, CLIs, and services.
+- [External Tool Directory](引用的外部工具/README.en.md): a shared directory for people and AI. Find candidates by goal, read only the selected guidance, and acquire resources when needed.
 - [Troubleshooting and recovery](故障排查与解决经验/): sanitized records and recovery tools for reproduced Codex Desktop and CC Switch issues.
 - [Local utilities](实用小工具/): read-only or reversible helpers, including the Codex session handoff assessment.
 - [Showcase](SHOWCASE.md): privacy-reviewed screenshots of real runs so visitors can see what the workflows and tools produce.
@@ -113,20 +114,19 @@ The repository uses **ChatGPT Workflows** as its public umbrella title so visito
 
 For that reason, product-specific directory names, script names, commands, and technical documentation are not renamed merely for branding consistency. The ChatGPT title also does not imply that every module runs in an ordinary web chat; each module README defines its audience, prerequisites, and limitations.
 
-## External-tool integration
+<a id="external-tool-integration"></a>
 
-`引用的外部工具/` is the workflow's auditable directory for third-party capabilities. It separates three states that are easy to confuse:
+## External Tool Directory
+
+`引用的外部工具/` is the workflow's lightweight tool directory. The [sole registry](引用的外部工具/外部工具目录.md) lists task categories, use cases, starting steps, status, and detail links. AI reads this summary before selected guidance, without default full clones or installations. The physical directory keeps its existing name so old links remain valid.
+
+It separates three states that are easy to confuse:
 
 1. **Registration:** official source, purpose, scope, permissions, validation, and rollback are documented. This does not prove installation.
 2. **Installation:** actual files are placed in a shared or project scope and their version is checked. The target path and write permission are separate decisions.
 3. **Project activation:** the commander selects the smallest tool set for the current goal and binds it to the task. It does not load every tool or change the Goal, single-writer, or remote-write rules.
 
-Current entries include:
-
-- **EXT-001 Agency Agents:** specialist viewpoints such as game design, technical art, and code review.
-- **EXT-002 CLI-Anything:** a framework for exposing real software or codebases through discoverable, composable, verifiable CLIs. It can consume existing CLI-Hub harnesses or generate a new harness, but still depends on the real software, environment, and human acceptance.
-
-Operators do not need to remember internal identifiers or install commands. Say what you want to accomplish and ask the commander for a read-only suitability check. The AI should explain dependencies, read/write scope, verification, and rollback before any installation or execution. The selected tool's `README.md` and maintenance record remain authoritative for its current status.
+Operators do not need identifiers or installation commands. Ask AI to check the directory, judge which tools fit the goal, and prepare a plan for discussion. Detailed prompts, commands, and environment requirements stay in each tool's subdirectory. AI verifies status and current authorization before execution; registration alone does not permit installation, product changes, cross-task messages, or remote writes.
 
 ## Bilingual README contract
 
@@ -167,4 +167,4 @@ Released under the [MIT License](LICENSE).
 
 This project acknowledges the [LINUX DO](https://linux.do/) community and supports sincere, friendly knowledge sharing and exchange.
 
-<!-- README-SOURCE-SHA256: b9bf031052c229c74dc1139c488e15e79b365ffc62cda4e43c0fef1407c9384e -->
+<!-- README-SOURCE-SHA256: 57524a6c083212e92324a2f387fc258172c889789c24c328493565f1bc98850a -->
