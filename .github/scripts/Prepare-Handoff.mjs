@@ -5,7 +5,7 @@ import crypto from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import { SCOPED_WORKSPACE_ALGORITHM, readScopedWorkspaceBaseline, validateScopedWorkspaceSources } from './HandoffWorkspaceScope.mjs';
 import { fileURLToPath } from 'node:url';
-import { appendSeal, sealDigest, validateControlPlaneRegistry, validateSealDraftForAppend, verifyChain, verifyControlIdentity } from './HandoffSeal.mjs';
+import { appendSeal, planSealAppend, validateControlPlaneRegistry, validateSealDraftForAppend, verifyChain, verifyControlIdentity } from './HandoffSeal.mjs';
 import { assertPrivateControlStorage } from './HandoffControl.mjs';
 
 export const REQUIRED_RULES = [
@@ -539,9 +539,17 @@ export function prepareFormalHandoff(configPath) {
   }
   const draftErrors = validateSealDraftForAppend(draft);
   if (draftErrors.length) throw new Error(`draft preflight validation failed: ${draftErrors.join('; ')}`);
+  const appendOptions = {
+    expectedPreviousDigest: config.expected_previous_digest,
+    sourceRoot,
+    externalControlPlaneRoot,
+    transitionTicket: config.transition_ticket ? resolveFrom(configDir, config.transition_ticket) : undefined
+  };
+  const appendPlan = planSealAppend(realSealDirectory, draft, { ...appendOptions, allowReuse: true });
   if (preflightOnly) return {
     status: draft.switch_status === 'READY_WITH_RESTRICTIONS' ? 'READY_WITH_RESTRICTIONS' : 'READY',
     mode: 'PREFLIGHT_ONLY',
+    append_action: appendPlan.action,
     project_key: config.project_key,
     source_root: sourceRoot,
     external_control_plane_root: externalControlPlaneRoot,
@@ -559,26 +567,8 @@ export function prepareFormalHandoff(configPath) {
   // If a previous attempt appended the immutable seal but failed while writing
   // the external artifact, reuse that exact seal. This makes preparation
   // retryable without advancing the chain or inventing a second event.
-  const preAppend = verifyChain(realSealDirectory, { sourceRoot, externalControlPlaneRoot, verifyLatestSources: false });
-  let seal;
-  const reusable = preAppend.latest && preAppend.latest.event_id === draft.event_id
-    && preAppend.latest.generation === draft.generation
-    && preAppend.latest.writer_id === draft.writer_id
-    && preAppend.latest.handoff_phase === draft.handoff_phase
-    && preAppend.latest.seal_digest === (() => {
-      const candidate = { ...draft, seal_sequence: preAppend.latest.seal_sequence, previous_seal_digest: preAppend.latest.previous_seal_digest };
-      return sealDigest(candidate);
-    })();
-  if (reusable) {
-    seal = preAppend.latest;
-  } else {
-    seal = appendSeal(realSealDirectory, draft, {
-      expectedPreviousDigest: config.expected_previous_digest,
-      sourceRoot,
-      externalControlPlaneRoot,
-      transitionTicket: config.transition_ticket ? resolveFrom(configDir, config.transition_ticket) : undefined
-    });
-  }
+  const currentPlan = planSealAppend(realSealDirectory, draft, { ...appendOptions, allowReuse: true });
+  const seal = currentPlan.action === 'REUSE' ? currentPlan.seal : appendSeal(realSealDirectory, draft, appendOptions);
   const verified = verifyChain(realSealDirectory, { sourceRoot, externalControlPlaneRoot });
   if (verified.status !== 'PASS' || !verified.handoff_ready || verified.latest?.seal_digest !== seal.seal_digest || verified.latest_source_status !== 'PASS') throw new Error(`new seal did not pass live verification: ${verified.errors.join('; ')}`);
 

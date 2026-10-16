@@ -1351,6 +1351,8 @@ if ($LASTEXITCODE -ne 0) { throw '交接附件交付闭环检查失败。' }
 if ($LASTEXITCODE -ne 0) { throw '工作流刷新契约检查失败。' }
 & node (Join-Path $PSScriptRoot 'Test-Inspect-RuleRefresh.mjs')
 if ($LASTEXITCODE -ne 0) { throw '已保存本地规则刷新合成检查失败。' }
+& node (Join-Path $PSScriptRoot 'Test-Find-CodexThread.mjs')
+if ($LASTEXITCODE -ne 0) { throw '本机任务名称定位只读回归失败。' }
 & node (Join-Path $PSScriptRoot 'Test-Inspect-QuotaProtection.mjs')
 if ($LASTEXITCODE -ne 0) { throw '额度保护方向、累计与重置回归失败。' }
 & node (Join-Path $PSScriptRoot 'Test-Inspect-PrReviewPayload.mjs')

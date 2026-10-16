@@ -2,7 +2,7 @@
 
 [简体中文](README.md) | **English**
 
-<!-- README-SOURCE-SHA256: 3676e460fae95a8ae97b18b118255fffff0ce270d65dd4f64e915f9b26e79fc2 -->
+<!-- README-SOURCE-SHA256: 583b35db9312072fd789f168db4d1a6917bd0e8d9c9892dda4f7b309b763b034 -->
 This directory contains sanitized Codex and companion-tool incident records with explicit evidence boundaries. Start with the symptom table. You do not need to understand the directory layout or read every investigation.
 
 ## Find a case by symptom
@@ -20,6 +20,7 @@ This directory contains sanitized Codex and companion-tool incident records with
 | `TRB-009` | A task flashes `Model provider 'OpenAI' not found` and cannot load `config.toml` | **Resolved: provider alias added and loading verified for this case** | [Missing model provider in project configuration](<02-登录、账号和模型问题/TRB-009-打开项目时找不到模型/SYS-TRB-009-打开项目时找不到模型.en.md>) |
 | `TRB-010` | A multi-part request receives only a kickoff note or promised next action, then ends with a non-empty answer before the task is complete | **Unresolved: behavioral guard added; live regression and host-level interception are unavailable** | [Task ended before closure](<05-任务没做完就结束/TRB-010-任务没做完就结束/SYS-TRB-010-任务没做完就结束.md>) |
 | `TRB-011` | Switching models rejects a historical tool name with an `input[N].name` character-pattern error | **Resolved for one case: bounded local repair verified and recovery confirmed by the operator; not a general fix** | [Invalid characters in historical tool names (Chinese)](<06-工具调用与上下文协议/TRB-011-切换模型后工具名称校验失败/ERR-TRB-011-历史工具名称包含非法字符.md>) |
+| `TRB-012` | Memory usage rises again while multiple tool services remain resident, possibly alongside a `configRequirements/read` timeout | **Partially resolved: page-file relocation verified; growth, root cause, and safe reclamation remain open** | [High memory and resident tool services (Chinese)](<07-资源与进程问题/TRB-012-高内存与工具服务常驻/SYS-TRB-012-高内存与工具服务常驻.md>) |
 
 “Resolved” applies only to the platform, version, and evidence scope stated in the case. “Partially resolved” means that a verified recovery or workaround exists while the root cause, durable fix, or other environments remain open. “Unresolved” means that no verified solution is currently available; the record provides investigation progress, evidence, and stop conditions.
 

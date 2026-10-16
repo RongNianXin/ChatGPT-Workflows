@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "document_ref": "01-操作者操作手册.md",
-  "manual_sha256": "0a677cb4fa4747a9b5da84f41f36907bc6deb045406b4badc584aff31185b527",
+  "manual_sha256": "2ce0460746ef2172e03a29454fe6f54821d46372ee11f18144234d615a7df8f4",
   "sections": [
     {
       "anchor": null,
@@ -126,14 +126,19 @@
     },
     {
       "anchor": "scenario-onboarding",
-      "references": {},
+      "references": {
+        "scenario-rule-refresh": "0A",
+        "scenario-project-rule-broadcast": "0B",
+        "scenario-commander-start": "1A"
+      },
       "history": []
     },
     {
       "anchor": "scenario-rule-refresh",
       "references": {
         "scenario-project-rule-broadcast": "0B",
-        "scenario-rule-refresh": "0A"
+        "scenario-rule-refresh": "0A",
+        "scenario-commander-start": "1A"
       },
       "history": []
     },
@@ -174,7 +179,8 @@
         "scenario-ordinary-takeover": "1F",
         "scenario-commander-start": "1A",
         "scenario-commander-takeover": "1D",
-        "scenario-handoff-triage": "1B"
+        "scenario-handoff-triage": "1B",
+        "scenario-rule-refresh": "0A"
       },
       "history": []
     },
@@ -192,7 +198,8 @@
         "scenario-commander-takeover": "1D",
         "scenario-ordinary-handoff": "1E",
         "scenario-handoff-triage": "1B",
-        "scenario-ordinary-takeover": "1F"
+        "scenario-ordinary-takeover": "1F",
+        "scenario-rule-refresh": "0A"
       },
       "history": []
     },
@@ -214,7 +221,9 @@
     },
     {
       "anchor": "scenario-contextless-recovery",
-      "references": {},
+      "references": {
+        "scenario-rule-refresh": "0A"
+      },
       "history": []
     },
     {
@@ -227,7 +236,8 @@
     {
       "anchor": "scenario-cross-project-rule-update",
       "references": {
-        "scenario-commander-takeover": "1D"
+        "scenario-commander-takeover": "1D",
+        "scenario-project-rule-broadcast": "0B"
       },
       "history": []
     },

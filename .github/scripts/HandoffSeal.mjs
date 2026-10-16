@@ -496,66 +496,110 @@ function prepareTransitionLocked(dir, { sourceRoot, externalControlPlaneRoot, ex
   } finally { fs.closeSync(fd); fs.unlinkSync(lock); }
 }
 
+// The public plan is read-only. Only the private locked writer may ignore its own chain lock.
+export function planSealAppend(dir, draft, { expectedPreviousDigest, sourceRoot, externalControlPlaneRoot, transitionTicket, allowReuse = false } = {}) {
+  const current = verifyChain(dir, { sourceRoot, externalControlPlaneRoot, verifyLatestSources: false });
+  return planSealAppendFromState(dir, draft, { expectedPreviousDigest, sourceRoot, externalControlPlaneRoot, transitionTicket, allowReuse }, current);
+}
+
+function planSealAppendFromState(dir, draft, { expectedPreviousDigest, sourceRoot, externalControlPlaneRoot, transitionTicket, allowReuse = false }, state) {
+  const current = { ...state, pending_intents: state.pending_intents ?? [], intents: state.intents ?? [], recoveries: state.recoveries ?? [] };
+  const emptyChainErrors = current.records.length === 0 && current.errors.every(error => error === 'no immutable seal record' || (error === 'seal directory missing' && !fs.existsSync(dir)));
+  if (current.errors.length && !emptyChainErrors) throw new Error(`existing chain invalid: ${current.errors.join('; ')}`);
+  const previous = current.latest;
+  const actualPreviousDigest = previous?.seal_digest ?? null;
+  const anchor = previous || draft;
+  assertControlReady(anchor, { sourceRoot, externalControlPlaneRoot });
+  if (previous && resolveSource(previous.sources.status_index, { sourceRoot, externalControlPlaneRoot }) !== resolveSource(draft.sources.status_index, { sourceRoot, externalControlPlaneRoot })) throw new Error('canonical index change requires explicit migration');
+  const reusable = allowReuse && previous && previous.event_id === draft.event_id
+    && previous.generation === draft.generation && previous.writer_id === draft.writer_id
+    && previous.handoff_phase === draft.handoff_phase
+    && previous.seal_digest === sealDigest({ ...draft, seal_sequence: previous.seal_sequence, previous_seal_digest: previous.previous_seal_digest });
+  if (reusable) {
+    if (expectedPreviousDigest !== undefined && expectedPreviousDigest !== previous.previous_seal_digest && expectedPreviousDigest !== previous.seal_digest) throw new Error('expected previous digest mismatch');
+    if (current.pending_intents.length || transitionTicket) throw new Error('an unconsumed transition intent must be consumed or explicitly recovered before appending');
+    if (current.recoveries.some(item => item.previous_seal_digest === previous.seal_digest)) throw new Error('recovered intent requires a later same-writer current attestation');
+    const errors = validateSeal(previous, { requireExtensions: true });
+    errors.push(...verifySourceFiles(previous, sourceRoot, externalControlPlaneRoot));
+    if (errors.length) throw new Error(errors.join('; '));
+    if (previous.sources.central_entry || previous.sources.workflow_enablement) {
+      const identity = verifyControlIdentity(previous, { sourceRoot, externalControlPlaneRoot });
+      if (identity.status !== 'PASS') throw new Error('control identity verification failed: ' + identity.errors.join('; '));
+    }
+    return { action: 'REUSE', seal: structuredClone(previous) };
+  }
+  if (expectedPreviousDigest !== undefined && expectedPreviousDigest !== actualPreviousDigest) throw new Error('expected previous digest mismatch');
+  if (current.pending_intents.length && !transitionTicket) throw new Error('an unconsumed transition intent must be consumed or explicitly recovered before appending');
+  const seal = structuredClone(draft);
+  const recovery = current.recoveries.find(item => item.previous_seal_digest === previous?.seal_digest);
+  if (recovery && (seal.handoff_phase !== 'CURRENT_ATTESTATION' || Date.parse(seal.sealed_at) < Date.parse(recovery.recovered_at))) throw new Error('recovered intent requires a later same-writer current attestation');
+  if (![3, 4].includes(seal.schema_version)) throw new Error('new seal writes require schema_version 3 or 4; schema 1/2 records are read-only legacy history');
+  if (previous && seal.generation < previous.generation) throw new Error('generation rollback');
+  if (previous && seal.generation === previous.generation && seal.writer_id !== previous.writer_id) throw new Error('writer change without generation transition');
+  if (previous && seal.generation > previous.generation && (seal.generation !== previous.generation + 1 || seal.writer_id === previous.writer_id || !['STOPPED_DISPATCH', 'ARCHIVED'].includes(seal.old_writer_status))) throw new Error('unsafe generation transition');
+  const previousSourceErrors = previous ? verifySourceFiles(previous, sourceRoot, externalControlPlaneRoot) : [];
+  let intent = null;
+  if (transitionTicket) {
+    const resolvedTicket = fs.realpathSync(path.resolve(transitionTicket));
+    const resolvedDir = fs.realpathSync(path.resolve(dir));
+    if (path.dirname(resolvedTicket) !== resolvedDir) throw new Error('transition ticket must be stored in the seal directory');
+    intent = readTransitionIntent(transitionTicket);
+    if (!previous || intent.previous_seal_digest !== previous.seal_digest || intent.previous_sequence !== previous.seal_sequence || intent.previous_generation !== previous.generation || intent.previous_writer_id !== previous.writer_id || intent.next_generation !== seal.generation || intent.next_writer_id !== seal.writer_id || intent.event_id !== seal.event_id) throw new Error('transition intent does not match append');
+    if (intent.record_type === 'handoff-direct-transition-intent' && seal.schema_version !== 4) throw new Error('direct recipient evidence requires schema_version 4');
+    if (intent.record_type === 'handoff-direct-transition-intent') {
+      const body = fs.readFileSync(resolveSource(seal.sources.status_index, { sourceRoot, externalControlPlaneRoot }), 'utf8').split('<!-- CURRENT:BEGIN -->')[1]?.split('<!-- CURRENT:END -->')[0];
+      const mapping = JSON.parse(body?.match(/<!-- CONTROL_IDENTITY: (.*?) -->/)?.[1] || 'null');
+      if (mapping?.platform_task_id !== intent.authorization.recipient_platform_id || body?.match(/^项目键：([^\r\n]+)$/m)?.[1]?.trim() !== intent.authorization.project_key) throw new Error('direct intent recipient platform or project does not match new CURRENT');
+    }
+    seal.transition = { intent_digest: intent.transition_digest, previous_seal_digest: intent.previous_seal_digest, prepared_at: intent.prepared_at };
+  }
+  if (previous && seal.generation > previous.generation && !intent) throw new Error('generation transition requires a pre-update intent');
+  if (intent && (!previous || seal.generation === previous.generation)) throw new Error('transition intent may only be consumed by a generation transition');
+  if (previous && seal.generation > previous.generation && seal.switch_status !== 'COMPLETED') throw new Error('generation transition requires a completed seal');
+  if (seal.handoff_phase === 'CURRENT_ATTESTATION' && (!previous || seal.generation !== previous.generation || seal.writer_id !== previous.writer_id || transitionTicket)) throw new Error('current attestation requires an existing seal with the same generation and writer');
+  seal.seal_sequence = (previous?.seal_sequence ?? 0) + 1;
+  seal.previous_seal_digest = previous?.seal_digest ?? null;
+  if (current.records.some(record => record.event_id === seal.event_id) || current.intents.some(previousIntent => previousIntent.event_id === seal.event_id && previousIntent.transition_digest !== intent?.transition_digest) || current.recoveries.some(recovery => recovery.event_id === seal.event_id)) throw new Error('event_id already exists in the handoff chain');
+  if (previous && Date.parse(seal.fact_cutoff) < Date.parse(previous.fact_cutoff)) throw new Error('fact_cutoff rollback');
+  if (previous && Date.parse(seal.sealed_at) < Date.parse(previous.sealed_at)) throw new Error('sealed_at rollback');
+  if (intent && Date.parse(intent.prepared_at) > Date.parse(seal.sealed_at)) throw new Error('transition prepared_at follows takeover seal');
+  if (seal.handoff_phase === 'CURRENT_ATTESTATION' && previous) {
+    const names = new Set([...Object.keys(previous.sources ?? {}), ...Object.keys(seal.sources ?? {})]);
+    if (![...names].some(name => previous.sources?.[name]?.digest !== seal.sources?.[name]?.digest)) throw new Error('current attestation requires at least one changed source digest');
+  }
+  seal.seal_digest = sealDigest(seal);
+  const errors = validateSeal(seal, { requireExtensions: true });
+  if (errors.length) throw new Error(`draft invalid: ${errors.join('; ')}`);
+  let currentIdentityVerified = false;
+  if (seal.control_handoff_confidence === 'HIGH' || ['READY', 'READY_WITH_RESTRICTIONS', 'COMPLETED'].includes(seal.switch_status)) {
+    const sourceErrors = verifySourceFiles(seal, sourceRoot, externalControlPlaneRoot);
+    if (sourceErrors.length) throw new Error(sourceErrors.join('; '));
+    if (seal.sources.central_entry || seal.sources.workflow_enablement) {
+      const identity = verifyControlIdentity(seal, { sourceRoot, externalControlPlaneRoot });
+      if (identity.status !== 'PASS') throw new Error(`control identity verification failed: ${identity.errors.join('; ')}`);
+      currentIdentityVerified = true;
+    }
+  }
+  if (!intent && previousSourceErrors.length && seal.handoff_phase !== 'CURRENT_ATTESTATION') {
+    const error = new Error(previousSourceErrors.join('; '));
+    if (seal.handoff_phase === 'MATERIAL_PREPARED' && previous?.generation === seal.generation
+      && previous.writer_id === seal.writer_id && currentIdentityVerified
+      && previousSourceErrors.every(message => /^source verification failed: [A-Za-z0-9_]+: source digest mismatch$/.test(message))) {
+      error.code = 'CURRENT_ATTESTATION_REQUIRED';
+      error.message = 'CURRENT_ATTESTATION_REQUIRED: current writer must reverify and attest current sources before freezing a new candidate; ' + error.message;
+    }
+    throw error;
+  }
+  return { action: 'APPEND', seal };
+}
+
 function appendSealLocked(dir, draft, { expectedPreviousDigest, sourceRoot, externalControlPlaneRoot, transitionTicket } = {}) {
   fs.mkdirSync(dir, { recursive: true });
   const lock = path.join(dir, '.handoff.lock');
   const fd = fs.openSync(lock, 'wx');
   try {
     const current = verifyChain(dir, { ignoreOwnLock: true, sourceRoot, externalControlPlaneRoot, verifyLatestSources: false });
-    const emptyChainErrors = current.records.length === 0 && current.errors.every(error => error === 'no immutable seal record');
-    if (current.errors.length && !emptyChainErrors) throw new Error(`existing chain invalid: ${current.errors.join('; ')}`);
-    const previous = current.latest;
-    const actualPreviousDigest = previous?.seal_digest ?? null;
-    if (expectedPreviousDigest !== undefined && expectedPreviousDigest !== actualPreviousDigest) throw new Error('expected previous digest mismatch');
-    if (current.pending_intents.length && !transitionTicket) throw new Error('an unconsumed transition intent must be consumed or explicitly recovered before appending');
-    const seal = structuredClone(draft);
-    const recovery = current.recoveries.find(item => item.previous_seal_digest === previous?.seal_digest);
-    if (recovery && (seal.handoff_phase !== 'CURRENT_ATTESTATION' || Date.parse(seal.sealed_at) < Date.parse(recovery.recovered_at))) throw new Error('recovered intent requires a later same-writer current attestation');
-    if (![3, 4].includes(seal.schema_version)) throw new Error('new seal writes require schema_version 3 or 4; schema 1/2 records are read-only legacy history');
-    if (previous && seal.generation < previous.generation) throw new Error('generation rollback');
-    if (previous && seal.generation === previous.generation && seal.writer_id !== previous.writer_id) throw new Error('writer change without generation transition');
-    if (previous && seal.generation > previous.generation && (seal.generation !== previous.generation + 1 || seal.writer_id === previous.writer_id || !['STOPPED_DISPATCH', 'ARCHIVED'].includes(seal.old_writer_status))) throw new Error('unsafe generation transition');
-    const previousSourceErrors = previous ? verifySourceFiles(previous, sourceRoot, externalControlPlaneRoot) : [];
-    let intent = null;
-    if (transitionTicket) {
-      const resolvedTicket = fs.realpathSync(path.resolve(transitionTicket));
-      const resolvedDir = fs.realpathSync(path.resolve(dir));
-      if (path.dirname(resolvedTicket) !== resolvedDir) throw new Error('transition ticket must be stored in the seal directory');
-      intent = readTransitionIntent(transitionTicket);
-      if (!previous || intent.previous_seal_digest !== previous.seal_digest || intent.previous_sequence !== previous.seal_sequence || intent.previous_generation !== previous.generation || intent.previous_writer_id !== previous.writer_id || intent.next_generation !== seal.generation || intent.next_writer_id !== seal.writer_id || intent.event_id !== seal.event_id) throw new Error('transition intent does not match append');
-      if (intent.record_type === 'handoff-direct-transition-intent' && seal.schema_version !== 4) throw new Error('direct recipient evidence requires schema_version 4');
-      if (intent.record_type === 'handoff-direct-transition-intent') {
-        const body = fs.readFileSync(resolveSource(seal.sources.status_index, { sourceRoot, externalControlPlaneRoot }), 'utf8').split('<!-- CURRENT:BEGIN -->')[1]?.split('<!-- CURRENT:END -->')[0];
-        const mapping = JSON.parse(body?.match(/<!-- CONTROL_IDENTITY: (.*?) -->/)?.[1] || 'null');
-        if (mapping?.platform_task_id !== intent.authorization.recipient_platform_id || body?.match(/^项目键：([^\r\n]+)$/m)?.[1]?.trim() !== intent.authorization.project_key) throw new Error('direct intent recipient platform or project does not match new CURRENT');
-      }
-      seal.transition = { intent_digest: intent.transition_digest, previous_seal_digest: intent.previous_seal_digest, prepared_at: intent.prepared_at };
-    } else if (previousSourceErrors.length && seal.handoff_phase !== 'CURRENT_ATTESTATION') throw new Error(previousSourceErrors.join('; '));
-    if (previous && seal.generation > previous.generation && !intent) throw new Error('generation transition requires a pre-update intent');
-    if (intent && (!previous || seal.generation === previous.generation)) throw new Error('transition intent may only be consumed by a generation transition');
-    if (previous && seal.generation > previous.generation && seal.switch_status !== 'COMPLETED') throw new Error('generation transition requires a completed seal');
-    if (seal.handoff_phase === 'CURRENT_ATTESTATION' && (!previous || seal.generation !== previous.generation || seal.writer_id !== previous.writer_id || transitionTicket)) throw new Error('current attestation requires an existing seal with the same generation and writer');
-    seal.seal_sequence = (previous?.seal_sequence ?? 0) + 1;
-    seal.previous_seal_digest = previous?.seal_digest ?? null;
-    if (current.records.some(record => record.event_id === seal.event_id) || current.intents.some(previousIntent => previousIntent.event_id === seal.event_id && previousIntent.transition_digest !== intent?.transition_digest) || current.recoveries.some(recovery => recovery.event_id === seal.event_id)) throw new Error('event_id already exists in the handoff chain');
-    if (previous && Date.parse(seal.fact_cutoff) < Date.parse(previous.fact_cutoff)) throw new Error('fact_cutoff rollback');
-    if (previous && Date.parse(seal.sealed_at) < Date.parse(previous.sealed_at)) throw new Error('sealed_at rollback');
-    if (intent && Date.parse(intent.prepared_at) > Date.parse(seal.sealed_at)) throw new Error('transition prepared_at follows takeover seal');
-    if (seal.handoff_phase === 'CURRENT_ATTESTATION' && previous) {
-      const names = new Set([...Object.keys(previous.sources ?? {}), ...Object.keys(seal.sources ?? {})]);
-      if (![...names].some(name => previous.sources?.[name]?.digest !== seal.sources?.[name]?.digest)) throw new Error('current attestation requires at least one changed source digest');
-    }
-    seal.seal_digest = sealDigest(seal);
-    const errors = validateSeal(seal, { requireExtensions: true });
-    if (errors.length) throw new Error(`draft invalid: ${errors.join('; ')}`);
-    if (seal.control_handoff_confidence === 'HIGH' || ['READY', 'READY_WITH_RESTRICTIONS', 'COMPLETED'].includes(seal.switch_status)) {
-      const sourceErrors = verifySourceFiles(seal, sourceRoot, externalControlPlaneRoot);
-      if (sourceErrors.length) throw new Error(sourceErrors.join('; '));
-      if (seal.sources.central_entry || seal.sources.workflow_enablement) {
-        const identity = verifyControlIdentity(seal, { sourceRoot, externalControlPlaneRoot });
-        if (identity.status !== 'PASS') throw new Error(`control identity verification failed: ${identity.errors.join('; ')}`);
-      }
-    }
+    const { seal } = planSealAppendFromState(dir, draft, { expectedPreviousDigest, sourceRoot, externalControlPlaneRoot, transitionTicket }, current);
     const finalName = `handoff-state.${seal.seal_sequence}.${seal.seal_digest}.json`;
     const tempName = `${finalName}.${process.pid}.tmp`;
     const tempPath = path.join(dir, tempName);

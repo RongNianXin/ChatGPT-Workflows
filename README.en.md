@@ -38,7 +38,6 @@ Most of the repository is Markdown and PowerShell rather than a hosted service o
 ## What this update does for you
 
 - **Find tools by purpose:** the [External Tool Directory](引用的外部工具/外部工具目录.md) summarizes use cases. AI tasks that have loaded the updated workflow should select necessary tools from the goal without requiring the full directory name or a second reminder; simple tasks remain lightweight.
-- **Document reverse-engineering tools before acquiring them:** [REA](引用的外部工具/rea/README.en.md) has use cases, an invocation guide and safety boundaries, but is not installed or runtime-validated. Game-design research starts with public material and observable behavior, not automatic reverse engineering or a full repository download.
 - **Verify the receiving identity:** handoffs require a new generation, a new writer and the receiving window's own verified platform identity. A central readback still pointing to the outgoing window cannot count as completion.
 - **Check delivered text and model choices:** shared writing is checked against the actual delivered edition, and model suggestions use capability tiers. Updated rules do not certify every model, client or professional outcome.
 - **A new model-switch troubleshooting case:** [invalid historical tool names](故障排查与解决经验/06-工具调用与上下文协议/TRB-011-切换模型后工具名称校验失败/ERR-TRB-011-历史工具名称包含非法字符.md) documents the verified cause, preservation and recovery steps, while distinguishing recovery from untested conditions.
@@ -69,6 +68,8 @@ Specific model names, prices, and reasoning levels are not permanent prerequisit
 | Reuse a focused prompt | [Prompt collection](其他%20Codex%20技巧性提示词/) |
 | Find tools by task | [External Tool Directory](引用的外部工具/README.en.md) |
 | Try a local helper | [Local utilities](实用小工具/) |
+| Move an ordinary conversation without adopting the workflow | [Outgoing handoff prompt](实用小工具/上下文交接提示词/上下文移交方提示词.md) and [receiving prompt](实用小工具/上下文交接提示词/上下文继承方提示词.md) (Chinese) |
+| Locate a project conversation missing from the recent list | [Codex task-name lookup](实用小工具/Codex任务定位/README.en.md): read-only candidates followed by host verification |
 | Save tasks and query Codex session snapshots (Windows dev.10) | [Session handoff assessment](实用小工具/Codex会话交接评估/README.en.md) |
 | See real-world results | [Showcase](SHOWCASE.md) |
 
@@ -167,4 +168,4 @@ Released under the [MIT License](LICENSE).
 
 This project acknowledges the [LINUX DO](https://linux.do/) community and supports sincere, friendly knowledge sharing and exchange.
 
-<!-- README-SOURCE-SHA256: 57524a6c083212e92324a2f387fc258172c889789c24c328493565f1bc98850a -->
+<!-- README-SOURCE-SHA256: e18752b8bd136f454ad480d0b7874620fe1e3f1fadca3ba981d2816163da032b -->

@@ -4,6 +4,7 @@
 总指挥工作流/第二代总指挥的工作模式/docs/EXECUTION_AND_INDEPENDENT_REVIEW.md text eol=lf
 总指挥工作流/第二代总指挥的工作模式/docs/DOCUMENT_REVIEW_STANDARD.md text eol=lf
 总指挥工作流/第二代总指挥的工作模式/docs/AUTOMATED_TESTING_LESSONS.md text eol=lf
+总指挥工作流/第二代总指挥的工作模式/docs/CROSS_SOFTWARE_COLLABORATION.md text eol=lf
 .github/scripts/HandoffSeal.mjs text eol=lf
 .github/scripts/HandoffControl.mjs text eol=lf
 .github/scripts/HandoffTransactionWorkspace.mjs text eol=lf
@@ -12,6 +13,8 @@
 .github/scripts/Prepare-Handoff.mjs text eol=lf
 .github/scripts/Inspect-WorkspaceTracking.mjs text eol=lf
 .github/scripts/Inspect-RuleRefresh.mjs text eol=lf
+.github/scripts/Find-CodexThread.mjs text eol=lf
+.github/scripts/Find-CodexThread.py text eol=lf
 .github/scripts/Inspect-QuotaProtection.mjs text eol=lf
 .github/scripts/Inspect-PrReviewPayload.mjs text eol=lf
 .github/scripts/Test-OperatorManualReferences.mjs text eol=lf

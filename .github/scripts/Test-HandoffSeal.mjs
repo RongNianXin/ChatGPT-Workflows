@@ -6,7 +6,7 @@ import path from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import crypto from 'node:crypto';
-import { appendSeal, prepareTransition, recoverTransition, sealDigest, validateSeal, verifyChain } from './HandoffSeal.mjs';
+import { appendSeal, planSealAppend, prepareTransition, recoverTransition, sealDigest, validateSeal, verifyChain } from './HandoffSeal.mjs';
 
 const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'handoff-seal-'));
 const sealDir = path.join(temp, 'seals');
@@ -58,6 +58,80 @@ try {
   check('chain cannot start from a non-one sequence', () => assert.equal(verifyChain(gapDir, { sourceRoot }).status, 'BLOCKED'));
   const first = appendSeal(sealDir, draft(), { sourceRoot });
   check('valid chain accepts runtime UNKNOWN with control HIGH', () => { const result = verifyChain(sealDir, { sourceRoot }); assert.equal(result.status, 'PASS'); assert.equal(result.latest.runtime_acceptance_status, 'UNKNOWN'); });
+  const planningDir = path.join(temp, 'read-only-plan');
+  const planningDraft = draft();
+  check('append planning on a missing directory is read-only and does not mutate its draft', () => {
+    const saved = structuredClone(planningDraft);
+    assert.equal(planSealAppend(planningDir, planningDraft, { sourceRoot, expectedPreviousDigest: null }).action, 'APPEND');
+    assert.equal(fs.existsSync(planningDir), false);
+    assert.deepEqual(planningDraft, saved);
+  });
+  const planningSeed = appendSeal(planningDir, planningDraft, { sourceRoot, expectedPreviousDigest: null });
+  check('read-only exact reuse keeps artifact retries separate from low-level event deduplication', () => {
+    const plan = planSealAppend(planningDir, planningDraft, { sourceRoot, expectedPreviousDigest: null, allowReuse: true });
+    assert.equal(plan.action, 'REUSE');
+    assert.equal(plan.seal.seal_digest, planningSeed.seal_digest);
+    assert.throws(() => appendSeal(planningDir, planningDraft, { sourceRoot, allowReuse: true }), /event_id already exists/);
+  });
+  check('planning and locked append retain matching predecessor, writer, event and time guards', () => {
+    const cases = [
+      { change: next => { next.writer_id = 'OTHER-WRITER'; }, pattern: /writer change without generation/ },
+      { change: next => { next.generation++; }, pattern: /unsafe generation transition/ },
+      { change: next => { next.event_id = planningSeed.event_id; }, pattern: /event_id already exists/ },
+      { change: next => { next.fact_cutoff = '2026-09-01T00:00:00.000Z'; }, pattern: /fact_cutoff rollback/ },
+      { change: next => { next.sealed_at = '2026-09-01T00:00:00.000Z'; }, pattern: /sealed_at rollback/ },
+      { change: () => {}, pattern: /expected previous digest mismatch/, expected: 'a'.repeat(64) }
+    ];
+    for (const [index, test] of cases.entries()) {
+      const next = structuredClone(planningDraft);
+      next.event_id = `guard-${index}`;
+      test.change(next);
+      const options = { sourceRoot, expectedPreviousDigest: test.expected ?? planningSeed.seal_digest };
+      assert.throws(() => planSealAppend(planningDir, next, options), test.pattern);
+      assert.throws(() => appendSeal(planningDir, next, options), test.pattern);
+      assert.equal(verifyChain(planningDir, { sourceRoot }).records.length, 1);
+    }
+  });
+  check('public planning cannot ignore a chain lock', () => {
+    fs.writeFileSync(path.join(planningDir, '.handoff.lock'), 'another owner');
+    try { assert.throws(() => planSealAppend(planningDir, planningDraft, { sourceRoot, ignoreOwnLock: true }), /recovery artifact/); }
+    finally { fs.unlinkSync(path.join(planningDir, '.handoff.lock')); }
+  });
+  check('missing sources and roots are not classified as routine current-attestation recovery', () => {
+    const missing = structuredClone(planningDraft);
+    missing.event_id = 'missing-source';
+    missing.sources.central_work_items.path_ref = 'absent.md';
+    const external = structuredClone(planningDraft);
+    external.event_id = 'missing-external-root';
+    external.sources.status_index.root_ref = 'external_control_plane';
+    for (const next of [missing, external]) {
+      const expected = error => error.code !== 'CURRENT_ATTESTATION_REQUIRED' && /ENOENT|INPUT_REQUIRED/.test(error.message);
+      assert.throws(() => planSealAppend(planningDir, next, { sourceRoot }), expected);
+      assert.throws(() => appendSeal(planningDir, next, { sourceRoot }), expected);
+    }
+  });
+  check('legacy sources without identity evidence do not receive a routine attestation recommendation', () => {
+    const file = path.join(sourceRoot, planningDraft.sources.central_work_items.path_ref);
+    const saved = fs.readFileSync(file);
+    fs.appendFileSync(file, '\nlegacy progress');
+    const next = structuredClone(planningDraft);
+    next.event_id = 'legacy-without-identity';
+    next.sources.central_work_items.digest = crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex');
+    try {
+      assert.throws(() => planSealAppend(planningDir, next, { sourceRoot }), error => error.code !== 'CURRENT_ATTESTATION_REQUIRED' && /source digest mismatch/.test(error.message));
+    } finally { fs.writeFileSync(file, saved); }
+  });
+  check('locked append rejects source drift after a successful read-only plan', () => {
+    const driftDir = path.join(temp, 'after-plan-drift');
+    const next = draft();
+    assert.equal(planSealAppend(driftDir, next, { sourceRoot }).action, 'APPEND');
+    const file = path.join(sourceRoot, next.sources.central_work_items.path_ref);
+    const saved = fs.readFileSync(file);
+    fs.appendFileSync(file, '\nsource changed after planning');
+    try { assert.throws(() => appendSeal(driftDir, next, { sourceRoot }), /source digest mismatch/); }
+    finally { fs.writeFileSync(file, saved); }
+    assert.equal(verifyChain(driftDir, { sourceRoot, verifyLatestSources: false }).records.length, 0);
+  });
   check('summary CLI verifies the same chain without rendering source bodies', () => {
     const run = flags => spawnSync(process.execPath, [path.join(scriptDir, 'HandoffSeal.mjs'), 'verify', sealDir, sourceRoot, ...flags], { encoding: 'utf8' });
     const full = run([]), compact = run(['--summary']);
