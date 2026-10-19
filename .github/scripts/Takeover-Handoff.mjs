@@ -8,6 +8,7 @@ import { verifyHandoffCandidate } from './Verify-Handoff-Candidate.mjs';
 import { byteDigest, resolveSource, controlPaths, withControlLock, withControlTransaction, assertControlReady, assertPrivateControlStorage, writeAtomic, writeJournal } from './HandoffControl.mjs';
 import { verifyRuleManifest, verifyWorkspaceBaseline, readGitWorkspaceBaseline, readLiveRemoteBaseline } from './Prepare-Handoff.mjs';
 import { captureTransactionWorkspace, verifyTransactionWorkspace } from './HandoffTransactionWorkspace.mjs';
+import { validateWorkspaceAmendment } from './HandoffWorkspaceAmendment.mjs';
 
 const assert = (condition, message) => { if (!condition) throw new Error(message); };
 function privateControlStorage(previous, options) {
@@ -76,7 +77,7 @@ function assertRenderedCurrentIdentity(bytes, recipient, generation, requireMark
   const fields = [
     [/(?:当前唯一中央写者|唯一当前写者绑定|中央登记唯一写者|唯一中央写者|当前写者|writer_id)\s*[:：=]\s*`?([A-Za-z0-9._-]+)/g, recipient.writerId],
     [/(?:当前总指挥世代|generation)\s*[:：=]\s*`?(\d+)/g, String(generation)],
-    [/(?:当前任务\s*ID|平台任务\s*ID|platform_task_id)\s*[:：=]\s*`?([A-Za-z0-9-]+)/g, recipient.platformTaskId]
+    [/(?:当前任务\s*ID|平台任务\s*ID|当前平台任务|platform_task_id)\s*[:：=]\s*`?([A-Za-z0-9-]+)/g, recipient.platformTaskId]
   ];
   for (const [pattern, expected] of fields) {
     for (const match of current.matchAll(pattern)) assert(match[1] === expected, 'rendered CURRENT contains a conflicting identity declaration');
@@ -85,7 +86,7 @@ function assertRenderedCurrentIdentity(bytes, recipient, generation, requireMark
 // Version 1 is frozen: historical journals are validated against their original
 // byte transformation, including recovery, rollback and completed readback.
 function renderCurrent(bytes, previous, recipient, version, eventId) {
-  assert([1, 2, 3].includes(version), 'unsupported CURRENT render version');
+  assert([1, 2, 3, 4].includes(version), 'unsupported CURRENT render version');
   const legacy = replaceCurrent(bytes, previous, recipient);
   if (version === 1) return legacy;
   return Buffer.from(legacy.toString('utf8').replace(/(<!-- CURRENT:BEGIN -->)([\s\S]*?)(<!-- CURRENT:END -->)/, (_, begin, old, end) => {
@@ -97,7 +98,8 @@ function renderCurrent(bytes, previous, recipient, version, eventId) {
       .replace(/^当前目标：/gm, '来源目标：')
       .replace(/^精确断点：/gm, '来源精确断点：')
       .replace(/^事实截点：/gm, '来源事实截点：');
-    if (version === 3) current = projectSourceFields(current);
+    if (version >= 3) current = projectSourceFields(current);
+    if (version >= 4) current = current.replace(/^(当前平台任务\s*[:：=]\s*)`?[A-Za-z0-9-]+`?/gm, `$1${recipient.platformTaskId}`);
     return `${begin}${current}\n状态：TAKEOVER_COMPLETED（仅规范事务日志COMPLETED且完成回读一致后生效）\n完成事件：${eventId}\n本任务加载记录：待接收方独立建立，不继承来源已读\n接续门禁：来源目标、断点和队列保留；业务授权、依赖、预算及停止条件逐项重核\n下一行动方：接收方完成回读后核验原队列，继续当前有效授权范围内动作\n${end}`;
   }));
 }
@@ -113,7 +115,7 @@ function buildPlan(previous, options) {
     if (files.has(file)) { files.get(file).names.push(name); continue; }
     const before = fs.readFileSync(file);
     assert(byteDigest(before) === source.digest, 'source changed before transaction plan');
-    const after = renderCurrent(before, previous, options.recipient, 3, options.eventId);
+    const after = renderCurrent(before, previous, options.recipient, 4, options.eventId);
     assertRenderedCurrentIdentity(after, options.recipient, previous.generation + 1, name === 'status_index');
     files.set(file, { names: [name], root_ref: source.root_ref || 'source_root', path_ref: source.path_ref, before: before.toString('base64'), after: after.toString('base64'), before_sha256: byteDigest(before), after_sha256: byteDigest(after) });
   }
@@ -122,7 +124,7 @@ function buildPlan(previous, options) {
 function checkJournal(journal, options, history) {
   assert(journal.protocol_version === 1 && journal.event_id === options.eventId && Array.isArray(journal.plan) && journal.plan.length > 0 && journal.plan.length <= 4, 'transaction journal mismatch');
   const renderVersion = Object.hasOwn(journal, 'current_render_version') ? journal.current_render_version : 1;
-  assert([1, 2, 3].includes(renderVersion), 'unsupported CURRENT render version');
+  assert([1, 2, 3, 4].includes(renderVersion), 'unsupported CURRENT render version');
   const previous = history.records.find(item => item.seal_digest === journal.previous_seal_digest);
   assert(previous, 'journal predecessor absent from immutable history');
   confirmed(options, previous);
@@ -144,11 +146,14 @@ function checkJournal(journal, options, history) {
     for (const name of item.names) assert(resolveSource(previous.sources[name], options) === resolveSource(original, options), 'journal alias mismatch');
   }
   const draft = journal.draft;
+  const amendment = journal.workspace_projection?.version === 3 ? journal.workspace_projection.amendment : undefined;
+  assert(JSON.stringify(amendment) === JSON.stringify(options.workspaceAmendment), 'journal repair authorization changed');
+  const effective = amendment ? validateWorkspaceAmendment(previous, options, false) : previous;
   if (Object.hasOwn(journal, 'workspace_projection')) {
-    assert(journal.workspace_projection?.version === 2, 'unsupported workspace projection version');
-    for (const key of ['root_ref', 'required_untracked', 'inflight_scope']) assert(JSON.stringify(draft.workspace?.[key]) === JSON.stringify(previous.workspace?.[key]), `journal changed protected workspace ${key}`);
+    assert([2, 3].includes(journal.workspace_projection?.version), 'unsupported workspace projection version');
+    for (const key of ['root_ref', 'required_untracked', 'inflight_scope']) assert(JSON.stringify(draft.workspace?.[key]) === JSON.stringify(effective.workspace?.[key]), `journal changed protected workspace ${key}`);
   } else assert(JSON.stringify(draft?.workspace) === JSON.stringify(previous.workspace), 'journal changed protected workspace');
-  for (const key of ['objective', 'prohibitions', 'rule_baseline', 'invalidation_conditions', 'runtime_acceptance_status', 'professional_acceptance_status']) assert(JSON.stringify(draft?.[key]) === JSON.stringify(previous[key]), `journal changed protected ${key}`);
+  for (const key of ['objective', 'prohibitions', 'rule_baseline', 'invalidation_conditions', 'runtime_acceptance_status', 'professional_acceptance_status']) assert(JSON.stringify(draft?.[key]) === JSON.stringify(effective[key]), `journal changed protected ${key}`);
   assert(draft?.schema_version === 4 && draft.generation === previous.generation + 1 && draft.writer_id === options.recipient.writerId && draft.event_id === options.eventId && draft.handoff_phase === 'TAKEOVER_COMPLETED' && draft.switch_status === 'COMPLETED' && draft.communications?.status === 'NONE', 'journal completion target mismatch');
   assert(Object.keys(draft.sources).sort().join(',') === Object.keys(previous.sources).sort().join(','), 'journal source set mismatch');
   for (const [name, source] of Object.entries(previous.sources)) {
@@ -193,7 +198,8 @@ function commitJournal(journal, paths, options) {
   }
   recheckDependencies(journal, options, previous);
   if (journal.workspace_projection) {
-    const workspace = { ...previous.workspace, ...readGitWorkspaceBaseline(options.sourceRoot, previous.workspace.required_untracked?.map(item => item.path_ref) ?? [], previous.workspace.inflight_scope ?? null) };
+    const effective = journal.workspace_projection.version === 3 ? validateWorkspaceAmendment(previous, options, false) : previous;
+    const workspace = { ...effective.workspace, ...readGitWorkspaceBaseline(options.sourceRoot, effective.workspace.required_untracked?.map(item => item.path_ref) ?? [], effective.workspace.inflight_scope ?? null) };
     recheckDependencies(journal, options, previous);
     if (committed) assert(JSON.stringify(committed.workspace) === JSON.stringify(workspace), 'completed workspace conflicts with transaction evidence');
     journal.draft.workspace = workspace;
@@ -217,6 +223,7 @@ export function takeoverHandoff(options) {
     return withControlLock(latest, options, paths => {
       assertControlReady(latest, options);
       const journal = JSON.parse(fs.readFileSync(paths.journal, 'utf8')); checkJournal(journal, options, history);
+      if (journal.workspace_projection?.version === 3) recheckDependencies(journal, options, previous);
       const live = verifyChain(options.sealDirectory, options);
       assert(journal.status === 'COMPLETED' && live.status === 'PASS' && live.control_status === 'READY' && latest.writer_id === options.recipient.writerId && latest.previous_seal_digest === previous.seal_digest && latest.transition?.intent_digest === journal.intent_digest, 'completed takeover needs recovery or revalidation');
       return { status: 'COMPLETED', generation: latest.generation, writer_id: latest.writer_id, restrictions: latest.restrictions || [], old_authorization_inherited: false };
@@ -238,10 +245,10 @@ export function takeoverHandoff(options) {
       else workspaceProjection = undefined; // Preserve old intent bytes and strict old recovery semantics.
     } else intent = prepareDirectTransition(options.sealDirectory, { ...options, expectedPreviousDigest: latest.seal_digest, workspace_projection_sha256: byteDigest(Buffer.from(JSON.stringify(workspaceProjection))) }).intent;
     const stamp = new Date().toISOString();
-    const draft = structuredClone(latest);
+    const draft = structuredClone(validateWorkspaceAmendment(latest, options));
     Object.assign(draft, { schema_version: 4, generation: latest.generation + 1, writer_id: options.recipient.writerId, old_writer_status: options.confirmation.old_writer_status, event_id: options.eventId, fact_cutoff: stamp, sealed_at: stamp, switch_status: 'COMPLETED', handoff_phase: 'TAKEOVER_COMPLETED', candidate_verification_status: result.status === 'READY' ? 'PASS' : 'PASS_WITH_RESTRICTIONS', control_handoff_confidence: 'HIGH', communications: { status: 'NONE' }, restrictions: result.remote.status === 'UNKNOWN' ? ['REMOTE_UNOBSERVED'] : [], remote: { ...draft.remote, status: result.remote.status, head: result.remote.head || null, observed_at: result.remote.observed_at || null }, transition: null, migration: null, seal_digest: '' });
     for (const item of plan) for (const name of item.names) { draft.sources[name].digest = item.after_sha256; draft.sources[name].fact_cutoff = stamp; }
-    const journal = { protocol_version: 1, current_render_version: 3, ...(workspaceProjection ? { workspace_projection: workspaceProjection } : {}), status: 'PREPARED', event_id: options.eventId, previous_seal_digest: latest.seal_digest, confirmation: structuredClone(options.confirmation), intent_digest: intent.transition_digest, intent_path: `handoff-transition.${intent.previous_sequence}.${intent.transition_digest}.json`, plan, draft, prepared_at: stamp };
+    const journal = { protocol_version: 1, current_render_version: 4, ...(workspaceProjection ? { workspace_projection: workspaceProjection } : {}), status: 'PREPARED', event_id: options.eventId, previous_seal_digest: latest.seal_digest, confirmation: structuredClone(options.confirmation), intent_digest: intent.transition_digest, intent_path: `handoff-transition.${intent.previous_sequence}.${intent.transition_digest}.json`, plan, draft, prepared_at: stamp };
     // Durable evidence precedes the first central file mutation.
     writeJournal(paths.journal, journal); options.fault?.('after-journal');
     return withControlTransaction(latest, options, () => commitJournal(journal, paths, options));

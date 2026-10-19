@@ -10,6 +10,7 @@ import { readGitWorkspaceBaseline } from './Prepare-Handoff.mjs';
 import { takeoverHandoff, recoverTakeover, rollbackTakeover } from './Takeover-Handoff.mjs';
 import { controlPaths, withControlLock, withControlTransaction } from './HandoffControl.mjs';
 import { verifyHandoffCandidate } from './Verify-Handoff-Candidate.mjs';
+import { createWorkspaceAmendment, validateWorkspaceAmendment } from './HandoffWorkspaceAmendment.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const cache = path.join(root, '.codex-manual-cache');
@@ -21,7 +22,7 @@ const workflowRoot = path.join(root, '总指挥工作流/第二代总指挥的�
 const manifestPath = path.join(workflowRoot, '规则刷新manifest.json');
 const recipient = { writerId: 'SYNTHETIC-NEW', platformTaskId: '11111111-1111-4111-8111-111111111111', projectKey: 'SYNTHETIC' };
 let count = 0;
-function fixture(external = false, overrides = {}, englishDeclarations = false, preparationFields = '', layout = '', scoped = false, existingChange = false) {
+function fixture(external = false, overrides = {}, englishDeclarations = false, preparationFields = '', layout = '', scoped = false, existingChange = false, requiredOriginal = false, localManifest = false) {
   const base = path.join(temp, String(++count)); fs.mkdirSync(base);
   const sourceRoot = path.join(base, 'source'); fs.mkdirSync(sourceRoot);
   const externalControlPlaneRoot = external ? path.join(base, 'external') : undefined;
@@ -30,7 +31,10 @@ function fixture(external = false, overrides = {}, englishDeclarations = false, 
   git(['init', '--quiet', '--initial-branch=main']);
   fs.writeFileSync(path.join(sourceRoot, '.gitignore'), '.control/\n');
   fs.writeFileSync(path.join(sourceRoot, 'probe.txt'), 'base\n');
+  const localManifestRef = '总指挥工作流/第二代总指挥的工作模式/规则刷新manifest.json';
+  if (localManifest) { fs.mkdirSync(path.dirname(path.join(sourceRoot, localManifestRef)), { recursive: true }); fs.copyFileSync(manifestPath, path.join(sourceRoot, localManifestRef)); }
   git(['add', '--', '.gitignore', 'probe.txt']);
+  if (localManifest) git(['add', '--', localManifestRef]);
   git(['-c', 'user.name=Synthetic Test', '-c', 'user.email=test@example.invalid', 'commit', '--quiet', '-m', 'synthetic']);
   git(['remote', 'add', 'origin', sourceRoot]);
   const stamp = '2026-01-01T00:00:00.000Z', sources = {};
@@ -51,6 +55,8 @@ function fixture(external = false, overrides = {}, englishDeclarations = false, 
   }
   const sealDirectory = path.join(base, 'seals');
   if (existingChange) fs.appendFileSync(path.join(sourceRoot, 'probe.txt'), 'original accepted change\n');
+  const required = requiredOriginal ? [{ path_ref: 'original.txt', sha256: hash(Buffer.from('original untracked\n')), reason: 'synthetic original' }] : [];
+  if (requiredOriginal) fs.writeFileSync(path.join(sourceRoot, 'original.txt'), 'original untracked\n');
   let inflightScope = null;
   if (scoped) {
     fs.mkdirSync(path.join(sourceRoot, 'business'));
@@ -62,13 +68,14 @@ function fixture(external = false, overrides = {}, englishDeclarations = false, 
   }
   const draft = { schema_version: 3, record_type: 'handoff-seal', generation: 1, writer_id: 'SYNTHETIC-OLD', old_writer_status: 'UNKNOWN', fact_cutoff: stamp, sealed_at: stamp, event_id: 'synthetic-material', sources, source_digest_status: 'PASS', rule_baseline: { rule_version: JSON.parse(fs.readFileSync(manifestPath)).rule_version, manifest_sha256: hash(fs.readFileSync(manifestPath)) }, objective: { summary: 'synthetic', breakpoint: 'read-only' }, prohibitions: ['remote-write'], communications: { status: 'NONE' }, workspace: { root_ref: '<PROJECT_ROOT>', ...readGitWorkspaceBaseline(sourceRoot), required_untracked: [] }, remote: { status: 'PASS', default_ref: 'refs/heads/main', head: git(['rev-parse', 'HEAD']), observed_at: stamp }, control_handoff_confidence: 'HIGH', candidate_verification_status: 'PASS', switch_status: 'READY', handoff_phase: 'MATERIAL_PREPARED', runtime_acceptance_status: 'NOT_RUN', professional_acceptance_status: 'NOT_APPLICABLE', transition: null, migration: null, invalidation_conditions: ['source drift'], seal_digest: '' };
   Object.assign(draft, overrides);
+  if (requiredOriginal) draft.workspace = { ...draft.workspace, ...readGitWorkspaceBaseline(sourceRoot, required.map(f => f.path_ref)), required_untracked: required };
   if (scoped) draft.workspace = { root_ref: '<PROJECT_ROOT>', ...readGitWorkspaceBaseline(sourceRoot, [], inflightScope), required_untracked: [] };
   const material = appendSeal(sealDirectory, draft, { sourceRoot, externalControlPlaneRoot });
   const confirmation = { protocol_version: 1, origin: 'CURRENT_OPERATOR_MESSAGE', evidence_ref: 'synthetic-direct-confirmation', confirmed_at: new Date().toISOString(), project_key: 'SYNTHETIC', previous_seal_digest: material.seal_digest, old_generation: 1, old_writer_id: 'SYNTHETIC-OLD', old_writer_status: 'STOPPED_DISPATCH', recipient_writer_id: recipient.writerId, recipient_platform_id: recipient.platformTaskId, scope: 'HANDOFF_PREPARE_COMMIT_ONLY', transfer_confirmed: true };
-  return { sourceRoot, externalControlPlaneRoot, sealDirectory, workflowRoot, manifestPath, recipient, confirmation, eventId: 'synthetic-takeover', material, git };
+  return { sourceRoot, externalControlPlaneRoot, sealDirectory, workflowRoot, manifestPath: localManifest ? path.join(sourceRoot, localManifestRef) : manifestPath, recipient, confirmation, eventId: 'synthetic-takeover', material, git };
 }
 let passed = 0;
-function check(name, fn) { fn(); passed++; console.log(`PASS: ${name}`); }
+function check(name, fn) { if (process.argv.includes('--repair-only') && !/repair/i.test(name)) return; fn(); passed++; console.log(`PASS: ${name}`); }
 
 const one = fixture();
 check('preflight refuses a tracked private index before recommending stop', () => {
@@ -241,13 +248,20 @@ check('unversioned historical partial journal rolls back exact bytes and keeps s
   assert.equal(rollbackTakeover(f).status, 'ROLLED_BACK_STOPPED');
   for (const item of journal.plan) assert.equal(hash(fs.readFileSync(path.join(f.sourceRoot, item.path_ref))), item.before_sha256);
 });
-for (const version of [1, 0, 4, '2', null]) check(`changed CURRENT renderer version ${version} is rejected before writes`, () => {
+for (const version of [1, 0, 5, '2', null]) check(`changed CURRENT renderer version ${version} is rejected before writes`, () => {
   const f = fixture(); assert.throws(() => takeoverHandoff({ ...f, fault: stage => { if (stage === 'after-journal') throw new Error('interrupt'); } }));
   const journalPath = controlPaths(f.material, f).journal, journal = JSON.parse(fs.readFileSync(journalPath));
-  assert.equal(journal.current_render_version, 3); journal.current_render_version = version;
+  assert.equal(journal.current_render_version, 4); journal.current_render_version = version;
   fs.writeFileSync(journalPath, JSON.stringify(journal));
   assert.throws(() => recoverTakeover(f), /render version|target bytes changed/);
   for (const item of journal.plan) assert.equal(hash(fs.readFileSync(path.join(f.sourceRoot, item.path_ref))), item.before_sha256);
+});
+check('repair rejects downgrading an alias-bearing version4 plan to version3', () => {
+  const f = fixture(false, {}, false, '当前平台任务：old-platform-task\n');
+  assert.throws(() => takeoverHandoff({ ...f, fault: point => { if (point === 'after-journal') throw new Error('interrupt'); } }));
+  const file = controlPaths(f.material, f).journal, journal = JSON.parse(fs.readFileSync(file));
+  journal.current_render_version = 3; fs.writeFileSync(file, JSON.stringify(journal));
+  assert.throws(() => recoverTakeover(f), /target bytes changed/);
 });
 check('supported English identity declarations follow the new canonical identity', () => {
   const f = fixture(false, {}, true); assert.equal(takeoverHandoff(f).status, 'COMPLETED');
@@ -386,6 +400,104 @@ check('completion seal forbids rollback', () => {
 });
 check('source drift before prepare is rejected', () => { const f = fixture(); fs.appendFileSync(path.join(f.sourceRoot, '.control/current_view.md'), 'drift'); assert.throws(() => takeoverHandoff(f), /source|candidate/i); });
 check('required workspace change is preserved and blocks takeover', () => { const f = fixture(); fs.appendFileSync(path.join(f.sourceRoot, 'probe.txt'), 'change'); assert.throws(() => takeoverHandoff(f), /workspace|candidate/i); assert.ok(fs.readFileSync(path.join(f.sourceRoot, 'probe.txt'), 'utf8').includes('change')); });
+function amendedFixture() {
+  const f = fixture(false, {}, false, '', 'entry', false, false, true);
+  fs.unlinkSync(path.join(f.sourceRoot, 'probe.txt')); fs.unlinkSync(path.join(f.sourceRoot, 'original.txt'));
+  f.workspaceAmendment = createWorkspaceAmendment(f.material, f, { evidence_ref: 'synthetic-operator-confirmed-deletions', deletions: ['probe.txt', 'original.txt'], maintenance: [] });
+  return f;
+}
+check('repair takeover updates the actual Chinese platform-task alias in every CURRENT', () => {
+  const f = fixture(false, {}, false, '当前平台任务：old-platform-task\n');
+  assert.equal(takeoverHandoff(f).status, 'COMPLETED');
+  for (const name of ['status_index', 'central_work_items', 'current_view', 'central_entry']) {
+    const current = fs.readFileSync(path.join(f.sourceRoot, f.material.sources[name].path_ref), 'utf8').split('<!-- CURRENT:BEGIN -->')[1].split('<!-- CURRENT:END -->')[0];
+    assert.ok(current.includes(`当前平台任务：${recipient.platformTaskId}`)); assert.ok(!current.includes('old-platform-task'));
+  }
+});
+check('receiving repair bridges exact tracked and required-untracked deletions without old-writer seals', () => {
+  const f = amendedFixture();
+  assert.equal(verifyHandoffCandidate(f).workspace.status, 'PASS');
+  assert.equal(takeoverHandoff(f).status, 'COMPLETED');
+  assert.equal(takeoverHandoff(f).status, 'COMPLETED');
+  const live = verifyChain(f.sealDirectory, f); assert.equal(live.status, 'PASS');
+  assert.equal(live.records.length, 2); assert.equal(live.latest.generation, 2);
+  assert.deepEqual(live.latest.workspace.required_untracked, []);
+  assert.equal(fs.existsSync(path.join(f.sourceRoot, 'probe.txt')), false);
+});
+for (const field of ['version', 'previous_seal_digest', 'recipient_writer_id', 'recipient_platform_id', 'scope']) {
+  check(`repair rejects tampered ${field}`, () => { const f = amendedFixture(); f.workspaceAmendment[field] = 'tampered'; assert.throws(() => takeoverHandoff(f), /AMENDMENT|candidate/); });
+}
+check('repair refuses an extra deletion or unrelated file change', () => {
+  const f = amendedFixture(); fs.appendFileSync(path.join(f.sourceRoot, '.gitignore'), '#extra\n');
+  assert.throws(() => takeoverHandoff(f), /AMENDMENT|candidate/);
+});
+check('repair refuses removed original reappearing and path traversal', () => {
+  const f = amendedFixture(); fs.writeFileSync(path.join(f.sourceRoot, 'original.txt'), 'reappeared');
+  assert.throws(() => takeoverHandoff(f), /AMENDMENT|candidate/);
+  f.workspaceAmendment.deletions.push('../outside'); assert.throws(() => validateWorkspaceAmendment(f.material, f), /unsafe exact path/);
+});
+for (const stage of ['after-journal', 'after-write-3', 'after-seal']) {
+  check(`repair recovers interruption at ${stage}`, () => {
+    const f = amendedFixture(); assert.throws(() => takeoverHandoff({ ...f, fault: point => { if (point === stage) throw new Error('repair interruption'); } }), /repair interruption/);
+    assert.equal(recoverTakeover(f).status, 'COMPLETED'); assert.equal(verifyChain(f.sealDirectory, f).status, 'PASS');
+  });
+}
+check('repair rollback preserves deliberate deletions and rejects changed repair grant', () => {
+  const f = amendedFixture(); assert.throws(() => takeoverHandoff({ ...f, fault: p => { if (p === 'after-journal') throw new Error('repair interruption'); } }));
+  const altered = structuredClone(f.workspaceAmendment); altered.evidence_ref = 'different-grant';
+  assert.throws(() => recoverTakeover({ ...f, workspaceAmendment: altered }), /authorization changed/);
+  assert.equal(rollbackTakeover(f).status, 'ROLLED_BACK_STOPPED'); assert.equal(fs.existsSync(path.join(f.sourceRoot, 'original.txt')), false);
+});
+check('repair immutable anchor rejects journal amendment tampering', () => {
+  const f = amendedFixture(); assert.throws(() => takeoverHandoff({ ...f, fault: p => { if (p === 'after-journal') throw new Error('repair interruption'); } }));
+  const file = controlPaths(f.material, f).journal, j = JSON.parse(fs.readFileSync(file));
+  j.workspace_projection.amendment.evidence_ref = 'tampered'; fs.writeFileSync(file, JSON.stringify(j));
+  assert.throws(() => recoverTakeover(f), /anchor mismatch/);
+});
+check('repair detects index or workspace drift after journal', () => {
+  const f = amendedFixture(); assert.throws(() => takeoverHandoff({ ...f, fault: p => { if (p === 'after-journal') throw new Error('repair interruption'); } }));
+  fs.appendFileSync(path.join(f.sourceRoot, '.gitignore'), '#later\n'); f.git(['add', '--', '.gitignore']);
+  assert.throws(() => recoverTakeover(f), /worktree or index changed/);
+});
+function maintainedFixture() {
+  const f = fixture(false, {}, false, '', 'entry', false, false, true, true);
+  const ref = '总指挥工作流/第二代总指挥的工作模式/规则刷新manifest.json';
+  const before = fs.readFileSync(f.manifestPath).toString('base64');
+  fs.appendFileSync(f.manifestPath, '\n');
+  const script = '.github/scripts/synthetic-repair.mjs'; fs.mkdirSync(path.join(f.sourceRoot, '.github/scripts'), { recursive: true }); fs.writeFileSync(path.join(f.sourceRoot, script), '// synthetic maintenance\n');
+  fs.unlinkSync(path.join(f.sourceRoot, 'probe.txt')); fs.unlinkSync(path.join(f.sourceRoot, 'original.txt'));
+  const grant = { evidence_ref: 'synthetic-operator-scoped-maintenance', deletions: ['probe.txt', 'original.txt'], maintenance: [{ path_ref: ref, before_base64: before, before_diff: '' }, { path_ref: script, before_base64: null, before_diff: '' }] };
+  f.workspaceAmendment = createWorkspaceAmendment(f.material, f, grant); f.repairGrant = grant;
+  return f;
+}
+check('repair bridges maintenance and rule manifest into the new completion baseline', () => {
+  const f = maintainedFixture(); assert.equal(takeoverHandoff(f).status, 'COMPLETED');
+  const latest = verifyChain(f.sealDirectory, f).latest;
+  assert.equal(latest.rule_baseline.manifest_sha256, hash(fs.readFileSync(f.manifestPath)));
+  assert.notEqual(latest.rule_baseline.manifest_sha256, f.material.rule_baseline.manifest_sha256);
+});
+for (const invalid of ['version', 'entry']) {
+  check(`repair rejects unapproved manifest ${invalid}`, () => {
+    const f = maintainedFixture(), m = JSON.parse(fs.readFileSync(f.manifestPath));
+    if (invalid === 'version') m.rule_version += '-unapproved'; else m.rules.pop();
+    fs.writeFileSync(f.manifestPath, JSON.stringify(m));
+    assert.throws(() => createWorkspaceAmendment(f.material, f, f.repairGrant), /rule contract|rule entry removed/);
+  });
+}
+check('repair rejects maintenance or manifest changes after proof creation', () => {
+  const f = maintainedFixture(); fs.appendFileSync(path.join(f.sourceRoot, '.github/scripts/synthetic-repair.mjs'), 'changed');
+  assert.throws(() => takeoverHandoff(f), /maintenance file changed/);
+  const g = maintainedFixture(); fs.appendFileSync(g.manifestPath, ' '); assert.throws(() => takeoverHandoff(g), /maintenance file changed/);
+});
+for (const invalid of ['missing', 'invalid', 'advanced']) {
+  check(`repair permits exact rollback after live manifest becomes ${invalid}`, () => {
+    const f = maintainedFixture(); assert.throws(() => takeoverHandoff({ ...f, fault: p => { if (p === 'after-write-1') throw new Error('repair interruption'); } }), /repair interruption/);
+    if (invalid === 'missing') fs.unlinkSync(f.manifestPath); else fs.writeFileSync(f.manifestPath, invalid === 'invalid' ? 'broken json' : JSON.stringify({ ...JSON.parse(fs.readFileSync(f.manifestPath)), rule_version: 'future-version' }));
+    assert.throws(() => recoverTakeover(f)); assert.equal(rollbackTakeover(f).status, 'ROLLED_BACK_STOPPED');
+    assert.equal(fs.existsSync(path.join(f.sourceRoot, 'original.txt')), false);
+    assert.equal(fs.existsSync(path.join(f.sourceRoot, '.github/scripts/synthetic-repair.mjs')), true);
+  });
+}
 async function compete() {
   const f = fixture(), second = path.join(path.dirname(f.sealDirectory), 'second-chain'); appendSeal(second, { ...f.material }, f);
   const first = { ...f }, other = { ...f, sealDirectory: second, eventId: 'synthetic-other', recipient: { ...recipient, writerId: 'SYNTHETIC-OTHER', platformTaskId: '22222222-2222-4222-8222-222222222222' } };
@@ -403,5 +515,5 @@ async function compete() {
   assert.equal(JSON.parse(body.match(/<!-- CONTROL_IDENTITY: (.*) -->/)[1]).generation, 2);
   passed++; console.log('PASS: two receiving processes and different chains have one CAS winner');
 }
-await compete();
+if (!process.argv.includes('--repair-only')) await compete();
 console.log(`Direct handoff journey: ${passed} PASS. Synthetic fixtures retained under ignored cache.`);

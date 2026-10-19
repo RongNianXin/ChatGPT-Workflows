@@ -4,6 +4,7 @@ import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { verifyChain } from './HandoffSeal.mjs';
 import { assertPrivateControlStorage } from './HandoffControl.mjs';
+import { validateWorkspaceAmendment } from './HandoffWorkspaceAmendment.mjs';
 import { classifyRuleDrift, verifyRuleManifest, verifyWorkspaceBaseline, readLiveRemoteBaseline } from './Prepare-Handoff.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -30,7 +31,7 @@ function verifyRotation(chain, { nextGeneration, nextWriterId, eventId }) {
   return { ...result, status: 'MATCHED', can_stop_old: true };
 }
 
-export function verifyHandoffCandidate({ sealDirectory, sourceRoot, externalControlPlaneRoot, workflowRoot = defaultWorkflowRoot, manifestPath = path.join(workflowRoot, '规则刷新manifest.json'), remoteRequired = false, nextGeneration, nextWriterId, eventId } = {}) {
+export function verifyHandoffCandidate({ sealDirectory, sourceRoot, externalControlPlaneRoot, workflowRoot = defaultWorkflowRoot, manifestPath = path.join(workflowRoot, '规则刷新manifest.json'), remoteRequired = false, nextGeneration, nextWriterId, eventId, workspaceAmendment, recipient } = {}) {
   const result = { status: 'BLOCKED', chain: null, rule: null, workspace: null, remote: null, rotation: { status: 'NOT_CHECKED', can_stop_old: false, errors: [] }, actions: [], errors: [] };
   let chain;
   try { chain = verifyChain(sealDirectory, { sourceRoot, externalControlPlaneRoot }); } catch (error) { result.errors.push(`SEAL_VERIFY_FAILED: ${error.message}`); return result; }
@@ -52,7 +53,11 @@ export function verifyHandoffCandidate({ sealDirectory, sourceRoot, externalCont
   catch (error) { result.rule = { status: error.message.startsWith('INPUT_REQUIRED:') ? 'INPUT_REQUIRED' : 'FAIL' }; result.errors.push(`RULE_SOURCE_INVALID: ${error.message}`); return result; }
   const liveManifestDigest = liveManifest && fs.existsSync(manifestPath)
     ? crypto.createHash('sha256').update(fs.readFileSync(manifestPath)).digest('hex') : null;
-  const pinned = chain.latest.rule_baseline || {};
+  let effective;
+  const amendmentOptions = { sourceRoot, externalControlPlaneRoot, workspaceAmendment, recipient };
+  try { effective = validateWorkspaceAmendment(chain.latest, amendmentOptions); }
+  catch (error) { result.errors.push(error.message); return result; }
+  const pinned = effective.rule_baseline || {};
   const live = { rule_version: liveManifest.rule_version, manifest_sha256: liveManifestDigest };
   const drift = classifyRuleDrift({ pinned, live });
   result.rule = { status: drift.status, action: drift.action, pinned: { rule_version: pinned.rule_version, manifest_sha256: pinned.manifest_sha256 }, live };
@@ -61,7 +66,7 @@ export function verifyHandoffCandidate({ sealDirectory, sourceRoot, externalCont
     result.actions.push('规则变化只暂停受影响切换；接收方定点核验并保存新观察，无法证明安全时给出最小恢复，不正常返旧取票据');
     return result;
   }
-  const workspaceErrors = verifyWorkspaceBaseline(sourceRoot, chain.latest.workspace, chain.latest.sources, { externalControlPlaneRoot, ruleBaseline: chain.latest.rule_baseline, workflowRepositoryRoot: path.resolve(workflowRoot, '../..') });
+  const workspaceErrors = verifyWorkspaceBaseline(sourceRoot, effective.workspace, chain.latest.sources, { externalControlPlaneRoot, ruleBaseline: effective.rule_baseline, workflowRepositoryRoot: path.resolve(workflowRoot, '../..') });
   result.workspace = { status: workspaceErrors.length ? 'FAIL' : 'PASS', errors: workspaceErrors };
   if (workspaceErrors.length) { result.errors.push(...workspaceErrors); return result; }
   try {
@@ -84,7 +89,8 @@ export function verifyHandoffCandidate({ sealDirectory, sourceRoot, externalCont
     assertPrivateControlStorage(finalChain.latest, { sourceRoot, externalControlPlaneRoot });
     const finalManifest = verifyRuleManifest(workflowRoot, manifestPath);
     const finalManifestDigest = crypto.createHash('sha256').update(fs.readFileSync(manifestPath)).digest('hex');
-    const finalWorkspaceErrors = verifyWorkspaceBaseline(sourceRoot, chain.latest.workspace, chain.latest.sources, { externalControlPlaneRoot, ruleBaseline: chain.latest.rule_baseline, workflowRepositoryRoot: path.resolve(workflowRoot, '../..') });
+    validateWorkspaceAmendment(chain.latest, amendmentOptions);
+    const finalWorkspaceErrors = verifyWorkspaceBaseline(sourceRoot, effective.workspace, chain.latest.sources, { externalControlPlaneRoot, ruleBaseline: effective.rule_baseline, workflowRepositoryRoot: path.resolve(workflowRoot, '../..') });
     const intents = value => JSON.stringify((value.pending_intents || []).map(intent => intent.transition_digest).sort());
     if (finalChain.status !== 'PASS' || finalChain.control_status !== 'READY' ||
         finalChain.latest?.seal_digest !== chain.latest.seal_digest || intents(finalChain) !== intents(chain) ||

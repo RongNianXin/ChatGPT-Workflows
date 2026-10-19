@@ -5,6 +5,7 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { byteDigest as hash, resolveSource } from './HandoffControl.mjs';
 import { collectScopedWorkspaceBaseline } from './HandoffWorkspaceScope.mjs';
+import { validateWorkspaceAmendment } from './HandoffWorkspaceAmendment.mjs';
 
 const assert = (condition, message) => { if (!condition) throw new Error(`workspace changed during transaction: ${message}`); };
 const digest = value => hash(Buffer.from(JSON.stringify(value)));
@@ -79,14 +80,21 @@ function validateBefore(evidence, previous, plan, options) {
   protectedEvidence(evidence); // Reject ambiguous projections before mutation.
 }
 export function captureTransactionWorkspace(previous, plan, options) {
-  const evidence = observe(previous.workspace, plan, options);
-  validateBefore(evidence, previous, plan, options);
-  return { version: 2, before: evidence };
+  const effective = validateWorkspaceAmendment(previous, options);
+  const evidence = observe(effective.workspace, plan, options);
+  validateBefore(evidence, effective, plan, options);
+  return options.workspaceAmendment ? { version: 3, amendment: structuredClone(options.workspaceAmendment), before: evidence } : { version: 2, before: evidence };
 }
 export function verifyTransactionWorkspace(journal, previous, options) {
   const proof = journal.workspace_projection;
-  assert(proof?.version === 2, 'unknown projection version');
-  validateBefore(proof.before, previous, journal.plan, options);
+  assert([2, 3].includes(proof?.version), 'unknown projection version');
+  const effective = proof.version === 3 ? validateWorkspaceAmendment(previous, { ...options, workspaceAmendment: proof.amendment }, false) : previous;
+  if (proof.version === 3) for (const ref of proof.amendment.deletions) {
+    const file = path.join(options.sourceRoot, ref);
+    let exists = true; try { fs.lstatSync(file); } catch (error) { if (error.code === 'ENOENT') exists = false; else throw error; }
+    assert(!exists, 'deleted original reappeared');
+  }
+  validateBefore(proof.before, effective, journal.plan, options);
   for (const item of journal.plan) assert([item.before_sha256, item.after_sha256].includes(hash(fs.readFileSync(resolveSource(item, options)))), 'control byte conflict');
   for (const field of ['head', 'tree']) {
     const live = run(options.sourceRoot, ['rev-parse', field === 'tree' ? 'HEAD^{tree}' : 'HEAD']).toString('utf8').trim();
@@ -94,6 +102,6 @@ export function verifyTransactionWorkspace(journal, previous, options) {
   }
   const branch = spawnSync('git', ['-C', options.sourceRoot, 'symbolic-ref', '--short', '-q', 'HEAD'], { encoding: 'utf8' });
   assert([0, 1].includes(branch.status) && (branch.stdout.trim() || 'HEAD') === previous.workspace.branch, 'branch changed');
-  const live = observe(previous.workspace, journal.plan, options);
+  const live = observe(effective.workspace, journal.plan, options);
   assert(JSON.stringify(protectedEvidence(live)) === JSON.stringify(protectedEvidence(proof.before)), 'unrelated worktree or index changed');
 }

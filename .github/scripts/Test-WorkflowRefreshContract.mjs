@@ -331,6 +331,35 @@ checks.push(['accepted local result maps to the actual delivery candidate', prSt
 checks.push(['remote checks follow push readiness and merge timing', syncChecks, ['Push前完成候选本地必要验证', '未来新Head尚无检查不循环阻断Push', 'Push后回读精确新Head', '未触发、运行中、失败、通过与不可观察', '网络不可观察记未知', 'Ready与合并前遵守实际团队门禁', '旧Head通过不能代签新Head', '结果待实际合并后回读']]);
 checks.push(['reviewer checklist keeps necessary steps without copying CI', prStandard, ['检查目的、前提与输入、具体操作、预期结果或事先约定的容差、明确失败条件', '无此需求时说明不适用', 'CI引用精确Head的实时检查入口', '复现所需的环境准备和操作命令不能因去重省略', '干净环境验证与接收成员实际复现分别记录', '| 检查目的 | 前提与输入（含入口/准备） | 具体操作 | 预期结果或约定容差 | 失败条件 |']]);
 checks.push(['unconditional pre-push future checks requirement is removed', [scene4K, syncChecks].every(text => !/远端动作前(?:还)?必须(?:逐项)?读取目标 Commit\/Head/.test(text)) ? 'NO_FUTURE_CHECK_DEADLOCK' : '', ['NO_FUTURE_CHECK_DEADLOCK']]);
+const deploymentGate = read('02-总指挥核心规则.md').split('### 低信息部署请求与运行身份交付门禁')[1]?.split('\n### ')[0] || '';
+const deploymentEntry = read('01-操作者操作手册.md').split('### 场景 2D：展示最新修改的运行效果')[1]?.split('\n### ')[0] || '';
+checks.push(['latest deployment accounts for the full effective scoped outcome', deploymentGate, [
+  '本次应交付的最终有效内容', '04成果契约', '相关已提交、暂存、未暂存、必要未跟踪成果及删除/重命名',
+  '未提交、未存档或晚于恢复包不是排除理由', '明确删除、回退和替代决定仍保留',
+  '无关实验、私有素材和未授权改动不自动纳入', '先核对本次应包含的功能及后续修改',
+  '不能静默部署较旧可靠候选并称“最新”', '操作者明确指定旧版或对照版本时按指定范围核验'
+]]);
+checks.push(['deployment gaps preserve save, integration and permission boundaries', deploymentGate, [
+  '编辑器未落盘内容不计为已包含', '不可观察时保持未知', '明确需要的未保存内容只暂停依赖它的动作',
+  '多工作区尚未汇合', '在已有权限内处理必要的登记、保存、集成与验证',
+  '不绕过门禁、不擅自提交或存档，也不自动合并工作区', '本门禁不自动授权公网/共享部署',
+  '不能代签算法效果、设备或专业验收'
+]]);
+checks.push(['deployment reports whole identity and actual loaded content', deploymentGate, [
+  '绑定本次整体源码、配置、必要资源及实际涉及的各组件身份',
+  '不能由单个算法版本、提交或恢复包标签代替整体包含性', '核对服务和客户端加载内容',
+  '汇报复用“用户可见输出契约”', '开头用一到两句人话说明实际包含的功能和本轮最新修改',
+  '保留颜色、实线/虚线等影响理解的差别', '缺失和未验证项紧接说明',
+  '必要强制出口字段仍按原规则交付'
+]]);
+checks.push(['deployment manual and PR entry consume the same contract', `${deploymentEntry}\n${prStandard}`, [
+  '低信息部署请求与运行身份交付门禁', '从任务记录和实际工作区确认本次相关最新成果的完整范围',
+  '先用一到两句人话告诉我实际包含哪些功能和最新修改', '效果是否通过，由我实际查看后确认',
+  '实际代码提交/tree及本次相关工作区增量', '本地相关未提交成果不能只由HEAD代表',
+  '“最新”的范围与缺口处理沿[02部署门禁]', '不因本条扩大PR最终提交树或远端授权'
+]]);
+// These checks bind public prose and entry references, not a real deployment or
+// a guarantee that an agent, server or client actually used the intended files.
 for (const [name, text, needles] of checks) {
   const missing = needles.filter(needle => !text.includes(needle));
   if (missing.length) { failed += 1; console.error(`FAIL: ${name}: missing ${missing.join(', ')}`); }
@@ -514,7 +543,7 @@ const operatorManual = read('01-操作者操作手册.md');
 if (!coreRules.includes('### 用户可见输出契约') ||
     !coreRules.includes('均登记为本轮 `PRIMARY_OUTPUT`') ||
     !coreRules.includes('必须在面向操作者的主答复正文中直接呈现') ||
-    !coreRules.includes('若某项输出未完成、待确认或受阻，必须在第 1—3 项直接标明状态、原因、影响和恢复条件') ||
+    !coreRules.includes('明文要求的解释、未完成状态、影响和恢复条件必须在主答复直接交付，不能只留在记录中') ||
     !operatorManual.includes('提示词中明文要求的结果必须直接出现在 AI 面向你的主答复里')) {
   console.error('FAIL: explicit prompt outputs must be delivered in the visible primary response');
   process.exit(1);
@@ -526,13 +555,34 @@ if (!coreRules.includes('对执行型指令（包括规则刷新、读取核验�
     !coreRules.includes('1. 执行结果：成功 / 执行了一部分 / 失败 / 待确认 / 未执行 / 不适用 / 受阻') ||
     !coreRules.includes('4. 下一步操作建议：只给最推荐的一条，并写明行动方') ||
     !coreRules.includes('5. 执行细节：放验证依据、错误、恢复条件和场景要求的技术字段') ||
-    !workflowOverview.includes('所有执行型场景都先按 02 的统一五项外壳') ||
-    !operatorManual.includes('你可以先看主答复的前四项') ||
-    !riskRules.includes('执行型动作的操作者主答复统一按五项顺序输出')) {
+    !workflowOverview.includes('统一引用[02 用户可见输出契约]') ||
+    !operatorManual.includes('这些内容可以合并成简短段落，不要求固定五个标题') ||
+    !riskRules.includes('执行型动作的操作者主答复统一引用[02 用户可见输出契约]')) {
   console.error('FAIL: execution-oriented scenes must lead with a human result summary');
   process.exit(1);
 }
 console.log('PASS: execution-oriented scenes have a human result-summary gate');
+const returnRules = read('03-专项任务卡模板.md');
+const retrospectiveRules = read('06-复盘与优化规则.md');
+for (const needle of [
+  '下列十二项是内部核账目录', '五项是信息覆盖要求，不是强制五个标题或五段',
+  '开头先对照操作者原目标说明本轮实际得到什么、整体目标达到哪一步',
+  '不以阶段完成、多方意见一致或检查通过代替整体完成',
+  '原目标只要方案或文档且验收已满足时，就按该边界报告完成',
+  '原因或修复办法尚未知时如实说明', '排除、取消和被替代事项与真实未完项分开',
+  '说明谁做什么、为什么能推进原目标', '已有授权、前提满足的AI工作直接继续',
+  '纯问答直接回答', '操作者本轮明确的输出顺序和紧急安全提示优先',
+  '既有交接、发布等强制出口字段仍保留', '不为每次工具调用重复整份结果'
+]) {
+  if (!coreRules.includes(needle)) throw new Error(`Missing human result contract: ${needle}`);
+}
+if (coreRules.includes('每次汇报尽量使用以下顺序：') ||
+    !returnRules.includes('统一引用[02 用户可见输出契约]') ||
+    !retrospectiveRules.includes('汇报顺序、完成边界与段落合并统一引用[02 用户可见输出契约]') ||
+    retrospectiveRules.includes('结论与下一步 → 必要操作 → 按需证据')) {
+  throw new Error('Conflicting operator report order or missing unique 02 reference');
+}
+console.log('PASS: one report contract covers completion boundaries, concise prose and goal-linked next action (static contract, not live model behavior)');
 for (const needle of ['先说明它为什么与当前目标有关', '是否只用假数据', '不等于正在交接对话', '测试目录选错不等于产品功能失败', '不能把本地检查要求说成远端平台的新要求', '请求授权时只列真实权限差额', '这不放宽仓库外写入、隐私、远端和其他安全门禁']) {
   if (!coreRules.includes(needle)) throw new Error(`Missing goal-bound validation explanation: ${needle}`);
 }
