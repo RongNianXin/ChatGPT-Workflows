@@ -8,7 +8,9 @@ import { fileURLToPath } from 'node:url';
 import { inspect } from './Inspect-WorktreeLifecycle.mjs';
 
 const script = fileURLToPath(new URL('./Inspect-WorktreeLifecycle.mjs', import.meta.url));
-const fixture = fs.mkdtempSync(path.join(os.tmpdir(), 'worktree-lifecycle-'));
+// TEMP may be a short-path alias or junction on hosted runners. Normal cases
+// use the canonical root; the explicit alias case below still requires review.
+const fixture = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'worktree-lifecycle-')));
 const repo = path.join(fixture, 'repository');
 const target = path.join(fixture, 'linked space 测试');
 const record = path.join(fixture, 'projection.json');
@@ -49,7 +51,7 @@ try {
   save(projection());
   check('clean detached remains unverified', () => {
     const r = read(); assert.equal(r.observed.detached, true);
-    assert.equal(r.decision, 'CANDIDATE_PENDING_EVIDENCE_REVIEW');
+    assert.equal(r.decision, 'CANDIDATE_PENDING_EVIDENCE_REVIEW', `unexpected gaps: ${r.gaps.join(', ')}`);
     assert.equal(r.deletion_authorized, false); assert.equal(r.semantic_verification, 'NOT_PERFORMED');
   });
   check('missing record localized', () => assert.ok(gap(inspect({ worktree: target, event: 'complete' }), 'RECORD_PROJECTION_REQUIRED')));
