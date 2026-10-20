@@ -21,6 +21,7 @@ const REFRESH_REQUIRED_RULES = [
   '.github/scripts/Inspect-RuleRefresh.mjs',
   '.github/scripts/Inspect-QuotaProtection.mjs',
   '.github/scripts/Inspect-PrReviewPayload.mjs',
+  '.github/scripts/Inspect-WorktreeLifecycle.mjs',
   '.github/scripts/Test-OperatorManualReferences.mjs',
   'templates/OPERATOR_MANUAL_REFERENCES.json',
   ...Array.from({ length: 12 }, (_, index) => `${String(index).padStart(2, '0')}-`),
@@ -636,6 +637,15 @@ if (broadcast.includes('发送方事件封套模板') || broadcast.includes('规
   process.exit(1);
 }
 const manifestPath = path.join(workflow, '规则刷新manifest.json');
+for (const [file, needles] of [
+  ['02-总指挥核心规则.md', ['生命周期沿同一记录闭环', '业务任务状态、对话归档与物理资源去留分别记录', 'Inspect-WorktreeLifecycle.mjs', '不默认force', '同步/合并回读完成即触发']],
+  ['03-专项任务卡模板.md', ['用途被替代时', '02 Worktree生命周期']],
+  ['09-自动化授权与风险分级.md', ['物理清除仍绑定精确对象及有效权限', '缺口仅阻断对应对象']],
+  ['10-自动状态索引规范.md', ['不为此另建平行台账', 'semantic_verification=NOT_PERFORMED', 'deletion_authorized=false', '不是完整源码/忽略资产内容哈希']]
+]) {
+  for (const needle of needles) if (!read(file).includes(needle)) throw new Error(`Lifecycle trigger/authority contract missing in ${file}: ${needle}`);
+}
+if (!fs.readFileSync(path.join(root, '.github/scripts/Test-Repository.ps1'), 'utf8').includes("& node (Join-Path $PSScriptRoot 'Test-Inspect-WorktreeLifecycle.mjs')")) throw new Error('Lifecycle regression is not wired to the real quality entry');
 const manifestBytes = fs.readFileSync(manifestPath);
 const manifest = JSON.parse(manifestBytes.toString('utf8'));
 const versionedRules = ['00-第二代工作流总览.md', '02-总指挥核心规则.md', '09-自动化授权与风险分级.md', '10-自动状态索引规范.md', '总指挥轻量交接启动配置.md'];

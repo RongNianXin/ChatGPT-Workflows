@@ -1363,6 +1363,8 @@ if ($LASTEXITCODE -ne 0) { throw '操作者手册与外部工具入口检查失�
 if ($LASTEXITCODE -ne 0) { throw '操作者手册场景编号、语义绑定与交叉引用检查失败。' }
 & node (Join-Path $PSScriptRoot 'Test-Inspect-WorkspaceTracking.mjs')
 if ($LASTEXITCODE -ne 0) { throw '工作区跟踪检查失败。' }
+& node (Join-Path $PSScriptRoot 'Test-Inspect-WorktreeLifecycle.mjs')
+if ($LASTEXITCODE -ne 0) { throw 'Worktree生命周期只读检查失败。' }
 Test-TextFlowchartTemplateContract
 Test-PipelineStepDeckTemplate
 Test-PipelineStepDeckEnhancementTool

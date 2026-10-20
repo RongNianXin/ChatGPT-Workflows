@@ -2,6 +2,14 @@
 
 修改前按文件/章节、问题关键词及主题检索相关历史；记录与分类方法见[06修改历史检索与留痕](总指挥工作流/第二代总指挥的工作模式/06-复盘与优化规则.md#rule-change-history)。旧条目保留原样，新条目记录一个可独立验收批次，不要求每次读取全文。
 
+## 2026-10-20.1：Worktree生命周期补齐资源去留判断
+
+- 02沿现有登记和4K集成收口补创建、同步、任务/用途变化及交接触发，区分业务任务、聊天归档与物理资源状态；未知遗留对象保留责任方、差额和复核条件，不因未归档永久冻结，也不自动判断可删。03/09仅衔接触发与权限，04保全契约复用。
+- 10允许索引指向项目已有唯一映射表；保留原集成字段及旧状态读取，补资源去留/恢复/移除回读。必要检查投影是本地输入，不新增权威台账。Git外唯一成果、可重建缓存和离线依赖按证据区分，不全量备份所有运行环境。
+- 新增只读 `Inspect-WorktreeLifecycle.mjs`，明确工作区与事件输入，Git实查、负责人声明和未验证分开。27组合成Git/CLI用例通过，纳入现有仓库质量入口；版本与manifest同步，最终公共契约/质量和独立复核结果保存在既有私有记录，不由本条代签。
+- 边界：不自动Fetch、修改Git配置或引用、GC、停服务或删除；候选与平台快照不增加清理权限，实际移除仍核精确对象。公共修改不代表来源项目已采用、真实恢复或清理通过；未Commit、Push、部署或广播。回退仅本批差额，保留原证据并重算指纹。
+- English: Extended existing worktree records with event-triggered resource disposition, keeping task state, chat archival and physical retention independent. Reuse each project's sole registry and preservation contract. Added a read-only inspector and 27 synthetic Git/CLI cases; declarations never verify restoration, process dependencies or deletion permission. Local public changes only; no product changes, removal, commit, push, deployment or broadcast. Project adoption and live recovery remain separately verified.
+
 ## 2026-10-19：公开成果同步与首页导览整理
 
 - 首页：中英文说明精简为用途与入口，快速开始前移，封面缩小显示，导航保持对应；更新摘要覆盖本批实际规则和检查成果。移除操作者已删除的独立交接提示词链接，保留删除结果，不恢复文件；效果预览沿用已有获准图片，无新增截图公开。
