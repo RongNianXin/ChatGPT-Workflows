@@ -13,7 +13,9 @@ jobs:
   repository-quality:
     name: Markdown, PowerShell and Windows tool
     runs-on: windows-latest
-    timeout-minutes: 10
+    # The complete checks can approach ten minutes on hosted Windows runners;
+    # leave bounded time for checkout and post-job cleanup as well.
+    timeout-minutes: 15
     steps:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
