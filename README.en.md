@@ -41,14 +41,14 @@ Readable, editable rules and tools for stating goals, verifying work, and resumi
 | If you want to... | Open... |
 | --- | --- |
 | Improve the ChatGPT web experience | [ChatGPT-Web](ChatGPT-Web/README.en.md) |
-| Use the commander workflow | [Operator manual (Chinese)](总指挥工作流/第二代总指挥的工作模式/01-操作者操作手册.md) |
+| Use the commander workflow | [English entry](总指挥工作流/第二代总指挥的工作模式/docs/ENGLISH_ENTRY.md) · [operator manual (Chinese)](总指挥工作流/第二代总指挥的工作模式/01-操作者操作手册.md) |
 | Understand the rule architecture | [Workflow overview (Chinese)](总指挥工作流/第二代总指挥的工作模式/00-第二代工作流总览.md) |
 | Troubleshoot Codex or CC Switch | [Troubleshooting notes](故障排查与解决经验/) |
 | Reuse a focused prompt | [Prompt collection](其他%20Codex%20技巧性提示词/) |
 | Find tools by task | [External Tool Directory](引用的外部工具/README.en.md) |
 | Try a local helper | [Local utilities](实用小工具/) |
 | Locate a project conversation missing from the recent list | [Codex task-name lookup](实用小工具/Codex任务定位/README.en.md): read-only candidates followed by host verification |
-| Save tasks and query Codex session snapshots (Windows dev.10) | [Session handoff assessment](实用小工具/Codex会话交接评估/README.en.md) |
+| Save tasks and query Codex session snapshots (Windows desktop preview 0.2.0-dev.10) | [Session handoff assessment](实用小工具/Codex会话交接评估/README.en.md) |
 | See real-world results | [Showcase](SHOWCASE.md) |
 
 The detailed manuals are currently written in Chinese. This page is an evaluation and navigation guide for English-speaking visitors.
@@ -63,15 +63,16 @@ The detailed manuals are currently written in Chinese. This page is an evaluatio
 
 ### Use the Codex commander workflow
 
-1. Download or clone this repository.
-2. Open the [operator manual](总指挥工作流/第二代总指挥的工作模式/01-操作者操作手册.md). The bundled Markdown reader exposes a left sidebar tree; expand Scene 1–6 and click a child scene to jump directly to its prompt. “Register the rule directory” simply tells the current project's AI where to read these rules; it does not mean that you are developing this repository.
-3. In the project you actually want Codex to work on, start a new task. In the instruction below, use the full path to the `总指挥工作流/第二代总指挥的工作模式` folder inside your extracted copy, then send:
+1. Download the ZIP from GitHub with `Code → Download ZIP`, or clone this repository.
+2. Open the [English entry](总指挥工作流/第二代总指挥的工作模式/docs/ENGLISH_ENTRY.md) for the shortest orientation, then use the [operator manual](总指挥工作流/第二代总指挥的工作模式/01-操作者操作手册.md) when you need the full Chinese procedure. The bundled Markdown reader exposes a left sidebar tree; expand Scene 1–6 and click a child scene to jump directly to its prompt. “Register the rule directory” simply tells the current project's AI where to read these rules; it does not mean that you are developing this repository.
+3. In the project you actually want Codex to work on, start a new task. Replace the placeholder in the copy block below with the full path to the `总指挥工作流/第二代总指挥的工作模式` folder inside your extracted copy, then send:
 
    ```text
    Use <SECOND_GENERATION_COMMANDER_RULES_DIRECTORY> as this project's commander workflow rules. Read 01-操作者操作手册.md first, then load the other rules required for my goal and begin.
    ```
 
-Use the target project's workspace, not this repository's workspace, unless you are maintaining the workflow itself.
+> [!IMPORTANT]
+> Register the rules in the target project, not in this repository, unless you are maintaining the workflow itself. The Chinese manuals remain the canonical rules; the English entry is a navigation aid.
 
 ### A lightweight English entry
 
@@ -79,6 +80,7 @@ The detailed rules remain canonical in Chinese. Use the [English entry](总指�
 
 ## What this update does for you
 
+- **Temporary workspaces get a clear closeout:** when a task finishes, pauses, or changes purpose, check that its work is preserved and whether anything still uses the workspace, then record retention or cleanup candidates and the responsible actor. An unarchived chat does not by itself require permanent directory retention; the inspector never deletes anything.
 - **Latest means more than a version label:** the [deployment checks](总指挥工作流/第二代总指挥的工作模式/02-总指挥核心规则.md#低信息部署请求与运行身份交付门禁) cover relevant committed, uncommitted, and unarchived work, then verify what the service and client actually load. Missing work must be disclosed, rather than silently replaced with an older result.
 - **Clearer execution reports:** explain the actual outcome and completion boundary, disclose unfinished or blocked work, and finish with one next-step recommendation. Simple questions do not require five fixed sections.
 - **Bounded temporary collaboration:** reuse existing collaborators first; new temporary help defaults to an internal assistant. A separate conversation needs an explicit request. Model and token choices consider necessary quality and total task cost, without fixed savings promises.
@@ -131,7 +133,7 @@ Operators do not need identifiers or installation commands. Ask AI to check the 
 
 ## Bilingual README contract
 
-Every public directory that contains a tracked `README.md` also contains a `README.en.md`, with language links in both files. The Chinese page is the content source. The English page records a SHA-256 marker for the Chinese source, and the repository check scans every directory for missing pairs, broken language links, or an English page that has not been reviewed after its Chinese source changed.
+Every public directory that contains a tracked `README.md` also contains a `README.en.md` (except the single-file cross-repository pointer directory), with language links in both files. The Chinese page is the content source. The English page records a SHA-256 marker for the Chinese source, and the repository check scans every directory for missing pairs, broken language links, or an English page that has not been reviewed after its Chinese source changed.
 
 This gate detects missing or stale pages; it cannot prove that a translation is semantically correct. Before committing, the maintainer must still compare the purpose, prerequisites, steps, commands, permissions, security boundaries, and limitations. Ambiguous product terms or behavior remain explicitly unverified.
 
@@ -168,4 +170,4 @@ Released under the [MIT License](LICENSE).
 
 This project acknowledges the [LINUX DO](https://linux.do/) community and supports sincere, friendly knowledge sharing and exchange.
 
-<!-- README-SOURCE-SHA256: b05799a7167637950cbdc4d52c447cf1250cb2cca1a597843beac783a4d57f4a -->
+<!-- README-SOURCE-SHA256: a8d0d3877724f7ab76e6ff96a31ffcda0a28b03687caf638b96b6e76f147997d -->
