@@ -10,7 +10,13 @@ import { inspect } from './Inspect-WorktreeLifecycle.mjs';
 const script = fileURLToPath(new URL('./Inspect-WorktreeLifecycle.mjs', import.meta.url));
 // TEMP may be a short-path alias or junction on hosted runners. Normal cases
 // use the canonical root; the explicit alias case below still requires review.
-const fixture = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'worktree-lifecycle-')));
+const fixtureParent = fs.realpathSync.native(os.tmpdir());
+const fixture = fs.realpathSync.native(fs.mkdtempSync(path.join(fixtureParent, 'worktree-lifecycle-')));
+const assertCleanupBoundary = (actual, parent, expected) => {
+  assert.equal(actual, expected, 'cleanup must target the originally created fixture');
+  assert.ok(path.dirname(actual) === parent && path.basename(actual).startsWith('worktree-lifecycle-'),
+    'cleanup fixture must be a direct, named child of the original canonical TEMP');
+};
 const repo = path.join(fixture, 'repository');
 const target = path.join(fixture, 'linked space 测试');
 const record = path.join(fixture, 'projection.json');
@@ -38,6 +44,11 @@ const projection = () => {
 };
 const save = value => fs.writeFileSync(record, JSON.stringify(value));
 try {
+  assertCleanupBoundary(fixture, fixtureParent, fixture);
+  for (const wrong of [fixtureParent, path.join(fixture, 'nested'), path.join(fixtureParent, 'worktree-lifecycle-other')]) {
+    assert.throws(() => assertCleanupBoundary(wrong, fixtureParent, fixture));
+  }
+  assert.throws(() => assertCleanupBoundary(fixture, path.join(fixtureParent, 'other'), fixture));
   fs.mkdirSync(repo);
   git(['init', '-q']);
   git(['config', 'user.email', 'test@example.invalid']);
@@ -92,10 +103,12 @@ try {
     assert.deepEqual(snapshot(fixture), before); assert.equal(read().deletion_authorized, false);
   });
   check('CLI rejects bad/duplicate/missing parameters', () => { for (const args of [[], ['--force', 'yes'], ['--worktree', target, '--event', 'audit', '--event', 'sync'], ['--worktree', target, '--event', 'delete']]) { const r = spawnSync(process.execPath, [script, ...args], { encoding: 'utf8' }); assert.equal(r.status, 1); assert.match(r.stderr, /INPUT_REQUIRED/u); } });
-  console.log(`Worktree lifecycle inspector: PASS (${count} real Git/CLI cases; declarations never authorize deletion)`);
 } finally {
-  const actual = fs.realpathSync(fixture);
-  const parent = fs.realpathSync(os.tmpdir());
-  assert.ok(path.dirname(actual) === parent && path.basename(actual).startsWith('worktree-lifecycle-'));
+  // Use the same native canonical representation as creation, and retain the
+  // original TEMP boundary even if the environment changes during the suite.
+  const actual = fs.realpathSync.native(fixture);
+  assertCleanupBoundary(actual, fixtureParent, fixture);
   fs.rmSync(actual, { recursive: true, force: true });
+  assert.equal(fs.existsSync(actual), false, 'fixture cleanup must complete');
 }
+console.log(`Worktree lifecycle inspector: PASS (${count} real Git/CLI cases and cleanup boundary checks; declarations never authorize deletion)`);
