@@ -67,6 +67,7 @@ function Error-Text([string]$Message) {
         '待编辑任务不存在，请重新加载页面。'='The task being edited no longer exists. Reload the page.'
         '该任务正在查询，请稍后删除。'='This task is running. Wait before deleting it.'
         '不支持的清单操作。'='Unsupported list action.'
+        '查询进行中，请稍后排序。'='A query is running. Wait before sorting.'
         '请先保存该任务。'='Save this task first.'
         '本首版固定隔离验证模式：该 ID 没有虚构输入，不会读取真实会话。'='This build only uses isolated synthetic data. This ID has no fixture; real sessions will not be read.'
         '已有两个查询正在运行，请稍后重试。'='Two queries are already running. Try again shortly.'
@@ -127,20 +128,45 @@ function Read-Body($Request) {
     try { return ($reader.ReadToEnd() | ConvertFrom-Json) } finally { $reader.Dispose() }
 }
 
+function Get-ValidDeskScore($Value) {
+    if ($null -eq $Value -or $Value -is [bool] -or $Value -is [string]) { return $null }
+    $n = [double]0
+    if (-not [double]::TryParse([string]$Value, [Globalization.NumberStyles]::Float,
+        [Globalization.CultureInfo]::InvariantCulture, [ref]$n) -or
+        [double]::IsNaN($n) -or [double]::IsInfinity($n) -or $n -lt 0 -or $n -gt 10 -or [Math]::Floor($n) -ne $n) { return $null }
+    return [int]$n
+}
+function Get-DeskScoreLevel($Score) {
+    if ($null -eq $Score) { return 'unknown' }
+    if ($Score -ge 8) { return 'required' }
+    if ($Score -ge 3) { return 'recommended' }
+    return 'continue'
+}
+function Test-SnapshotSource([string]$Source) {
+    # Identity remains strict across modes/data roots. An analyzer update only marks history stale.
+    $prefix=$snapshotSource.Substring(0,$snapshotSource.LastIndexOf('|')+1)
+    return $Source.StartsWith($prefix,[StringComparison]::Ordinal) -and
+        $Source.Substring($prefix.Length) -cmatch '^([A-F0-9]{2}-){31}[A-F0-9]{2}$'
+}
 function Read-Snapshot([string]$Id) {
     $file=Join-Path $snapshots ($Id+'.json')
     if(-not [IO.File]::Exists($file)){return @()}
     try {
         if((Get-Item -LiteralPath $file).Length -gt 16777216){throw 'Snapshot too large'}
         $saved=[IO.File]::ReadAllText($file)|ConvertFrom-Json
-        if($saved.schema -ne 1 -or $saved.id -cne $Id -or $saved.source -cne $snapshotSource){throw 'Snapshot source changed'}
+        if($saved.schema -ne 1 -or $saved.id -cne $Id -or -not (Test-SnapshotSource ([string]$saved.source))){throw 'Snapshot source changed'}
         $items=@($saved.items)
         if($items.Count -gt 2){throw 'Invalid snapshot count'}
         $seen=@{}
         foreach($item in $items){
             if($item.id -cne $Id -or $item.state -ne 'done' -or $item.language -notin @('zh-CN','en-US') -or $seen.ContainsKey($item.language) -or $item.output -isnot [string] -or $item.reportText -isnot [string] -or -not $item.run){throw 'Invalid snapshot'}
-            if ($item.level -and $item.level -notin @('continue','recommended','required','unknown')) { throw 'Invalid snapshot level' }
-            if ($null -ne $item.score -and ([int]$item.score -lt 0 -or [int]$item.score -gt 10)) { throw 'Invalid snapshot score' }
+            $validatedScore=Get-ValidDeskScore $item.score
+            $item | Add-Member -NotePropertyName score -NotePropertyValue $validatedScore -Force
+            $item | Add-Member -NotePropertyName level -NotePropertyValue (Get-DeskScoreLevel $validatedScore) -Force
+            $itemSource=if($item.sourceFingerprint){[string]$item.sourceFingerprint}else{[string]$saved.source}
+            if(-not (Test-SnapshotSource $itemSource)){throw 'Snapshot item source changed'}
+            $item | Add-Member -NotePropertyName sourceFingerprint -NotePropertyValue $itemSource -Force
+            $item | Add-Member -NotePropertyName sourceChanged -NotePropertyValue ($itemSource -cne $snapshotSource) -Force
             [void][DateTime]::Parse([string]$item.finished);$seen[$item.language]=$true
         }
         return $items
@@ -154,7 +180,7 @@ function Write-Snapshot([string]$Id, $Items) {
 function Persist-Job($Job) {
     try {
         $previous=@();try{$previous=@(Read-Snapshot $Job.id)}catch{}
-        $item=@{id=$Job.id;run=$Job.run;language=$Job.language;state='done';output=$Job.output;error='';finished=$Job.finished;reportText=[IO.File]::ReadAllText($Job.report);level=$Job.level;score=$Job.score;contextPercent=$Job.contextPercent;restored=$true}
+        $item=@{id=$Job.id;run=$Job.run;language=$Job.language;state='done';output=$Job.output;error='';finished=$Job.finished;reportText=[IO.File]::ReadAllText($Job.report);level=$Job.level;score=$Job.score;contextPercent=$Job.contextPercent;contextInputTokens=$Job.contextInputTokens;contextObservedAt=$Job.contextObservedAt;assessmentVersion=$Job.assessmentVersion;contextGrowth=$Job.contextGrowth;roundsToObservation=$Job.roundsToObservation;scoreBasis=$Job.scoreBasis;sourceFingerprint=$snapshotSource;sourceChanged=$false;restored=$true}
         Write-Snapshot $Job.id (@($previous|Where-Object {$_.language -ne $Job.language})+@($item))
         $Job.historySaved=$true
     } catch {$Job.historySaved=$false}
@@ -178,10 +204,20 @@ function Update-Job($Job) {
             if($Job.state -eq 'done'){
                 try {
                     $analysisMetadata=[IO.File]::ReadAllText($Job.metadata)|ConvertFrom-Json
-                    if ($analysisMetadata.level -in @('continue','recommended','required')) { $Job.level=[string]$analysisMetadata.level }
-                    else { $Job.metadataWarning=$true }
-                    if ($null -ne $analysisMetadata.score) { $Job.score=[int]$analysisMetadata.score }
+                    $Job.score=Get-ValidDeskScore $analysisMetadata.score
+                    $Job.level=Get-DeskScoreLevel $Job.score
+                    if (($null -ne $analysisMetadata.score -and $null -eq $Job.score) -or $analysisMetadata.level -cne $Job.level) { $Job.metadataWarning=$true }
                     if ($null -ne $analysisMetadata.contextPercent) { $Job.contextPercent=[double]$analysisMetadata.contextPercent }
+                    $inputValue=$analysisMetadata.contextInputTokens
+                    if ($null -ne $inputValue -and $inputValue -isnot [bool] -and $inputValue -isnot [string]) {
+                        $numericInput=[double]$inputValue
+                        if (-not [double]::IsNaN($numericInput) -and -not [double]::IsInfinity($numericInput) -and $numericInput -ge 0 -and $numericInput -le 9007199254740991 -and [Math]::Floor($numericInput) -eq $numericInput) { $Job.contextInputTokens=$numericInput }
+                    }
+                    $Job.contextObservedAt=[string]$analysisMetadata.contextObservedAt
+                    $Job.assessmentVersion=[string]$analysisMetadata.assessmentVersion
+                    $Job.contextGrowth=$analysisMetadata.contextGrowth
+                    $Job.roundsToObservation=$analysisMetadata.roundsToObservation
+                    $Job.scoreBasis=if($analysisMetadata.scoreBasis -in @('current-only','forecast','traditional')){[string]$analysisMetadata.scoreBasis}else{$null}
                 } catch { $Job.metadataWarning=$true }
                 Persist-Job $Job
             }
@@ -189,7 +225,7 @@ function Update-Job($Job) {
 
         }
     }
-    return @{id=$Job.id;run=$Job.run;language=$Job.language;state=$Job.state;output=$Job.output;error=$Job.error;finished=$Job.finished;nameChange=$Job.nameChange;metadataWarning=$Job.metadataWarning;level=$Job.level;score=$Job.score;contextPercent=$Job.contextPercent;historySaved=$Job.historySaved;reportAvailable=($Job.state -eq 'done')}
+    return @{id=$Job.id;run=$Job.run;language=$Job.language;state=$Job.state;output=$Job.output;error=$Job.error;finished=$Job.finished;nameChange=$Job.nameChange;metadataWarning=$Job.metadataWarning;level=$Job.level;score=$Job.score;contextPercent=$Job.contextPercent;contextInputTokens=$Job.contextInputTokens;contextObservedAt=$Job.contextObservedAt;assessmentVersion=$Job.assessmentVersion;contextGrowth=$Job.contextGrowth;roundsToObservation=$Job.roundsToObservation;scoreBasis=$Job.scoreBasis;sourceChanged=$false;historySaved=$Job.historySaved;reportAvailable=($Job.state -eq 'done')}
 }
 try {
     try {
@@ -249,13 +285,23 @@ try {
         $id = '00000000-0000-0000-0000-' + $number.ToString('000000000000')
         $records = @(
             @{timestamp='2025-01-01T00:00:00Z';type='session_meta';payload=@{id=$id;synthetic_test=$true;originator='fixture';source='fixture';model_provider='fixture'}},
-            @{timestamp='2025-01-01T00:00:01Z';type='turn_context';payload=@{turn_id='fictional-turn'}},
+            @{timestamp='2025-01-01T00:00:01Z';type='turn_context';payload=@{turn_id='fictional-turn';model='fixture-model'}},
             @{timestamp='2025-01-01T00:00:02Z';type='event_msg';payload=@{type='user_message';turn_id='fictional-turn';message='这是隔离的虚构测试输入。'}},
             @{timestamp='2025-01-01T00:00:03Z';type='event_msg';payload=@{type='token_count';info=@{total_token_usage=@{input_tokens=(100*$number);output_tokens=30;total_tokens=(100*$number+30)}}}},
             @{timestamp='2025-01-01T00:00:04Z';type='event_msg';payload=@{type='task_complete';turn_id='fictional-turn'}}
         )
         if ($number -eq 2) {
             for ($compact=1;$compact -le 10;$compact++) { $records += @{timestamp=('2025-01-01T00:00:{0:D2}Z' -f (4+$compact));type='compacted';payload=@{synthetic_test=$true}} }
+        }
+        # Six completed turns exercise independent context-trend diagnostics.
+        # Keep fixtures representative of that contract rather than inventing a score from one sample.
+        for ($turn=1; $turn -le 6; $turn++) {
+            $turnId='fixture-'+$number+'-'+$turn
+            $inputValue=if ($number -eq 2) { 440+10*$turn } else { 10+$turn }
+            $time='2025-01-01T00:00:{0:D2}Z' -f (20+3*$turn)
+            $records += @{timestamp=$time;type='turn_context';payload=@{turn_id=$turnId;model='fixture-model'}}
+            $records += @{timestamp=$time;type='event_msg';payload=@{type='token_count';info=@{last_token_usage=@{input_tokens=$inputValue;cached_input_tokens=0};model_context_window=1000;total_token_usage=@{total_tokens=(1000*$turn)}}}}
+            $records += @{timestamp=$time;type='event_msg';payload=@{type='task_complete';turn_id=$turnId}}
         }
         $lines = @($records | ForEach-Object { $_ | ConvertTo-Json -Depth 10 -Compress })
         [IO.File]::WriteAllText((Join-Path $sessions ('fictional-' + $id + '.jsonl')), ($lines -join "`n")+"`n", $utf8)
@@ -332,7 +378,7 @@ try {
             }
             if ($request.HttpMethod -eq 'POST' -and $route -eq '/api/tasks') {
                 $body=Read-Body $request;$id=([string]$body.id).Trim().ToLowerInvariant()
-                if ($body.action -ne 'group' -and -not (Valid-Id $id)) { throw '请输入标准格式的任务 ID。' }
+                if ($body.action -notin @('group','urgency') -and -not (Valid-Id $id)) { throw '请输入标准格式的任务 ID。' }
                 if ($body.action -in @('add','save')) {
                     $name=''
                     $project=''
@@ -360,6 +406,23 @@ try {
                     for($i=0;$i -lt $newList.Count;$i++){if($newList[$i].id -eq $id){$index=$i;break}}
                     if($index -lt 0){throw '请先保存该任务。'}
                     if($index -gt 0){$item=$newList[$index];$newList=@($item)+@($newList | Where-Object {$_.id -ne $id})}
+                } elseif ($body.action -eq 'urgency') {
+                    # Read trusted latest results; never accept scores supplied by the browser.
+                    $ranked=@();$position=0
+                    foreach($task in $script:taskList){
+                        $candidates=@();try{$candidates=@(Read-Snapshot $task.id)}catch{}
+                        if($jobs.ContainsKey($task.id)){
+                            $current=Update-Job $jobs[$task.id]
+                            if($current.state -eq 'running'){throw '查询进行中，请稍后排序。'}
+                            if($current.state -eq 'done'){$candidates+=@($current)}
+                        }
+                        $latest=$candidates|Sort-Object { [DateTimeOffset]::Parse([string]$_.finished).UtcDateTime.Ticks } -Descending|Select-Object -First 1
+                        $score=$null
+                        if($latest -and $latest.assessmentVersion -ceq 'handoff-score-v6-traditional' -and -not $latest.sourceChanged){$score=Get-ValidDeskScore $latest.score}
+                        $priority=if($null -ne $score -and $score -ge 3){$score}else{-1}
+                        $ranked+=@([pscustomobject]@{task=$task;priority=$priority;position=$position});$position++
+                    }
+                    $newList=@($ranked|Sort-Object @{Expression='priority';Descending=$true},@{Expression='position';Descending=$false}|ForEach-Object {$_.task})
                 } elseif ($body.action -eq 'group') {
                     Sync-Metadata
                     $groups=[Collections.Generic.Dictionary[string,object]]::new([StringComparer]::Ordinal)
@@ -398,7 +461,7 @@ try {
                 $info.StandardOutputEncoding=$utf8;$info.StandardErrorEncoding=$utf8
                 $process=New-Object Diagnostics.Process;$process.StartInfo=$info;[void]$process.Start()
                 $job=@{id=$id;run=[guid]::NewGuid().ToString();state='running';output='';error='';finished=$null;started=[DateTime]::UtcNow;process=$process;stdout=$process.StandardOutput.ReadToEndAsync();stderr=$process.StandardError.ReadToEndAsync();report=$report;timedOut=$false}
-                $job.language=$queryLanguage;$job.metadata=$metadata;$job.nameChange=$null;$job.metadataWarning=$false;$job.level='unknown';$job.score=$null;$job.contextPercent=$null
+                $job.language=$queryLanguage;$job.metadata=$metadata;$job.nameChange=$null;$job.metadataWarning=$false;$job.level='unknown';$job.score=$null;$job.contextPercent=$null;$job.contextInputTokens=$null;$job.contextObservedAt=$null;$job.assessmentVersion=$null;$job.contextGrowth=$null;$job.roundsToObservation=$null;$job.scoreBasis=$null
                 $jobs[$id]=$job;Send-Json $context (Update-Job $job);continue
             }
             if ($request.HttpMethod -eq 'GET' -and $route -eq '/api/job') {

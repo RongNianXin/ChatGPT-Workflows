@@ -6,7 +6,7 @@ import path from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import crypto from 'node:crypto';
-import { appendSeal, planSealAppend, prepareTransition, recoverTransition, sealDigest, validateSeal, verifyChain } from './HandoffSeal.mjs';
+import { appendSeal, planSealAppend, prepareTransition, recoverTransition, sealDigest, validateSeal, verifyChain, verifyControlIdentity } from './HandoffSeal.mjs';
 
 const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'handoff-seal-'));
 const sealDir = path.join(temp, 'seals');
@@ -180,6 +180,22 @@ try {
   fs.rmSync(sealDir, { recursive: true, force: true }); fs.mkdirSync(sealDir);
   const invalid = draft(); invalid.sources.central_work_items.path_ref = String.fromCharCode(67) + ':/secret.json'; invalid.seal_digest = sealDigest(invalid);
   check('unsafe source paths are rejected', () => assert.ok(validateSeal(invalid).some(error => error.includes('unsafe source path'))));
+  const deletionEvidenceInWorkspace = draft();
+  deletionEvidenceInWorkspace.workspace.operator_confirmed_deletions = ['old-file.md'];
+  deletionEvidenceInWorkspace.seal_digest = sealDigest(deletionEvidenceInWorkspace);
+  check('workspace schema reports unexpected fields without treating the draft as valid', () => {
+    const errors = validateSeal(deletionEvidenceInWorkspace);
+    assert.ok(errors.includes('workspace baseline unexpected field(s): operator_confirmed_deletions'));
+    assert.ok(!errors.includes('invalid workspace baseline'));
+    const invalidSealDir = path.join(temp, 'invalid-workspace-seals');
+    assert.throws(() => appendSeal(invalidSealDir, deletionEvidenceInWorkspace, { sourceRoot }), /workspace baseline unexpected field\(s\): operator_confirmed_deletions/);
+    assert.deepEqual(fs.readdirSync(invalidSealDir).filter(name => name.endsWith('.json')), []);
+    assert.equal(fs.existsSync(path.join(invalidSealDir, 'handoff-state.1.' + deletionEvidenceInWorkspace.seal_digest + '.json')), false);
+  });
+  const workspaceMissingTree = draft();
+  delete workspaceMissingTree.workspace.tree;
+  workspaceMissingTree.seal_digest = sealDigest(workspaceMissingTree);
+  check('workspace schema reports missing fields explicitly', () => assert.ok(validateSeal(workspaceMissingTree).includes('workspace baseline missing field(s): tree')));
   const cutoffMismatch = draft(); cutoffMismatch.sources.current_view.fact_cutoff = '2026-09-22T00:00:01.000Z'; cutoffMismatch.seal_digest = sealDigest(cutoffMismatch);
   check('source cutoff after the seal is rejected', () => assert.ok(validateSeal(cutoffMismatch).some(error => error.includes('source fact_cutoff is after seal fact_cutoff'))));
   const remoteFail = draft(); remoteFail.remote.status = 'FAIL'; remoteFail.seal_digest = sealDigest(remoteFail);
@@ -291,6 +307,62 @@ try {
   recoveryDraft.sources.central_entry = identitySource('entry', `<!-- CURRENT:BEGIN -->\n${navigation}\n<!-- CURRENT:END -->`);
   recoveryDraft.sources.workflow_enablement = identitySource('enablement', '<!-- CONTROL_NAVIGATION: {"status_index":"state/index.json","root_ref":"source_root","central_entry":"state/entry.json","central_entry_root_ref":"source_root"} -->\nstate: enabled');
   recoveryDraft.sources.specialist_status = source('specialist', 'old');
+  const identityDraft = structuredClone(recoveryDraft);
+  const identityIndex = path.join(sourceRoot, identityDraft.sources.status_index.path_ref);
+  const identityView = path.join(sourceRoot, identityDraft.sources.current_view.path_ref);
+  const indexBytes = fs.readFileSync(identityIndex), viewBytes = fs.readFileSync(identityView);
+  check('historical heading and adopted rule version do not override canonical identity', () => {
+    fs.writeFileSync(identityIndex, indexBytes.toString().replace('<!-- CURRENT:END -->', '# 第0世代旧标题\n规则版本：old\n<!-- CURRENT:END -->'));
+    try { assert.equal(verifyControlIdentity(identityDraft, { sourceRoot }).status, 'PASS'); }
+    finally { fs.writeFileSync(identityIndex, indexBytes); }
+  });
+  check('stale explicit mirror requires migration, without claiming canonical identity conflict', () => {
+    fs.writeFileSync(identityView, viewBytes.toString().replace('<!-- CURRENT:END -->', '当前总指挥世代：0\n<!-- CURRENT:END -->'));
+    try {
+      const result = verifyControlIdentity(identityDraft, { sourceRoot });
+      assert.equal(result.status, 'FAIL');
+      assert.match(result.errors.join('; '), /CONTROL_PLANE_MIGRATION_REQUIRED/);
+      assert.doesNotMatch(result.errors.join('; '), /CONTROL_IDENTITY_CONFLICT/);
+    } finally { fs.writeFileSync(identityView, viewBytes); }
+  });
+  check('canonical generation mismatch remains an identity conflict', () => {
+    const result = verifyControlIdentity({ ...identityDraft, generation: 2 }, { sourceRoot });
+    assert.equal(result.status, 'FAIL');
+    assert.match(result.errors.join('; '), /CONTROL_IDENTITY_CONFLICT/);
+  });
+  check('canonical source platform task identity is available for inventory binding', () => {
+    const result = verifyControlIdentity(identityDraft, { sourceRoot });
+    assert.equal(result.status, 'PASS');
+    assert.equal(result.identity.generation, identityDraft.generation);
+    assert.equal(result.identity.platform_task_id, 'UNKNOWN');
+  });
+  for (const malformed of ['missing', 'invalid-json', 'duplicate']) check(`malformed canonical identity returns a structured failure: ${malformed}`, () => {
+    const text = indexBytes.toString(), identityMarker = text.match(/<!-- CONTROL_IDENTITY: [\s\S]*? -->/)[0];
+    const replacement = malformed === 'missing' ? '' : malformed === 'invalid-json' ? '<!-- CONTROL_IDENTITY: {invalid} -->' : `${identityMarker}\n${identityMarker}`;
+    fs.writeFileSync(identityIndex, text.replace(identityMarker, replacement));
+    try {
+      const result = verifyControlIdentity(identityDraft, { sourceRoot });
+      assert.equal(result.status, 'FAIL');
+      assert.ok(result.errors.length > 0);
+      assert.equal(result.identity, null);
+    } finally { fs.writeFileSync(identityIndex, indexBytes); }
+  });
+  for (const declaration of ['控制面世代：commander-0', '唯一写者：STALE-WRITER', '当前平台任务：STALE-ID']) check(`Chinese current declaration is checked: ${declaration.split('：')[0]}`, () => {
+    fs.writeFileSync(identityView, viewBytes.toString().replace('<!-- CURRENT:END -->', `${declaration}\n<!-- CURRENT:END -->`));
+    try {
+      const result = verifyControlIdentity(identityDraft, { sourceRoot });
+      assert.equal(result.status, 'FAIL');
+      assert.match(result.errors.join('; '), /CONTROL_PLANE_MIGRATION_REQUIRED/);
+    } finally { fs.writeFileSync(identityView, viewBytes); }
+  });
+  check('registry current fields are non-authoritative but its sealed bytes remain protected', () => {
+    identityDraft.sources.control_plane_registry = identitySource('registry', JSON.stringify({ schema_version: 1, canonical_index: identityDraft.sources.status_index.path_ref, legacy_indexes: [], current_generation: 0, current_writer_id: 'OLD-WRITER', platform_task_id: 'UNKNOWN' }));
+    const fixtureDir = path.join(temp, 'identity-registry');
+    appendSeal(fixtureDir, identityDraft, { sourceRoot });
+    assert.equal(verifyChain(fixtureDir, { sourceRoot }).handoff_ready, true);
+    fs.appendFileSync(path.join(sourceRoot, identityDraft.sources.control_plane_registry.path_ref), '\nchanged');
+    assert.equal(verifyChain(fixtureDir, { sourceRoot }).handoff_ready, false);
+  });
   const recoveryFirst = appendSeal(recoveryDir, recoveryDraft, { sourceRoot });
   const oldTicket = prepareTransition(recoveryDir, { sourceRoot, expectedPreviousDigest: recoveryFirst.seal_digest, nextGeneration: 2, nextWriterId: 'COMMANDER-GEN-2', eventId: 'evt-old-transition', preparedAt: stamp });
   const centralRecoveryPath = path.join(sourceRoot, recoveryDraft.sources.status_index.path_ref);

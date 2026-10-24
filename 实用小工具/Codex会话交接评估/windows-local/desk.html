@@ -2,12 +2,12 @@
 :root{font:15px/1.7 'Segoe UI','Microsoft YaHei',sans-serif;color:#203647;background:#edf3f7}*{box-sizing:border-box}body{margin:0}main{max-width:1280px;margin:auto;padding:28px 24px}header{border-left:5px solid #126d83;padding-left:20px;margin-bottom:24px}h1{font-size:29px;margin:4px 0}h2{font-size:19px;margin:0 0 12px}p{margin:9px 0}small,.muted{color:#536979}.layout{display:grid;grid-template-columns:minmax(320px,.9fr) minmax(0,1.25fr);gap:20px}.panel{padding:20px;border:1px solid #cad8e1;background:white;border-radius:12px;margin-bottom:16px}button,input{font:inherit}button{padding:8px 12px;border:1px solid #a9bdc8;background:white;border-radius:7px;cursor:pointer;color:#203647}button:hover:not(:disabled){background:#edf7fa}button:disabled{opacity:.45;cursor:default}.primary{background:#126d83;color:white}.primary:hover:not(:disabled){background:#09576b}button:focus-visible,input:focus-visible,summary:focus-visible{outline:3px solid #126d83;outline-offset:3px}input{width:100%;padding:9px;border:1px solid #a9bdc8;border-radius:7px;margin:5px 0 12px}label{display:block}.actions{display:flex;gap:8px;flex-wrap:wrap}.task{padding:14px 10px;border:1px solid transparent;border-bottom-color:#dce5eb;border-radius:8px;margin:4px 0}.name{font-weight:600}.id{font:12px/1.6 Consolas,monospace;overflow-wrap:anywhere;color:#536979;margin:4px 0 10px}.task.selected{background:#e7f3f7;border-color:#126d83;box-shadow:inset 3px 0 #126d83}.task.handoff{background:#fff7df;border-color:#e3b85c;box-shadow:inset 4px 0 #c77800}.task.handoff.selected{background:#fff3cd;border-color:#126d83;box-shadow:inset 4px 0 #c77800,0 0 0 1px #126d83}.task.required{background:#fde7ee;border-color:#e0a2b2;box-shadow:inset 4px 0 #c0213f}.task.required.selected{background:#fbdbe4;border-color:#126d83;box-shadow:inset 4px 0 #c0213f,0 0 0 1px #126d83}.task-title-status{display:flex;align-items:baseline;justify-content:flex-end;gap:8px;min-width:0;flex-wrap:wrap;text-align:right}.handoff-badge,.required-badge{display:inline-block;padding:2px 7px;border:1px solid #c77800;border-radius:4px;background:#fff;color:#7a4300;font-size:12px;font-weight:600;white-space:nowrap}.required-badge{border-color:#c0213f;color:#8c1a30}pre{white-space:pre-wrap;overflow-wrap:anywhere;font:14px/1.75 Consolas,'Microsoft YaHei',monospace;margin:0}#output{min-height:360px;max-height:75vh;overflow:auto}.status{display:inline-block;background:#edf3f7;padding:5px 10px;border-radius:5px}.error{color:#993d29}#notice{min-height:28px}.report{max-height:60vh;overflow:auto}details{margin-top:15px}summary{cursor:pointer}footer{font-size:12px;color:#536979;margin-top:20px}@media(max-width:800px){main{padding:18px 12px}.layout{grid-template-columns:1fr}#output{min-height:200px}}[hidden]{display:none!important}
 
 #tasks{max-height:60vh;overflow-y:auto;padding-right:6px}.task-heading{display:flex;justify-content:space-between;align-items:baseline;gap:16px}.task-heading span{min-width:0;overflow-wrap:anywhere}.task-title-status{display:flex;align-items:center;justify-content:flex-end;gap:6px;flex-wrap:wrap;text-align:right}.task-heading .name{text-align:right}.language{float:right;display:flex;gap:5px}.language [aria-pressed=true]{background:#126d83;color:white}.amber{outline:2px solid #bc851c;outline-offset:3px;background:#fff9e9}.name-note{color:#805b11;font-size:13px}#toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);max-width:90vw;width:max-content;background:#fff4d9;color:#66470c;border:1px solid #bc851c;padding:12px 20px;border-radius:8px;z-index:10}.title-line{display:flex;justify-content:space-between;gap:10px;align-items:center}#id[readonly]{background:#edf3f7}header:after{content:'';display:block;clear:both}@media(max-width:600px){.language{float:none;margin-bottom:12px}#tasks{max-height:60vh;overflow-y:auto;padding-right:6px}.task-heading{gap:10px}}
-.tip-wrap{position:relative}.tip{display:none;position:absolute;right:0;top:100%;width:260px;max-width:75vw;padding:10px 12px;background:#203647;color:white;border-radius:7px;font-size:13px;z-index:5}.tip-wrap:hover .tip,.tip-wrap:focus-within .tip{display:block}.title-line{flex-wrap:wrap}.title-line h2{margin-bottom:0}.list-tools{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}.move{min-width:38px}h3{font-size:15px;line-height:1.5;margin:16px 0 10px;color:#536979}.report-section{border-top:1px solid #cad8e1;margin-top:20px;padding-top:18px}#reportPanel{margin-top:16px;padding:16px;background:#f5f8fa;border:1px solid #dce5eb;border-radius:8px}#detailHeading{margin-top:0}.report{padding-right:8px}.exit-tip{display:inline-block}.exit-tip .tip{left:0;right:auto;top:100%;bottom:auto}header{position:sticky;top:0;background:#edf3f7;z-index:10;padding-top:12px;padding-bottom:12px}.exit-tip button{border-color:#126d83;font-weight:600}#notice.exit-notice{padding:18px 20px;border:2px solid #126d83;border-radius:10px;background:#e0f3ed;color:#164c3c;font-size:20px;font-weight:600;line-height:1.65}@media(min-width:801px){.layout>section{display:flex;flex-direction:column;min-width:0}.layout>section>.panel:last-child{flex:1;margin-bottom:0}}@media(forced-colors:active){.task.handoff,.task.required{border-left-width:4px}.handoff-badge,.required-badge{border-width:2px}}.scorebar{display:flex;gap:2px;margin:6px 0 0;max-width:240px}.scorebar .seg{flex:1 1 auto;height:7px;border-radius:2px;background:#dbe4ea;border:1px solid #c3d2dc}.scorebar .seg.on{background:#126d83;border-color:#0d5668}.scorebar.advice .seg.on{background:#c77800;border-color:#9a5d00}.scorebar.required .seg.on{background:#c0213f;border-color:#8c1a30}.scorebar .seg.tick{box-shadow:inset 0 0 0 1px #536979}.scorebar:focus-visible{outline:3px solid #126d83;outline-offset:3px}.scorebar-empty{font-size:12px;color:#536979;margin:6px 0 0}.context-note{font-size:13px;margin:3px 0 0;color:#a95900}.context-note.critical{color:#b3213c;font-weight:600}.score-tip{position:fixed;z-index:40;max-width:260px;padding:8px 10px;background:#203647;color:#fff;border-radius:7px;font-size:13px;box-shadow:0 4px 12px rgba(0,0,0,.22)}</style></head><body><main><header><nav class="language" aria-label="Tool controls"><span class="tip-wrap exit-tip"><button id="shutdown" data-i18n="shutdown" aria-describedby="exitTip"></button><span id="exitTip" class="tip" role="tooltip" data-i18n="exitTip"></span></span><button data-lang="zh-CN">简体中文</button><button data-lang="en-US">English</button></nav><small data-i18n="version"></small><h1 data-i18n="title"></h1><p data-i18n="intro"></p></header>
-<p id="notice" role="status" aria-live="polite"></p><div class="layout"><section><div class="panel"><div class="title-line"><h2 id="formTitle"></h2></div><form id="form" novalidate><label for="id" data-i18n="id"></label><input id="id" required autocomplete="off" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"><button id="save" class="primary"></button></form><details id="fixtures" hidden><summary data-i18n="fixtures"></summary><p class="muted" data-i18n="fixtureHelp"></p><div class="actions"><button data-fixture="1" data-i18n="sample1"></button><button data-fixture="2" data-i18n="sample2"></button><button data-fixture="3" data-i18n="sample3"></button></div></details></div><div class="panel"><div class="title-line"><h2><span data-i18n="savedTasks"></span> <small id="count"></small></h2><div class="list-tools"><span class="tip-wrap"><button id="sort" data-i18n="sort" aria-describedby="sortTip"></button><span id="sortTip" class="tip" role="tooltip" data-i18n="sortTip"></span></span><span class="tip-wrap"><button id="refresh" data-i18n="refresh" aria-describedby="refreshTip"></button><span id="refreshTip" class="tip" role="tooltip" data-i18n="refreshTip"></span></span></div></div><label for="search" data-i18n="search"></label><input id="search" type="search"><div id="tasks" tabindex="0"></div></div></section>
+.tip-wrap{position:relative}.tip{display:none;position:absolute;right:0;top:100%;width:260px;max-width:75vw;padding:10px 12px;background:#203647;color:white;border-radius:7px;font-size:13px;z-index:5}.tip-wrap:hover .tip,.tip-wrap:focus-within .tip{display:block}.title-line{flex-wrap:wrap}.title-line h2{margin-bottom:0}.list-tools{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}.move{min-width:38px}h3{font-size:15px;line-height:1.5;margin:16px 0 10px;color:#536979}.report-section{border-top:1px solid #cad8e1;margin-top:20px;padding-top:18px}#reportPanel{margin-top:16px;padding:16px;background:#f5f8fa;border:1px solid #dce5eb;border-radius:8px}#detailHeading{margin-top:0}.report{padding-right:8px}.exit-tip{display:inline-block}.exit-tip .tip{left:0;right:auto;top:100%;bottom:auto}header{position:sticky;top:0;background:#edf3f7;z-index:10;padding-top:12px;padding-bottom:12px}.exit-tip button{border-color:#126d83;font-weight:600}#notice.exit-notice{padding:18px 20px;border:2px solid #126d83;border-radius:10px;background:#e0f3ed;color:#164c3c;font-size:20px;font-weight:600;line-height:1.65}@media(min-width:801px){.layout>section{display:flex;flex-direction:column;min-width:0}.layout>section>.panel:last-child{flex:1;margin-bottom:0}}@media(forced-colors:active){.task.handoff,.task.required{border-left-width:4px}.handoff-badge,.required-badge{border-width:2px}}.scorebar{display:flex;gap:2px;margin:6px 0 0;max-width:240px}.scorebar .seg{flex:1 1 auto;height:7px;border-radius:2px;background:#dbe4ea;border:1px solid #c3d2dc}.scorebar .seg.on{background:#126d83;border-color:#0d5668}.scorebar.advice .seg.on{background:#c77800;border-color:#9a5d00}.scorebar.required .seg.on{background:#c0213f;border-color:#8c1a30}.scorebar .seg.tick:nth-child(3){border-color:#c77800}.scorebar .seg.tick:nth-child(8){border-color:#c0213f}.scorebar .seg.tick{box-shadow:inset 0 0 0 1px #536979}.scorebar:focus-visible{outline:3px solid #126d83;outline-offset:3px}.scorebar-empty{font-size:12px;color:#536979;margin:6px 0 0}.context-note{font-size:13px;margin:3px 0 0;color:#a95900}.context-note.critical{color:#b3213c;font-weight:600}.score-tip{position:fixed;z-index:40;max-width:260px;padding:8px 10px;background:#203647;color:#fff;border-radius:7px;font-size:13px;box-shadow:0 4px 12px rgba(0,0,0,.22)}</style></head><body><main><header><nav class="language" aria-label="Tool controls"><span class="tip-wrap exit-tip"><button id="shutdown" data-i18n="shutdown" aria-describedby="exitTip"></button><span id="exitTip" class="tip" role="tooltip" data-i18n="exitTip"></span></span><button data-lang="zh-CN">简体中文</button><button data-lang="en-US">English</button></nav><small data-i18n="version"></small><h1 data-i18n="title"></h1><p data-i18n="intro"></p></header>
+<p id="notice" role="status" aria-live="polite"></p><div class="layout"><section><div class="panel"><div class="title-line"><h2 id="formTitle"></h2></div><form id="form" novalidate><label for="id" data-i18n="id"></label><input id="id" required autocomplete="off" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"><button id="save" class="primary"></button></form><details id="fixtures" hidden><summary data-i18n="fixtures"></summary><p class="muted" data-i18n="fixtureHelp"></p><div class="actions"><button data-fixture="1" data-i18n="sample1"></button><button data-fixture="2" data-i18n="sample2"></button><button data-fixture="3" data-i18n="sample3"></button></div></details></div><div class="panel"><div class="title-line"><h2><span data-i18n="savedTasks"></span> <small id="count"></small></h2><div class="list-tools"><span class="tip-wrap"><button id="sort" data-i18n="sort" aria-describedby="sortTip"></button><span id="sortTip" class="tip" role="tooltip" data-i18n="sortTip"></span></span><span class="tip-wrap"><button id="urgencySort" data-i18n="urgencySort" aria-describedby="urgencySortTip"></button><span id="urgencySortTip" class="tip" role="tooltip" data-i18n="urgencySortTip"></span></span><span class="tip-wrap"><button id="refresh" data-i18n="refresh" aria-describedby="refreshTip"></button><span id="refreshTip" class="tip" role="tooltip" data-i18n="refreshTip"></span></span></div></div><label for="search" data-i18n="search"></label><input id="search" type="search"><div id="tasks" tabindex="0"></div></div></section>
 <section><div class="panel" aria-live="polite"><h2 id="selected"></h2><p id="selectedId" class="id"></p><p id="nameNote" class="name-note" hidden></p><span id="status" class="status"></span><p id="time" class="muted"></p><section aria-labelledby="basicHeading"><h3 id="basicHeading" data-i18n="basicReport"></h3><pre id="output" tabindex="0"></pre></section><div class="report-section"><button id="reportButton" disabled aria-expanded="false" aria-controls="reportPanel"></button><section id="reportPanel" aria-labelledby="detailHeading" hidden><h3 id="detailHeading" data-i18n="report"></h3><pre id="report" class="report" tabindex="0"></pre></section></div></div></section></div><footer data-i18n="footer"></footer></main><div id="toast" role="status" hidden></div>
 <script>
 'use strict';
-// I18N-SOURCE-SHA256: deb59865666c0bda5619b4714bdbdd0c5c0281ce2ee22afb79cfa26ca9ef07e6
+// I18N-SOURCE-SHA256: b969a03421c4a77ad612637dd48a2850712b0c4c6fe42e1713ee43bded35fc11
 // Every key is a Chinese/English pair. Tests require both translations and verify all referenced keys.
 const messages={
   "exitReminder": [
@@ -15,8 +15,8 @@ const messages={
     "Closing this page leaves the service running. Click Exit tool to stop it."
   ],
   "version": [
-    "WINDOWS · 0.2.0-dev.10 · 本地只读",
-    "WINDOWS · 0.2.0-dev.10 · Local read-only"
+    "WINDOWS · 0.2.0-dev.10 · 本地只读 · 评分条恢复修复",
+    "WINDOWS · 0.2.0-dev.10 · Local read-only · score availability fix"
   ],
   "title": [
     "会话交接评估",
@@ -195,12 +195,20 @@ const messages={
     "Development test: isolated synthetic data only."
   ],
   "sort": [
-    "一键排序",
-    "Sort all"
+    "按项目排序",
+    "Sort by project"
   ],
   "sortTip": [
     "按项目首次出现顺序分组；组内总指挥置顶，普通任务保持原顺序，同主题同编号的审查者与执行者成对排在后面，配对内部保持原顺序。无法明确配对时不合并。作用于完整列表；未取得项目的任务分别保留。",
     "Group projects in first-appearance order. Commanders come first, followed by ordinary tasks, then unambiguous reviewer/executor pairs with the same topic and number. Preserve order within each category and pair. Applies to the full list; unresolved projects stay separate."
+  ],
+  "urgencySort": [
+    "按交接紧急度排序",
+    "Sort by handoff urgency"
+  ],
+  "urgencySortTip": [
+    "按已有有效评分排序：3分及以上置前，分数从高到低；同分及其余任务保持原有相对顺序。作用于完整列表并保存顺序，不发起查询；旧规则、来源变化或未知评分不参与优先排序。",
+    "Use existing valid scores: place scores of 3 or above first, highest first. Keep ties and all remaining tasks in their current relative order. Applies to the full list and saves the order without querying. Old-rule, changed-source and unknown scores receive no priority."
   ],
   "refresh": [
     "一键刷新",
@@ -239,16 +247,16 @@ const messages={
     "No score data"
   ],
   "scoreTip": [
-    "当前评分 {0}/10 分，{1}",
-    "Current score {0}/10, {1}"
+    "历史评分 {0}/10 分，{1}（旧规则）",
+    "Historical score {0}/10, {1} (legacy rule)"
   ],
   "contextPrepare": [
-    "上下文占窗口 {0}%，建议准备交接",
-    "Context usage {0}%, prepare to hand off"
+    "最近输入占窗口 {0}%，容量提醒；准备断点",
+    "Latest input/window {0}%, capacity reminder; prepare breakpoint"
   ],
   "contextCritical": [
-    "上下文占窗口 {0}%，随时触发压缩，建议现在交接",
-    "Context usage {0}%, compaction may trigger anytime; hand off now"
+    "最近输入占窗口 {0}%，容量偏高；另核断点与运行配置",
+    "Latest input/window {0}%, high capacity usage; check breakpoint and runtime configuration"
   ],
   "up": [
     "上移",
@@ -293,6 +301,58 @@ const messages={
   "historyUnsaved": [
     "查询成功，但历史保存失败；退出后可能无法恢复，请检查本地目录写入权限。",
     "Query succeeded, but saving history failed. It may not survive exit; check local folder write access."
+  ],
+  "observationUnknown": [
+    "暂无可靠评分数据",
+    "No reliable score data"
+  ],
+  "unknownValue": [
+    "未知",
+    "unknown"
+  ],
+  "currentScoreTip": [
+    "交接评分 {0}/10，{1}。输入Token单独展示，不参与评分。3分建议、8分必须，在安全断点交接。依据与局限见详细报告。",
+    "Handoff score {0}/10, {1}. Input tokens are displayed separately and do not change the score. Recommended at three, required at eight, at a safe breakpoint. See the detailed report for limitations."
+  ],
+  "scoreNote": [
+    "评分 {0}/10 · {1}",
+    "Score {0}/10 · {1}"
+  ],
+  "oldRatio": [
+    "旧版窗口比例 {0}%（不是评分）；请查询以恢复0～10评分。",
+    "Earlier window ratio {0}% (not a score); query to restore the 0-10 score."
+  ],
+  "requestInput": [
+    "最近请求输入：{0} Token",
+    "Latest request input: {0} tokens"
+  ],
+  "historicalInput": [
+    "上次查询输入：{0} Token",
+    "Previous query input: {0} tokens"
+  ],
+  "historicalInputUnknown": [
+    "上次查询输入：未知",
+    "Previous query input: unknown"
+  ],
+  "failedInput": [
+    "上次查询输入：{0} Token（刷新失败）",
+    "Previous query input: {0} tokens (refresh failed)"
+  ],
+  "requestInputUnknown": [
+    "最近请求输入：未知",
+    "Latest request input: unknown"
+  ],
+  "requestInputTip": [
+    "日志中最近一次可靠模型请求的总输入，已含缓存输入，不重复相加；不是单条用户消息的字数。观测时间：{0}。查询完成：{1}。",
+    "Total input of the latest reliable model request in the log, including cached input once; not the length of a user message. Observed: {0}. Query completed: {1}."
+  ],
+  "historicalNote": [
+    "历史评分，查询可更新",
+    "Historical score; query to update"
+  ],
+  "notQueried": [
+    "尚未评估，点击“查询/刷新”",
+    "Not assessed; click Query / Refresh"
   ]
 };
 const $=id=>document.getElementById(id),token=location.hash.slice(1);let language='zh-CN',tasks=[],active=null,editing=null,revision=0,reportRaw='',reportRun=null,metadataBusy=false,jobs=new Map(),cache=new Map(),recommendations=new Map(),orderBusy=false,refreshBusy=false,pending=new Set(),stopped=false,switching=false,toastTimer;
@@ -303,12 +363,45 @@ function notice(text,error=false){if(stopped){text=t('stopped');error=false;$('e
 function resetForm(){editing=null;$('form').reset();formText();}
 function formText(){$('formTitle').textContent=t('newTask');$('save').textContent=t('save');}
 function cached(id){const variants=cache.get(id);return [variants?.get(language),jobs.get(id),...(variants?.values()||[])].find(job=>job?.state==='done'&&typeof job.output==='string'&&job.output.trim().length>0);}
-function levelLabel(level){return level==='required'?t('requiredBadge'):level==='recommended'?t('handoffBadge'):t('levelContinue');}
+function levelLabel(level){return level==='required'?t('requiredBadge'):level==='recommended'?t('handoffBadge'):level==='continue'?t('levelContinue'):t('observationUnknown');}
 function formatPercentText(value){return String(Math.round(value*10)/10);}
 const scoreTip=document.createElement('div');scoreTip.id='scoreTip';scoreTip.className='score-tip';scoreTip.setAttribute('role','tooltip');scoreTip.hidden=true;document.body.append(scoreTip);
-function rememberScore(job){if(job?.state!=='done'||typeof job.finished!=='string')return;const level=['continue','recommended','required'].includes(job.level)?job.level:'unknown',score=Number.isInteger(job.score)?job.score:null,contextPercent=Number.isFinite(job.contextPercent)?job.contextPercent:null,previous=recommendations.get(job.id);if(!previous||Date.parse(job.finished)>=Date.parse(previous.finished))recommendations.set(job.id,{level,score,contextPercent,finished:job.finished});}
-function appendScorebar(row,level,score){if(score===null){const empty=document.createElement('div');empty.className='scorebar-empty';empty.textContent=t('noScore');row.append(empty);return;}const label=tf('scoreTip',score,levelLabel(level));const bar=document.createElement('div');bar.className='scorebar'+(level==='required'?' required':level==='recommended'?' advice':'');bar.dataset.score=String(score);bar.tabIndex=0;bar.setAttribute('role','img');bar.setAttribute('aria-label',label);for(let step=1;step<=10;step++){const segment=document.createElement('span');segment.className='seg'+(step<=score?' on':'')+(step===3||step===8?' tick':'');bar.append(segment);}const show=()=>{const rect=bar.getBoundingClientRect();scoreTip.textContent=label;scoreTip.hidden=false;const height=scoreTip.offsetHeight;scoreTip.style.left=Math.max(8,Math.min(window.innerWidth-272,rect.left))+'px';scoreTip.style.top=(rect.bottom+6+height>window.innerHeight-6?Math.max(6,rect.top-6-height):rect.bottom+6)+'px';};const hide=()=>{scoreTip.hidden=true;};bar.addEventListener('mouseenter',show);bar.addEventListener('focus',show);bar.addEventListener('mouseleave',hide);bar.addEventListener('blur',hide);row.append(bar);}
-function list(){const q=$('search').value.trim().toLowerCase();scoreTip.hidden=true;$('count').textContent='('+tasks.length+')';$('tasks').replaceChildren();for(const task of tasks.filter(x=>[x.project,x.name,x.id].join(' ').toLowerCase().includes(q))){const status=recommendations.get(task.id),level=status?.level||'unknown',score=Number.isInteger(status?.score)?status.score:null;const row=document.createElement('div');row.className='task'+(active===task.id?' selected':'')+(level==='required'?' required':level==='recommended'?' handoff':'');row.dataset.id=task.id;const heading=document.createElement('div');heading.className='task-heading';const project=document.createElement('span');project.textContent=task.project||t('noProject');const titleStatus=document.createElement('span');titleStatus.className='task-title-status';const name=document.createElement('span');name.className='name';name.textContent=task.name||t('noName');titleStatus.append(name);if(level==='required'||level==='recommended'){const badge=document.createElement('span');badge.className=level==='required'?'required-badge':'handoff-badge';badge.textContent=t(level==='required'?'requiredBadge':'handoffBadge');titleStatus.append(badge);}heading.append(project,titleStatus);const id=document.createElement('div');id.className='id';id.textContent=task.id;const actions=document.createElement('div');actions.className='actions';const query=document.createElement('button');query.className='primary';query.dataset.query=task.id;query.textContent=t(pending.has(task.id)?'querying':'query');query.disabled=pending.has(task.id)||stopped||switching||refreshBusy;query.onclick=()=>queryTask(task.id);const remove=document.createElement('button');remove.textContent=t('remove');remove.disabled=pending.has(task.id)||stopped||refreshBusy;remove.onclick=async()=>{try{revision++;tasks=(await api('/api/tasks',{action:'delete',id:task.id})).tasks;jobs.delete(task.id);cache.delete(task.id);recommendations.delete(task.id);if(editing===task.id)resetForm();if(active===task.id){active=null;show();}list();notice(t('deleted'));}catch(e){notice(e.message,true);}};const view=document.createElement('button');view.textContent=t('view');view.disabled=refreshBusy||pending.has(task.id)||!cached(task.id);view.onclick=()=>{const result=cached(task.id);if(refreshBusy||pending.has(task.id)||!result)return;active=task.id;jobs.set(task.id,result);list();show();};actions.append(query,view,remove);for(const [direction,label] of [['up','↑'],['down','↓']]){const b=document.createElement('button');b.className='move';b.textContent=label;b.dataset.move=direction;b.title=t(direction);b.setAttribute('aria-label',t(direction));b.disabled=orderBusy||refreshBusy||stopped||(direction==='up'?tasks[0].id===task.id:tasks.at(-1).id===task.id);b.onclick=()=>reorder({action:'move',id:task.id,direction});actions.append(b);}const top=document.createElement('button');top.className='move';top.textContent=t('top');top.dataset.top=task.id;top.title=t('top');top.setAttribute('aria-label',t('top'));top.disabled=orderBusy||refreshBusy||stopped||tasks[0].id===task.id;top.onclick=()=>reorder({action:'top',id:task.id});actions.append(top);row.append(heading,id,actions);appendScorebar(row,level,score);if(typeof status?.contextPercent==='number'&&status.contextPercent>=85){const note=document.createElement('div');note.className='context-note'+(status.contextPercent>=95?' critical':'');note.textContent=tf(status.contextPercent>=95?'contextCritical':'contextPrepare',formatPercentText(status.contextPercent));row.append(note);}$('tasks').append(row);}if(!$('tasks').children.length)$('tasks').textContent=t(tasks.length?'noMatch':'empty');$('sort').disabled=orderBusy||refreshBusy||stopped||tasks.length<2;$('refresh').disabled=refreshBusy||orderBusy||stopped||!tasks.length||!!pending.size;$('refresh').textContent=t(refreshBusy?'refreshing':'refresh');for(const b of document.querySelectorAll('[data-lang]')){b.disabled=!!pending.size||stopped||switching||refreshBusy;b.title=pending.size||refreshBusy?t('languageBusy'):'';}}
+function rememberScore(job){
+ if(job?.state!=='done'||typeof job.finished!=='string'||!Number.isFinite(Date.parse(job.finished)))return;
+ const supported=!job.assessmentVersion||['handoff-score-v4','handoff-score-v5','handoff-score-v6-traditional'].includes(job.assessmentVersion);
+ const score=supported&&Number.isInteger(job.score)&&job.score>=0&&job.score<=10?job.score:null;
+ const level=score===null?'unknown':score>=8?'required':score>=3?'recommended':'continue';
+ const previous=recommendations.get(job.id);
+ if(!previous||Date.parse(job.finished)>=Date.parse(previous.finished))recommendations.set(job.id,{level,score,contextPercent:Number.isFinite(job.contextPercent)?job.contextPercent:null,assessmentVersion:job.assessmentVersion,legacyScore:score!==null&&(job.assessmentVersion!=='handoff-score-v6-traditional'||job.sourceChanged===true),scoreBasis:job.scoreBasis,contextInputTokens:Number.isSafeInteger(job.contextInputTokens)&&job.contextInputTokens>=0?job.contextInputTokens:null,contextObservedAt:job.contextObservedAt,restored:job.restored===true,sourceChanged:job.sourceChanged===true,finished:job.finished});
+}
+
+function appendScorebar(row,level,score,status){
+ const modern=status?.assessmentVersion==='handoff-score-v6-traditional'&&!status?.sourceChanged;
+ const scored=(modern||status?.legacyScore===true||status?.assessmentVersion==='handoff-score-v4')&&Number.isInteger(score)&&score>=0&&score<=10;
+ score=scored?score:null;level=score===null?'unknown':score>=8?'required':score>=3?'recommended':'continue';
+ const percent=status?.contextPercent;
+ const emptyLabel=Number.isFinite(percent)&&status?.assessmentVersion!=='handoff-score-v6-traditional'?tf('oldRatio',formatPercentText(percent)):t(status?'observationUnknown':'notQueried');
+ const label=score===null?emptyLabel:modern?tf('currentScoreTip',score,levelLabel(level)):tf('scoreTip',score,levelLabel(level));
+ const bar=document.createElement('div');bar.className='scorebar'+(score===null?' unscored':level==='required'?' required':level==='recommended'?' advice':'');
+ if(score!==null)bar.dataset.score=String(score);bar.tabIndex=0;bar.setAttribute('role','img');bar.setAttribute('aria-label',label);
+ for(let step=1;step<=10;step++){const segment=document.createElement('span');segment.className='seg'+(score!==null&&step<=score?' on':'')+((step===3||step===8)?' tick':'');bar.append(segment);}
+ const show=()=>{const rect=bar.getBoundingClientRect();scoreTip.textContent=label;scoreTip.hidden=false;const height=scoreTip.offsetHeight;scoreTip.style.left=Math.max(8,Math.min(window.innerWidth-272,rect.left))+'px';scoreTip.style.top=(rect.bottom+6+height>window.innerHeight-6?Math.max(6,rect.top-6-height):rect.bottom+6)+'px';};
+ const hide=()=>{scoreTip.hidden=true;};bar.addEventListener('mouseenter',show);bar.addEventListener('focus',show);bar.addEventListener('mouseleave',hide);bar.addEventListener('blur',hide);row.append(bar);
+ const note=document.createElement('div');note.className='scorebar-empty score-note';
+ if(score===null)note.textContent=emptyLabel;
+ else {note.textContent=tf('scoreNote',score,levelLabel(level));if(!modern)note.textContent+=' · '+t('historicalNote');}
+ row.append(note);
+ const input=document.createElement('div');input.className='scorebar-empty input-note';
+ const inputTokens=status?.contextInputTokens;
+ const historical=status?.restored||status?.sourceChanged||status?.legacyScore||status?.queryFailed;
+ input.textContent=Number.isSafeInteger(inputTokens)&&inputTokens>=0?tf(status?.queryFailed?'failedInput':historical?'historicalInput':'requestInput',inputTokens.toLocaleString(language)):t(historical?'historicalInputUnknown':'requestInputUnknown');
+ const time=value=>typeof value==='string'&&Number.isFinite(Date.parse(value))?new Date(value).toLocaleString(language):t('unknownValue');
+ input.title=tf('requestInputTip',time(status?.contextObservedAt),time(status?.finished));
+ if(historical)input.title+=' '+t('historicalNote');
+ row.append(input);
+}
+
+function list(){const q=$('search').value.trim().toLowerCase();scoreTip.hidden=true;$('count').textContent='('+tasks.length+')';$('tasks').replaceChildren();for(const task of tasks.filter(x=>[x.project,x.name,x.id].join(' ').toLowerCase().includes(q))){const savedStatus=recommendations.get(task.id),status=savedStatus?{...savedStatus,queryFailed:jobs.get(task.id)?.state==='failed'}:savedStatus,level=status?.level||'unknown',score=Number.isInteger(status?.score)?status.score:null;const row=document.createElement('div');row.className='task'+(active===task.id?' selected':'')+(level==='required'?' required':level==='recommended'?' handoff':'');row.dataset.id=task.id;const heading=document.createElement('div');heading.className='task-heading';const project=document.createElement('span');project.textContent=task.project||t('noProject');const titleStatus=document.createElement('span');titleStatus.className='task-title-status';const name=document.createElement('span');name.className='name';name.textContent=task.name||t('noName');titleStatus.append(name);if(level==='required'||level==='recommended'){const badge=document.createElement('span');badge.className=level==='required'?'required-badge':'handoff-badge';badge.textContent=t(level==='required'?'requiredBadge':'handoffBadge');titleStatus.append(badge);}heading.append(project,titleStatus);const id=document.createElement('div');id.className='id';id.textContent=task.id;const actions=document.createElement('div');actions.className='actions';const query=document.createElement('button');query.className='primary';query.dataset.query=task.id;query.textContent=t(pending.has(task.id)?'querying':'query');query.disabled=pending.has(task.id)||stopped||switching||refreshBusy;query.onclick=()=>queryTask(task.id);const remove=document.createElement('button');remove.textContent=t('remove');remove.disabled=pending.has(task.id)||stopped||refreshBusy;remove.onclick=async()=>{try{revision++;tasks=(await api('/api/tasks',{action:'delete',id:task.id})).tasks;jobs.delete(task.id);cache.delete(task.id);recommendations.delete(task.id);if(editing===task.id)resetForm();if(active===task.id){active=null;show();}list();notice(t('deleted'));}catch(e){notice(e.message,true);}};const view=document.createElement('button');view.textContent=t('view');view.disabled=refreshBusy||pending.has(task.id)||!cached(task.id);view.onclick=()=>{const result=cached(task.id);if(refreshBusy||pending.has(task.id)||!result)return;active=task.id;jobs.set(task.id,result);list();show();};actions.append(query,view,remove);for(const [direction,label] of [['up','↑'],['down','↓']]){const b=document.createElement('button');b.className='move';b.textContent=label;b.dataset.move=direction;b.title=t(direction);b.setAttribute('aria-label',t(direction));b.disabled=orderBusy||refreshBusy||stopped||(direction==='up'?tasks[0].id===task.id:tasks.at(-1).id===task.id);b.onclick=()=>reorder({action:'move',id:task.id,direction});actions.append(b);}const top=document.createElement('button');top.className='move';top.textContent=t('top');top.dataset.top=task.id;top.title=t('top');top.setAttribute('aria-label',t('top'));top.disabled=orderBusy||refreshBusy||stopped||tasks[0].id===task.id;top.onclick=()=>reorder({action:'top',id:task.id});actions.append(top);row.append(heading,id,actions);appendScorebar(row,level,score,status);if(!status?.legacyScore&&typeof status?.contextPercent==='number'&&status.contextPercent>=85){const note=document.createElement('div');note.className='context-note'+(status.contextPercent>=95?' critical':'');note.textContent=tf(status.contextPercent>=95?'contextCritical':'contextPrepare',formatPercentText(status.contextPercent));row.append(note);}$('tasks').append(row);}if(!$('tasks').children.length)$('tasks').textContent=t(tasks.length?'noMatch':'empty');$('sort').disabled=orderBusy||refreshBusy||stopped||tasks.length<2;$('urgencySort').disabled=orderBusy||refreshBusy||stopped||tasks.length<2||!!pending.size;$('refresh').disabled=refreshBusy||orderBusy||stopped||!tasks.length||!!pending.size;$('refresh').textContent=t(refreshBusy?'refreshing':'refresh');for(const b of document.querySelectorAll('[data-lang]')){b.disabled=!!pending.size||stopped||switching||refreshBusy;b.title=pending.size||refreshBusy?t('languageBusy'):'';}}
 function decorate(raw,report=false){const task=tasks.find(x=>x.id===active);if(!task)return raw;
 const name=task.name||t('noName'),project=task.project||t('noProject');
 const pattern=report ? /^[ \t]*- (?:任务名称：|Task name:)[^\r\n]*/m : /^(?:任务名称：|Task name:)[^\r\n]*/m;
@@ -321,6 +414,7 @@ function render(){document.documentElement.lang=language;document.title=t('title
 async function completed(job){if(job.state==='done'){try{job.reportText=(await api('/api/report?id='+encodeURIComponent(job.id))).text;}catch{job.reportText=null;}if(!cache.has(job.id))cache.set(job.id,new Map());cache.get(job.id).set(job.language,job);rememberScore(job);}try{tasks=(await api('/api/tasks')).tasks;}catch(e){notice(e.message,true);}}
 async function reorder(body){if(orderBusy||refreshBusy||stopped)return;orderBusy=true;revision++;list();try{tasks=(await api('/api/tasks',body)).tasks;if(body.action==='move'||body.action==='top'){active=body.id;const saved=cached(active);if(saved)jobs.set(active,saved);show();}notice(t('reordered'));}catch(e){notice(e.message,true);}finally{orderBusy=false;revision++;list();if((body.action==='move'||body.action==='top')&&active===body.id){const row=document.querySelector('.task.selected');row?.scrollIntoView({block:'nearest'});row?.querySelector(body.action==='top'?'[data-top]':'[data-move='+body.direction+']')?.focus({preventScroll:true});}}}
 $('sort').onclick=()=>reorder({action:'group'});
+$('urgencySort').onclick=()=>reorder({action:'urgency'});
 async function metadataPoll(){if(stopped)return;if(!metadataBusy&&!document.hidden){metadataBusy=true;const rev=revision;try{const r=await api('/api/tasks');if(rev===revision){tasks=r.tasks;list();live();}}catch(e){notice(e.message,true);}finally{metadataBusy=false;}}if(!stopped)setTimeout(metadataPoll,3000);}
 async function queryTask(id,preserve=false,activate=true){if(pending.has(id)||stopped||(refreshBusy&&activate))return;pending.add(id);if(activate)active=id;if(!preserve)cache.delete(id);jobs.set(id,{id,language,state:'running'});list();if(active===id)show();try{const job=await api('/api/query',{id,language,preserveHistory:preserve});jobs.set(id,job);if(job.state!=='running'){pending.delete(id);await completed(job);}}catch(e){pending.delete(id);jobs.set(id,{id,language,state:'failed',error:e.message});}finally{list();if(active===id)show();}}
 const pause=ms=>new Promise(resolve=>setTimeout(resolve,ms));

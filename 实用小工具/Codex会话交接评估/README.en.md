@@ -4,6 +4,8 @@
 
 Save frequently used task IDs and query local Codex turns, file size, compaction and handoff guidance with one click. **Recommended download: Windows desk 0.2.0-dev.10.** No commands are required for everyday use. Source sessions are read-only; data is not uploaded.
 
+The repository source includes score-bar recovery, history compatibility and Chinese text encoding fixes; the published dev.10 ZIP is unchanged. Reload the page for the renderer fix; restart only this tool to adopt backend/analyzer edits. Codex need not be restarted.
+
 ## Download and start
 
 1. [Download the standalone Windows ZIP](https://github.com/RongNianXin/ChatGPT-Workflows/releases/download/windows-sessiondesk-v0.2.0-dev.10/Windows-SessionDesk-0.2.0-dev.10.zip), extract it completely, and double-click the root `Start-SessionDesk.cmd`. You do not need to clone the repository. Do not open the HTML by itself.
@@ -29,16 +31,33 @@ Compare the result with the attached `SHA256SUMS.txt`. Different hashes mean the
 ## Everyday use
 
 - No fixed saved-task count limit; regression covers 20 tasks. Search, arrow ordering and Sort all are available, with order saved to disk. Refresh all runs at most two queries concurrently and restores the previous selection; an empty selection stays empty.
-- A task whose latest successful result reaches the analyzer's handoff threshold has a pale-yellow row, orange edge and text label. This is a query snapshot, not live state. Legacy snapshots without the recommendation field keep the ordinary style.
+- The latest successful score uses orange at 3-7 and red at 8-10, with advice to review a safe breakpoint. This is a query snapshot, not live state; old scores are explicitly historical.
 - Each task retains its latest successful basic output and detailed report per language. Reopening shows the original query time and a historical-snapshot notice; statistics update only on a new query.
 - **Closing the page does not stop the background service.** Select Exit tool at the top of the page when finished to stop this tool and its unfinished queries, without stopping Codex conversations. Bilingual hover help explains the button. Close the page after the prominent exit confirmation and use the launcher to restore saved tasks and results.
 - An interrupted or failed refresh does not turn old history into a new success. Previously saved history remains available after reopening. A visible result does not mean the AI is currently running.
 
 ## Score and slider
 
-Each task card has a 0–10 handoff reference score: file size contributes 0–5 points at 30, 50, 100, 200 and 400 MiB; automatic compaction contributes 0–5 points at 4, 7, 10, 15 and 20 events. Scores 0–2 mean continue for now, 3–7 show **Handoff recommended**, and 8–10 (including 8) show **Handoff required**. These are local heuristics, not official OpenAI limits.
+Current results use `handoff-score-v6-traditional`, restoring file-size plus compaction-count scoring. The 0-10 scale, recommendation at three (orange), required tier at eight (red), ten segments and three/eight markers remain. Unqueried or invalid scores show empty gray segments, not a fabricated zero.
 
-Scored task cards show a static 10-segment slider with subtle ticks at 3 and 8. Hovering or keyboard-focusing it shows the current score and level. Recent context-window usage is not included in the total and does not create a handoff reminder on task cards; the terminal and report retain the metric for diagnosis. Legacy snapshots without score fields show **No score data**, never a false zero.
+| Component | 0 points | 1 point | 2 points | 3 points | 4 points | 5 points |
+| --- | --- | --- | --- | --- | --- | --- |
+| File size (MiB) | <30 | 30-<50 | 50-<100 | 100-<200 | 200-<400 | >=400 |
+| Compaction count | <4 | 4-<7 | 7-<10 | 10-<15 | 15-<20 | >=20 |
+
+Add the components: 46 MiB and ten compactions give 1+3=4; 200 MiB and fifteen compactions give 4+4=8. Size is the aggregate bytes of discovered session segments divided by 1,048,576; compactions are detected events. Reports show both observed values, their contributions, all bands and the total equation.
+
+Current input, window utilization and observed growth do not affect scoring. The tool does not forecast future pressure or turns to an observation target. The 85%/95% capacity reminders are separate. Earlier dynamic scores remain explicitly historical until queried again; ratios without valid scores are not converted to points.
+
+Traditional thresholds are heuristics, not calibrated against end-to-end cost or completion quality. File size is not current input tokens, and compaction count is not current load. Three points is not a proven token optimum; neither 100,000 nor 150,000 tokens is an established universal mandatory handoff threshold.
+
+Cards show the latest logged request input directly below the score, without repeating the scoring method; the detailed report retains all scoring evidence. Restored, source-changed or failed-refresh results visibly say “Previous query input”; the tooltip preserves the original observation and query times.
+
+Native per-request input is independent: a valid nonnegative safe integer (including zero) can be shown without a window or cumulative counter. It is not cumulative input or the length of a user message. Capacity, utilization and growth are validated separately. `input_tokens` already includes `cached_input_tokens`; do not add them again. Use `model_context_window` from the same event, not the largest routing-group window; missing cumulative `total_tokens` does not establish a continuous observation. Growth averages five intervals from final observations in six completed turns sharing the same session, model, declared provider, window and compaction segment. Missing/invalid usage remains unknown; valid zero remains zero. Compaction, identity/window changes, counter rollback or missing new usage resets the baseline; repeated snapshots add no samples. Negative growth is retained; insufficient samples leave growth unknown. There is no arbitrary observation target or forecast of turns to reach it. Declared provider does not prove the actual gateway upstream.
+
+Handoff decisions need two further checks: whether the current work unit is complete, evidence is sufficient and recovery is possible; and whether future savings exceed preparation, rule reloads, cache rebuilding and expected rework. A terminal log turn cannot prove business completion. The tool cannot reliably infer these conditions and reports them as unknown. If capacity permits, complete the current unit and hand off at a safe breakpoint. Otherwise preserve evidence and a recoverable checkpoint first, without interrupting in-flight work or insisting on completing the entire task at any risk. A score of eight or more is a red traditional-heuristic signal, not an immediate window-switch command.
+
+Simplified token break-even is `N × (C - R) > H`: C is old-window input per model request, R is reconstructed new-window input, H is handoff overhead, and N counts future model requests. This assumes comparable accounting and roughly stable future inputs; a user turn can include many model requests. Cache rates, input/output prices, long-context multipliers, time and quality risks can change the result, so token savings do not directly equal money saved. Missing inputs never justify precise benefit claims. No extra sampling is required from the operator and no handoff is executed automatically. Query timestamps identify snapshots, not proof that a task is running or complete.
 
 See the [Windows desk guide](windows-local/README.en.md) for storage, invalidation rules and bilingual maintenance. [Real-world previews](../../SHOWCASE.md) collects redacted screenshots.
 
@@ -60,4 +79,4 @@ Results are engineering guidance, not official thresholds or live status. Segmen
 
 Detailed reports and history can contain complete user input and local paths. They remain in `.local` and must not be published without review. ZIP files exclude private state. The service listens only on loopback and validates a random connection token. Exit does not stop other programs or Codex tasks. Preserve the analyzer’s integrity warnings; missing Token counts must not be treated as zero.
 
-<!-- README-SOURCE-SHA256: beba9117506155648a617e65f89b247760c3bfebdce997c0bd4103598a14650d -->
+<!-- README-SOURCE-SHA256: 96ec6e12fde73376dcf84e7854a47956daa388799cccccc6194a4c40bae6c518 -->

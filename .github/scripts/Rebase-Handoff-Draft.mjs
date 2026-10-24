@@ -35,7 +35,11 @@ export function rebaseHandoffDraft(configPath, outputDraftPath) {
     if (!root) throw new Error('INPUT_REQUIRED: external_control_plane rebase is not supported by this entry; use an authorized owner-managed draft');
     const absolute = fs.realpathSync(path.resolve(root, source.path_ref));
     if (!inside(root, absolute)) throw new Error(`source escapes source_root: ${source.path_ref}`);
-    source.digest = sha256(fs.readFileSync(absolute));
+    const actualDigest = sha256(fs.readFileSync(absolute));
+    if (source === rebased.sources?.handoff_inventory && actualDigest !== source.digest) {
+      throw new Error('INPUT_REQUIRED: handoff_inventory changed after the draft was frozen; refresh its business facts from the current breakpoint and rebuild the candidate instead of silently rebasing its digest');
+    }
+    source.digest = actualDigest;
     source.fact_cutoff = cutoff;
   }
   rebased.workspace = { ...(rebased.workspace ?? {}), root_ref: '.', ...readGitWorkspaceBaseline(sourceRoot, rebased.workspace?.required_untracked?.map(item => item.path_ref) ?? [], rebased.workspace?.inflight_scope ?? null) };

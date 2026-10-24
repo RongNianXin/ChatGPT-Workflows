@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { verifyChain } from './HandoffSeal.mjs';
 import { assertPrivateControlStorage } from './HandoffControl.mjs';
 import { validateWorkspaceAmendment } from './HandoffWorkspaceAmendment.mjs';
-import { classifyRuleDrift, verifyRuleManifest, verifyWorkspaceBaseline, readLiveRemoteBaseline } from './Prepare-Handoff.mjs';
+import { classifyRuleDrift, verifyRuleManifest, verifyWorkspaceBaseline, readLiveRemoteBaseline, verifyHandoffInventory } from './Prepare-Handoff.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const defaultWorkflowRoot = path.resolve(here, '..', '..', '总指挥工作流', '第二代总指挥的工作模式');
@@ -42,6 +42,10 @@ export function verifyHandoffCandidate({ sealDirectory, sourceRoot, externalCont
     result.actions.push('已完成接管的封条只能按历史/当前状态核验，不能重复作为候选输入');
     return result;
   }
+  try {
+    result.inventory = verifyHandoffInventory(chain.latest, { sourceRoot, externalControlPlaneRoot });
+    if (result.inventory.status === 'NOT_DECLARED') result.actions.push('旧材料缺少完整结构化事实声明；保留兼容读取，由合法来源在冻结前核账，接收方仍独立核对业务断点，不把摘要通过当成事实完整');
+  } catch (error) { result.errors.push(error.message); return result; }
   let liveManifest;
   try { assertPrivateControlStorage(chain.latest, { sourceRoot, externalControlPlaneRoot }); }
   catch (error) {
@@ -86,6 +90,7 @@ export function verifyHandoffCandidate({ sealDirectory, sourceRoot, externalCont
   // A stop recommendation must use an unchanged observation group, not the first cached chain.
   try {
     const finalChain = verifyChain(sealDirectory, { sourceRoot, externalControlPlaneRoot });
+    verifyHandoffInventory(finalChain.latest, { sourceRoot, externalControlPlaneRoot });
     assertPrivateControlStorage(finalChain.latest, { sourceRoot, externalControlPlaneRoot });
     const finalManifest = verifyRuleManifest(workflowRoot, manifestPath);
     const finalManifestDigest = crypto.createHash('sha256').update(fs.readFileSync(manifestPath)).digest('hex');

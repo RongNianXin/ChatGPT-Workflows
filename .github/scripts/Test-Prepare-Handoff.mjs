@@ -614,7 +614,8 @@ try {
   }
   check('hydrated snapshot uses the verified public rule root and resolved receipt and source inventory', () => {
     const input = hydrationCase(403);
-    prepareFormalHandoff(input.configPath);
+    const result = prepareFormalHandoff(input.configPath);
+    assert.equal(result.receipt.inventory_verification.status, 'NOT_DECLARED');
     const body = fs.readFileSync(input.finalPath, 'utf8');
     assert.ok(body.includes(`- 规则根：${workflowFilesRoot}`));
     assert.ok(body.includes(`- 机器记录：${input.inventoryPath}`));
@@ -628,6 +629,53 @@ try {
     assert.doesNotMatch(body, /stale baseline|old-candidate|{{[A-Z_]+}}/);
   });
   let hydrationNumber = 410;
+  for (const [field, stale] of [
+    ['commander_generation', -1], ['writer_id', 'SYNTHETIC-STALE'], ['platform_task_id', '00000000-0000-4000-8000-000000000099'],
+    ['rule_baseline', { rule_version: 'stale', manifest_sha256: 'a'.repeat(64) }],
+    ['objective', { summary: 'old objective', breakpoint: 'old breakpoint' }]
+  ]) for (const preflightOnly of [true, false]) check(`stale inventory ${field} is rejected with valid hashes in ${preflightOnly ? 'preflight' : 'formal'} preparation`, () => {
+    const input = hydrationCase(hydrationNumber++);
+    const record = { record_type: 'handoff_inventory', commander_generation: input.draft.generation, writer_id: input.draft.writer_id, platform_task_id: '00000000-0000-4000-8000-000000000001', rule_baseline: input.draft.rule_baseline, objective: input.draft.objective, [field]: stale };
+    fs.writeFileSync(input.inventoryPath, JSON.stringify(record));
+    input.draft.sources.handoff_inventory.digest = sha256(fs.readFileSync(input.inventoryPath));
+    input.draft.workspace = { ...input.draft.workspace, ...readGitWorkspaceBaseline(sourceRoot) };
+    input.config.preflight_only = preflightOnly;
+    writeJson(input.config.draft_path, input.draft); writeJson(input.configPath, input.config);
+    assert.throws(() => prepareFormalHandoff(input.configPath), /HANDOFF_INVENTORY_MISMATCH/);
+    assert.equal(fs.existsSync(input.finalPath), false);
+    if (fs.existsSync(input.config.seal_directory)) assert.deepEqual(fs.readdirSync(input.config.seal_directory), []);
+  });
+  check('complete matching inventory reports declared fields only and retains business readback', () => {
+    const input = hydrationCase(hydrationNumber++);
+    fs.writeFileSync(input.inventoryPath, JSON.stringify({ record_type: 'handoff_inventory', commander_generation: input.draft.generation, writer_id: input.draft.writer_id, platform_task_id: '00000000-0000-4000-8000-000000000001', rule_baseline: input.draft.rule_baseline, objective: input.draft.objective, remote: { ref: input.draft.remote.default_ref, head: input.draft.remote.head }, task_contract: '材料/task-contract.md' }));
+    input.draft.sources.handoff_inventory.digest = sha256(fs.readFileSync(input.inventoryPath));
+    input.draft.workspace = { ...input.draft.workspace, ...readGitWorkspaceBaseline(sourceRoot) };
+    writeJson(input.config.draft_path, input.draft);
+    const result = prepareFormalHandoff(input.configPath);
+    assert.equal(result.receipt.inventory_verification.status, 'PASS');
+    assert.equal(result.receipt.inventory_verification.business_freshness, 'REQUIRES_SOURCE_READBACK');
+  });
+  check('declared source platform task ID is compared with the old CURRENT identity', () => {
+    const input = hydrationCase(hydrationNumber++);
+    const sourceIndex = path.join(sourceRoot, input.draft.sources.status_index.path_ref);
+    fs.writeFileSync(sourceIndex, fs.readFileSync(sourceIndex, 'utf8').replace('UNKNOWN', '00000000-0000-4000-8000-000000000001'));
+    input.draft.sources.status_index.digest = sha256(fs.readFileSync(sourceIndex));
+    fs.writeFileSync(input.inventoryPath, JSON.stringify({ record_type: 'handoff_inventory', commander_generation: input.draft.generation, writer_id: input.draft.writer_id, platform_task_id: '00000000-0000-4000-8000-000000000001', rule_baseline: input.draft.rule_baseline, objective: input.draft.objective, task_contract: '材料/task-contract.md' }));
+    input.draft.sources.handoff_inventory.digest = sha256(fs.readFileSync(input.inventoryPath));
+    input.draft.workspace = { ...input.draft.workspace, ...readGitWorkspaceBaseline(sourceRoot) };
+    writeJson(input.config.draft_path, input.draft);
+    const result = prepareFormalHandoff(input.configPath);
+    assert.equal(result.receipt.inventory_verification.status, 'PASS');
+  });
+  check('a declared formal inventory cannot omit identity and pass as pointer-only legacy', () => {
+    const input = hydrationCase(hydrationNumber++);
+    fs.writeFileSync(input.inventoryPath, JSON.stringify({ record_type: 'handoff_inventory', loading_record: '材料/loading.json' }));
+    input.draft.sources.handoff_inventory.digest = sha256(fs.readFileSync(input.inventoryPath));
+    input.draft.workspace = { ...input.draft.workspace, ...readGitWorkspaceBaseline(sourceRoot) };
+    writeJson(input.config.draft_path, input.draft);
+    assert.throws(() => prepareFormalHandoff(input.configPath), /INPUT_REQUIRED.*source generation/);
+    assert.deepEqual(fs.readdirSync(input.config.seal_directory), []);
+  });
   for (const [name, ref] of [['parent escape', '../outside.md'], ['absolute', 'C:/<OUTSIDE>/contract.md'], ['Markdown injection', 'contract>\n.md']]) check(`hydration refuses ${name} inventory pointer before sealing`, () => {
     const input = hydrationCase(hydrationNumber++);
     fs.writeFileSync(input.inventoryPath, JSON.stringify({ task_contract: ref }));
@@ -697,6 +745,25 @@ try {
     assert.equal(sha256(fs.readFileSync(path.join(configDir, 'draft.json'))), originalDigest);
     const retry = spawnSync(process.execPath, [rebaseScript, input.configPath, output], { cwd: outputRoot, encoding: 'utf8' });
     assert.equal(retry.status, 1); assert.match(retry.stderr, /refusing to overwrite/);
+  });
+  check('rebase refuses to refresh a changed handoff inventory without a business readback', () => {
+    const input = restrictedCase(406);
+    const inventoryPath = path.join(sourceRoot, 'rebase-inventory.json');
+    fs.writeFileSync(inventoryPath, JSON.stringify({ objective: 'before' }));
+    input.draft.sources.handoff_inventory = {
+      owner: 'synthetic',
+      root_ref: 'source_root',
+      path_ref: 'rebase-inventory.json',
+      digest: sha256(fs.readFileSync(inventoryPath)),
+      fact_cutoff: input.draft.fact_cutoff
+    };
+    writeJson(input.config.draft_path, input.draft);
+    fs.writeFileSync(inventoryPath, JSON.stringify({ objective: 'after' }));
+    const output = path.join(path.dirname(input.configPath), 'rebased-stale-inventory.json');
+    const result = spawnSync(process.execPath, [rebaseScript, input.configPath, output], { cwd: outputRoot, encoding: 'utf8' });
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /INPUT_REQUIRED: handoff_inventory changed/);
+    assert.equal(fs.existsSync(output), false);
   });
   check('protected non-source drift after rendering cannot produce a final attachment', () => {
     const latePath = path.join(sourceRoot, 'late-protected.txt');

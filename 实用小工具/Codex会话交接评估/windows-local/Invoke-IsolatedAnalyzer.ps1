@@ -12,7 +12,7 @@ try {
         $score = if ($null -ne $totalScore) { [int]$totalScore } else { $null }
         $level = if ($handoffLevel -in @('continue','recommended','required')) { [string]$handoffLevel } else { 'unknown' }
         $contextPercent = if ($null -ne $contextPercent) { [double]$contextPercent } else { $null }
-        $metadata = @{name=$taskNameInfo.TaskName;found=$taskNameInfo.IndexFound;warnings=$taskNameInfo.ParseWarnings;score=$score;level=$level;contextPercent=$contextPercent}
+        $metadata = @{name=$taskNameInfo.TaskName;found=$taskNameInfo.IndexFound;warnings=$taskNameInfo.ParseWarnings;score=$score;level=$level;contextPercent=$contextPercent;contextInputTokens=$(if ($null -ne $contextState.Request) { $contextState.Request.Input } else { $null });contextObservedAt=$(if ($null -ne $contextState.Request) { $contextState.Request.Timestamp } else { $null });assessmentVersion=$assessmentVersion;contextGrowth=$contextGrowth;roundsToObservation=$roundsToObservation;scoreBasis=$scoreBasis}
         [IO.File]::WriteAllText($MetadataPath, ($metadata | ConvertTo-Json), (New-Object Text.UTF8Encoding($false)))
     }
     [Console]::Out.Write($output)

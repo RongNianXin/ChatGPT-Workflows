@@ -2,7 +2,7 @@
 
 [简体中文](README.md) | **English**
 
-<!-- README-SOURCE-SHA256: 583b35db9312072fd789f168db4d1a6917bd0e8d9c9892dda4f7b309b763b034 -->
+<!-- README-SOURCE-SHA256: 72999f558463f16a21263b4923eb2209ae9ba2235b2b11d5e8c4bc9ee5b0d645 -->
 This directory contains sanitized Codex and companion-tool incident records with explicit evidence boundaries. Start with the symptom table. You do not need to understand the directory layout or read every investigation.
 
 ## Find a case by symptom
@@ -18,7 +18,7 @@ This directory contains sanitized Codex and companion-tool incident records with
 | `TRB-007` | A long task reports an explicit conversation-too-long 400, 401, unsupported-model 404, 429, either of two 502 signatures, 503, 504, or a dropped stream | **Partially resolved: triage and recovery available; failures still observed after the reported fix** | [Long tasks and HTTP errors index](<04-网络断开或服务报错/TRB-007-任务太长或网络报错/TRB-007-任务太长或网络报错-总说明.md>) |
 | `TRB-008` | The official ChatGPT account still shows Codex capacity, reconnects, and stream disconnects in a clean environment | **Unresolved: initial support reply; workspace and `/status` details pending** | [Official-account capacity and stream disconnect](<02-登录、账号和模型问题/TRB-008-官方账号容量不足或总断开/SYS-TRB-008-官方账号容量不足或总断开.en.md>) |
 | `TRB-009` | A task flashes `Model provider 'OpenAI' not found` and cannot load `config.toml` | **Resolved: provider alias added and loading verified for this case** | [Missing model provider in project configuration](<02-登录、账号和模型问题/TRB-009-打开项目时找不到模型/SYS-TRB-009-打开项目时找不到模型.en.md>) |
-| `TRB-010` | A multi-part request receives only a kickoff note or promised next action, then ends with a non-empty answer before the task is complete | **Unresolved: behavioral guard added; live regression and host-level interception are unavailable** | [Task ended before closure](<05-任务没做完就结束/TRB-010-任务没做完就结束/SYS-TRB-010-任务没做完就结束.md>) |
+| `TRB-010` | A multi-part request receives only a kickoff note or promised next action, then ends with a non-empty answer before the task is complete | **Unresolved**; partially mitigated: independent checks and bounded continuation tested for new CLI tasks; existing desktop conversations are not connected | [Task ended before closure](<05-任务没做完就结束/TRB-010-任务没做完就结束/SYS-TRB-010-任务没做完就结束.md>) |
 | `TRB-011` | Switching models rejects a historical tool name with an `input[N].name` character-pattern error | **Resolved for one case: bounded local repair verified and recovery confirmed by the operator; not a general fix** | [Invalid characters in historical tool names (Chinese)](<06-工具调用与上下文协议/TRB-011-切换模型后工具名称校验失败/ERR-TRB-011-历史工具名称包含非法字符.md>) |
 | `TRB-012` | Memory usage rises again while multiple tool services remain resident, possibly alongside a `configRequirements/read` timeout | **Partially resolved: page-file relocation verified; growth, root cause, and safe reclamation remain open** | [High memory and resident tool services (Chinese)](<07-资源与进程问题/TRB-012-高内存与工具服务常驻/SYS-TRB-012-高内存与工具服务常驻.md>) |
 

@@ -83,6 +83,8 @@ function verifySourceFiles(seal, sourceRoot, externalControlPlaneRoot) {
 }
 
 export function validateControlPlaneRegistry(registry, sourceRoot, canonicalStatusIndexRef) {
+  // Legacy current_* copies are not a second identity authority. The registry's
+  // path/history contract and (when sealed) all of its bytes remain verified.
   const errors = [];
   if (!registry || typeof registry !== 'object' || Array.isArray(registry)) return ['registry must be an object'];
   if (registry.schema_version !== 1) errors.push('registry schema_version must be 1');
@@ -115,6 +117,7 @@ export function verifyControlIdentity(seal, { sourceRoot, externalControlPlaneRo
   catch (error) { return { status: error.message.includes('INPUT_REQUIRED:') ? 'NOT_CHECKED' : 'FAIL', errors: [error.message], platform_mapping_status: 'NOT_CHECKED' }; }
   const bodies = {};
   let platformMappingStatus = 'NOT_CHECKED';
+  let canonicalIdentity = null;
   for (const name of CONTROL_IDENTITY_SOURCES) {
     try {
       const source = seal.sources[name];
@@ -140,12 +143,13 @@ export function verifyControlIdentity(seal, { sourceRoot, externalControlPlaneRo
   try {
     const identity = marker('status_index', 'CONTROL_IDENTITY');
     if (!exactKeys(identity, ['generation', 'writer_id', 'platform_task_id']) || !Number.isInteger(identity.generation) || identity.generation < 1 || !/^[A-Za-z0-9._-]+$/.test(identity.writer_id ?? '') || !(identity.platform_task_id === 'UNKNOWN' || /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(identity.platform_task_id ?? ''))) throw new Error('invalid canonical identity mapping');
+    canonicalIdentity = identity;
     platformMappingStatus = identity.platform_task_id === 'UNKNOWN' ? 'UNKNOWN' : 'RECORDED_NOT_PLATFORM_VERIFIED';
-    if (identity.generation !== seal.generation || identity.writer_id !== seal.writer_id) throw new Error('canonical identity does not match seal');
+    if (identity.generation !== seal.generation || identity.writer_id !== seal.writer_id) throw new Error('CONTROL_IDENTITY_CONFLICT: canonical identity does not match seal');
     for (const name of CONTROL_IDENTITY_SOURCES) {
       if (name !== 'status_index') {
         const navigation = marker(name, 'CONTROL_NAVIGATION');
-        if (!exactKeys(navigation, name === 'workflow_enablement' ? ['status_index', 'root_ref', 'central_entry', 'central_entry_root_ref'] : ['status_index', 'root_ref']) || navigation.status_index !== seal.sources.status_index.path_ref || navigation.root_ref !== (seal.sources.status_index.root_ref ?? 'source_root')) throw new Error(`${name}: canonical navigation mismatch`);
+        if (!exactKeys(navigation, name === 'workflow_enablement' ? ['status_index', 'root_ref', 'central_entry', 'central_entry_root_ref'] : ['status_index', 'root_ref']) || navigation.status_index !== seal.sources.status_index.path_ref || navigation.root_ref !== (seal.sources.status_index.root_ref ?? 'source_root')) throw new Error(`CONTROL_PLANE_MIGRATION_REQUIRED: ${name}: canonical navigation mismatch`);
         if (name === 'workflow_enablement') {
           const states = [...bodies[name].matchAll(/^[\t ]*(?:状态|state)[\t ]*[:：=][\t ]*([^\r\n]*)$/gm)];
           if (states.length !== 1 || !/^(?:enabled|`enabled`)$/.test(states[0][1].trim())) throw new Error('workflow_enablement: requires an explicit enabled state');
@@ -155,16 +159,16 @@ export function verifyControlIdentity(seal, { sourceRoot, externalControlPlaneRo
       }
       // Recognized current declarations are checked; historical text is excluded.
       const fields = [
-        [/(?:当前唯一中央写者|唯一当前写者绑定|中央登记唯一写者|唯一中央写者|当前写者|writer_id)\s*[:：=]\s*`?([A-Za-z0-9._-]+)/g, identity.writer_id],
-        [/(?:当前总指挥世代|generation)\s*[:：=]\s*`?(\d+)/g, String(identity.generation)],
-        [/(?:当前任务\s*ID|平台任务\s*ID|platform_task_id)\s*[:：=]\s*`?([A-Za-z0-9-]+)/g, identity.platform_task_id]
+        [/(?:当前唯一中央写者|唯一当前写者绑定|中央登记唯一写者|唯一中央写者|唯一写者|当前写者|writer_id)\s*[:：=]\s*`?([A-Za-z0-9._-]+)/g, identity.writer_id],
+        [/(?:当前总指挥世代|控制面世代|generation)\s*[:：=]\s*`?(?:commander-)?(\d+)/g, String(identity.generation)],
+        [/(?:当前任务\s*ID|平台任务\s*ID|当前平台任务|platform_task_id)\s*[:：=]\s*`?([A-Za-z0-9-]+)/g, identity.platform_task_id]
       ];
       for (const [pattern, expected] of fields) {
-        for (const match of (bodies[name] ?? '').matchAll(pattern)) if (match[1] !== expected) throw new Error(`${name}: conflicting current identity declaration`);
+        for (const match of (bodies[name] ?? '').matchAll(pattern)) if (match[1] !== expected) throw new Error(`${name === 'status_index' ? 'CONTROL_IDENTITY_CONFLICT' : 'CONTROL_PLANE_MIGRATION_REQUIRED'}: ${name}: conflicting current identity declaration`);
       }
     }
   } catch (error) { errors.push(error.message); }
-  return { status: errors.length ? errors.some(error => error.includes('INPUT_REQUIRED:')) ? 'NOT_CHECKED' : 'FAIL' : 'PASS', errors, platform_mapping_status: platformMappingStatus };
+  return { status: errors.length ? errors.some(error => error.includes('INPUT_REQUIRED:')) ? 'NOT_CHECKED' : 'FAIL' : 'PASS', errors, platform_mapping_status: platformMappingStatus, identity: errors.length ? null : canonicalIdentity };
 }
 export function validateSeal(seal, { checkDigest = true, requireExtensions = false } = {}) {
   const errors = [];
@@ -201,9 +205,21 @@ export function validateSeal(seal, { checkDigest = true, requireExtensions = fal
   if (!exactKeys(seal.communications, ['status']) || !['NONE', 'AUTHORIZED', 'PENDING_CONFIRMATION', 'BLOCKED'].includes(seal.communications.status)) fail(errors, 'invalid communications status');
   const w = seal.workspace;
   const workspaceKeys = ['root_ref', 'branch', 'head', 'tree', 'staged_count', 'tracked_modified_count', 'untracked_count', 'required_untracked'];
-  const legacyWorkspace = w && !Object.hasOwn(w, 'worktree_fingerprint');
-  if (!w || (!legacyWorkspace && !exactKeys(w, [...workspaceKeys, 'worktree_fingerprint', ...(Object.hasOwn(w, 'inflight_scope') ? ['inflight_scope'] : [])])) || (legacyWorkspace && !requireExtensions && !exactKeys(w, workspaceKeys)) || (legacyWorkspace && requireExtensions) || typeof w.root_ref !== 'string' || !w.root_ref || typeof w.branch !== 'string' || !w.branch || !/^[0-9a-f]{40,64}$/.test(w.head || '') || !/^[0-9a-f]{40,64}$/.test(w.tree || '') || !Number.isInteger(w.staged_count) || w.staged_count < 0 || !Number.isInteger(w.tracked_modified_count) || w.tracked_modified_count < 0 || !Number.isInteger(w.untracked_count) || w.untracked_count < 0 || !Array.isArray(w.required_untracked) || (!legacyWorkspace && !validWorkspaceFingerprint(w, seal.sources, { ruleBaseline: seal.rule_baseline }))) fail(errors, 'invalid workspace baseline');
-  else for (const item of w.required_untracked) if (!exactKeys(item, ['path_ref', 'sha256', 'reason']) || !relativeRef(item.path_ref) || !HEX.test(item.sha256 || '') || typeof item.reason !== 'string' || !item.reason) fail(errors, 'invalid required_untracked item');
+  if (!w || typeof w !== 'object' || Array.isArray(w)) fail(errors, 'workspace baseline must be an object');
+  else {
+    const legacyWorkspace = !Object.hasOwn(w, 'worktree_fingerprint');
+    const allowedWorkspaceKeys = [...workspaceKeys, 'worktree_fingerprint', 'inflight_scope'];
+    const unexpectedWorkspaceKeys = Object.keys(w).filter(key => !allowedWorkspaceKeys.includes(key));
+    const requiredWorkspaceKeys = [...workspaceKeys, ...(legacyWorkspace && !requireExtensions ? [] : ['worktree_fingerprint'])];
+    const missingWorkspaceKeys = requiredWorkspaceKeys.filter(key => !Object.hasOwn(w, key));
+    if (unexpectedWorkspaceKeys.length) fail(errors, `workspace baseline unexpected field(s): ${unexpectedWorkspaceKeys.join(', ')}`);
+    if (missingWorkspaceKeys.length) fail(errors, `workspace baseline missing field(s): ${missingWorkspaceKeys.join(', ')}`);
+    if (!unexpectedWorkspaceKeys.length && !missingWorkspaceKeys.length) {
+      if (typeof w.root_ref !== 'string' || !w.root_ref || typeof w.branch !== 'string' || !w.branch || !/^[0-9a-f]{40,64}$/.test(w.head || '') || !/^[0-9a-f]{40,64}$/.test(w.tree || '') || !Number.isInteger(w.staged_count) || w.staged_count < 0 || !Number.isInteger(w.tracked_modified_count) || w.tracked_modified_count < 0 || !Number.isInteger(w.untracked_count) || w.untracked_count < 0 || !Array.isArray(w.required_untracked)) fail(errors, 'invalid workspace baseline scalar fields');
+      else if (!legacyWorkspace && !validWorkspaceFingerprint(w, seal.sources, { ruleBaseline: seal.rule_baseline })) fail(errors, 'invalid workspace fingerprint');
+      else for (const item of w.required_untracked) if (!exactKeys(item, ['path_ref', 'sha256', 'reason']) || !relativeRef(item.path_ref) || !HEX.test(item.sha256 || '') || typeof item.reason !== 'string' || !item.reason) fail(errors, 'invalid required_untracked item');
+    }
+  }
   const r = seal.remote;
   if (!exactKeys(r, ['status', 'default_ref', 'head', 'observed_at']) || !['PASS', 'UNKNOWN', 'FAIL', 'NOT_APPLICABLE'].includes(r.status) || typeof r.default_ref !== 'string' || !r.default_ref || (r.head !== null && !/^[0-9a-f]{40,64}$/.test(r.head || '')) || (r.observed_at !== null && !iso(r.observed_at))) fail(errors, 'invalid remote baseline');
   if (!['HIGH', 'MEDIUM', 'LOW'].includes(seal.control_handoff_confidence)) fail(errors, 'invalid control_handoff_confidence');

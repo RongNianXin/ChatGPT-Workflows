@@ -91,6 +91,27 @@ try {
   workspace = { root_ref: '<PROJECT_ROOT>', ...readGitWorkspaceBaseline(sourceRoot), required_untracked: [] };
   const candidate = makeCandidate();
   const internalCandidate = makeCandidate({ sources: internalSources });
+  for (const [field, stale] of [['generation', 0], ['writer_id', 'STALE-WRITER'], ['platform_task_id', '00000000-0000-4000-8000-000000000099'], ['rule_baseline', { rule_version: 'old', manifest_sha256: 'a'.repeat(64) }], ['objective', { summary: 'old', breakpoint: 'old' }]]) check(`candidate blocks stale inventory ${field} even when source hashes match`, () => {
+    const ref = `control/inventory-${field}.json`, file = path.join(sourceRoot, ref);
+    fs.writeFileSync(file, JSON.stringify({ record_type: 'handoff_inventory', generation: 1, writer_id: 'TEST-COMMANDER', platform_task_id: 'UNKNOWN', rule_baseline: ruleBaseline, objective: { summary: 'synthetic candidate', breakpoint: 'read-only check' }, [field]: stale }));
+    try {
+      const bound = makeCandidate({ workspace: { ...workspace, ...readGitWorkspaceBaseline(sourceRoot) }, sources: { ...sources, handoff_inventory: { owner: 'synthetic', path_ref: ref, root_ref: 'source_root', digest: sha256(fs.readFileSync(file)), fact_cutoff: stamp } } });
+      const result = verify(bound);
+      assert.equal(result.status, 'BLOCKED'); assert.equal(result.rotation.can_stop_old, false);
+      assert.match(result.errors.join('; '), /HANDOFF_INVENTORY_MISMATCH/);
+      assert.equal(verifyChain(bound, { sourceRoot, externalControlPlaneRoot: externalRoot }).records.length, 1);
+    } finally { fs.unlinkSync(file); }
+  });
+  check('pointer-only inventory remains explicit NOT_DECLARED rather than semantic PASS', () => {
+    const ref = 'control/pointer-inventory.json', file = path.join(sourceRoot, ref);
+    fs.writeFileSync(file, JSON.stringify({ loading_record: 'loading.json' }));
+    try {
+      const bound = makeCandidate({ workspace: { ...workspace, ...readGitWorkspaceBaseline(sourceRoot) }, sources: { ...sources, handoff_inventory: { owner: 'synthetic', path_ref: ref, root_ref: 'source_root', digest: sha256(fs.readFileSync(file)), fact_cutoff: stamp } } });
+      const result = verify(bound);
+      assert.equal(result.status, 'READY', result.errors.join('; '));
+      assert.equal(result.inventory.status, 'NOT_DECLARED'); assert.match(result.actions.join('; '), /独立核对业务断点/);
+    } finally { fs.unlinkSync(file); }
+  });
   // The real candidate/rotation entry must accept unrelated in-flight changes.
   const inflightDirectory = path.join(sourceRoot, 'specialist');
   fs.mkdirSync(inflightDirectory);
@@ -105,7 +126,7 @@ try {
   prepareTransition(scopedCandidate, { sourceRoot, expectedPreviousDigest: scopedPrevious.seal_digest, nextGeneration: 2, nextWriterId: 'SCOPED-NEXT', eventId: 'scoped-takeover', preparedAt: stamp });
   fs.writeFileSync(path.join(inflightDirectory, 'task.js'), 'ordinary updated in-flight file\n');
   check('unrelated in-flight changes preserve the matching stop-old preparation', () => assert.equal(verify(scopedCandidate, { externalControlPlaneRoot: undefined, nextGeneration: 2, nextWriterId: 'SCOPED-NEXT', eventId: 'scoped-takeover' }).rotation.can_stop_old, true));
-  check('scoped seal cannot ignore a strict active specialist source', () => assert.throws(() => makeCandidate({ workspace: scopedWorkspace, sources: { ...internalSources, active_specialist: { owner: 'synthetic', path_ref: 'specialist/task.js', root_ref: 'source_root', digest: sha256(fs.readFileSync(path.join(inflightDirectory, 'task.js'))), fact_cutoff: stamp } } }), /invalid workspace baseline/));
+  check('scoped seal cannot ignore a strict active specialist source', () => assert.throws(() => makeCandidate({ workspace: scopedWorkspace, sources: { ...internalSources, active_specialist: { owner: 'synthetic', path_ref: 'specialist/task.js', root_ref: 'source_root', digest: sha256(fs.readFileSync(path.join(inflightDirectory, 'task.js'))), fact_cutoff: stamp } } }), /invalid workspace fingerprint/));
   fs.unlinkSync(path.join(inflightDirectory, 'task.js'));
   fs.rmdirSync(inflightDirectory);
   check('material READY without a separately delivered intent permits stopping, not authority transfer', () => {

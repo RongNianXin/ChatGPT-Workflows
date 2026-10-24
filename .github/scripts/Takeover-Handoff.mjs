@@ -75,18 +75,57 @@ function assertRenderedCurrentIdentity(bytes, recipient, generation, requireMark
     assert(identity.generation === generation && identity.writer_id === recipient.writerId && identity.platform_task_id === recipient.platformTaskId, 'rendered CURRENT identity does not match takeover target');
   }
   const fields = [
-    [/(?:当前唯一中央写者|唯一当前写者绑定|中央登记唯一写者|唯一中央写者|当前写者|writer_id)\s*[:：=]\s*`?([A-Za-z0-9._-]+)/g, recipient.writerId],
-    [/(?:当前总指挥世代|generation)\s*[:：=]\s*`?(\d+)/g, String(generation)],
+    [/(?:当前唯一中央写者|唯一当前写者绑定|中央登记唯一写者|唯一中央写者|唯一写者|当前写者|writer_id)\s*[:：=]\s*`?([A-Za-z0-9._-]+)/g, recipient.writerId],
+    [/(?:当前总指挥世代|控制面世代|generation)\s*[:：=]\s*`?(?:commander-)?(\d+)/g, String(generation)],
     [/(?:当前任务\s*ID|平台任务\s*ID|当前平台任务|platform_task_id)\s*[:：=]\s*`?([A-Za-z0-9-]+)/g, recipient.platformTaskId]
   ];
   for (const [pattern, expected] of fields) {
     for (const match of current.matchAll(pattern)) assert(match[1] === expected, 'rendered CURRENT contains a conflicting identity declaration');
   }
 }
-// Version 1 is frozen: historical journals are validated against their original
-// byte transformation, including recovery, rollback and completed readback.
+function renderCurrentV5(bytes, previous, recipient, eventId) {
+  const text = bytes.toString('utf8'), begin = '<!-- CURRENT:BEGIN -->', end = '<!-- CURRENT:END -->';
+  assert(text.split(begin).length === 2 && text.split(end).length === 2, 'canonical CURRENT boundaries required');
+  const start = text.indexOf(begin) + begin.length, finish = text.indexOf(end);
+  assert(finish > start, 'canonical CURRENT boundaries required');
+  const old = text.slice(start, finish);
+  const identities = [...old.matchAll(/<!-- CONTROL_IDENTITY: ([\s\S]*?) -->/g)];
+  const navigations = [...old.matchAll(/<!-- CONTROL_NAVIGATION: ([\s\S]*?) -->/g)];
+  assert(identities.length + navigations.length === 1, 'CURRENT requires one identity or navigation marker');
+  let marker;
+  if (identities.length) {
+    const identity = JSON.parse(identities[0][1]);
+    assert(identity.generation === previous.generation && identity.writer_id === previous.writer_id, 'identity changed before plan');
+    marker = `<!-- CONTROL_IDENTITY: ${JSON.stringify({ generation: previous.generation + 1, writer_id: recipient.writerId, platform_task_id: recipient.platformTaskId })} -->`;
+  } else marker = navigations[0][0];
+  const line = value => String(value).replace(/[\r\n]/g, ' ').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
+  const anchor = `handoff-source-${eventId}`;
+  const current = [
+    '', marker, '# 当前接管登记', `项目键：${recipient.projectKey}`,
+    `当前总指挥世代：${previous.generation + 1}`, `当前唯一中央写者：${recipient.writerId}`, `当前平台任务：${recipient.platformTaskId}`,
+    `规则版本：${line(previous.rule_baseline.rule_version)}`, `规则清单摘要：${previous.rule_baseline.manifest_sha256}`,
+    `来源目标：${line(previous.objective.summary)}`, `来源精确断点：${line(previous.objective.breakpoint)}`,
+    `来源历史入口：[移交时的完整状态、队列与文件指针](#${anchor})；仅作来源事实，不继承已读、权限或调度`,
+    `来源事件：${previous.event_id}`, `完成事件：${eventId}`,
+    '状态：TAKEOVER_COMPLETED（仅规范事务日志COMPLETED且完成回读一致后生效）',
+    '接管协议：DIRECT_OPERATOR_V1', '本任务加载记录：待接收方独立建立，不继承来源已读',
+    '本轮权限：仅本次交接准备、提交与完成回读；旧授权不继承，业务、远端和通信另核当前有效授权',
+    '旧授权继承：NONE', `旧总指挥：世代${previous.generation} STOPPED_DISPATCH；保留历史，不恢复旧授权`,
+    '接续门禁：来源目标、断点和队列保留；业务授权、依赖、预算及停止条件逐项重核',
+    '下一行动方：接收方完成回读后核验原队列，继续当前有效授权范围内动作', ''
+  ].join('\n');
+  const historical = old.replaceAll('<!-- CONTROL_IDENTITY:', '<!-- ARCHIVED_CONTROL_IDENTITY:').replaceAll('<!-- CONTROL_NAVIGATION:', '<!-- ARCHIVED_CONTROL_NAVIGATION:');
+  const block = `\n\n<a id="${anchor}"></a>\n## Previous commander (HISTORICAL_ONLY)\n${historical}\n`;
+  let after = text.slice(0, start) + current + text.slice(finish);
+  if (after.includes('<!-- HISTORY:BEGIN -->')) after = after.replace('<!-- HISTORY:BEGIN -->', `<!-- HISTORY:BEGIN -->${block}`);
+  else after += `\n<!-- HISTORY:BEGIN -->${block}`;
+  return Buffer.from(after);
+}
+// Versions 1..4 are frozen: historical journals keep their original byte
+// transformation for recovery, rollback and completed readback.
 function renderCurrent(bytes, previous, recipient, version, eventId) {
-  assert([1, 2, 3, 4].includes(version), 'unsupported CURRENT render version');
+  assert([1, 2, 3, 4, 5].includes(version), 'unsupported CURRENT render version');
+  if (version === 5) return renderCurrentV5(bytes, previous, recipient, eventId);
   const legacy = replaceCurrent(bytes, previous, recipient);
   if (version === 1) return legacy;
   return Buffer.from(legacy.toString('utf8').replace(/(<!-- CURRENT:BEGIN -->)([\s\S]*?)(<!-- CURRENT:END -->)/, (_, begin, old, end) => {
@@ -108,14 +147,14 @@ function buildPlan(previous, options) {
   // Older accepted documents may redundantly state the writer here. Detect that
   // compatibility limit before preparing an intent or touching central bytes.
   const enablement = fs.readFileSync(resolveSource(previous.sources.workflow_enablement, options), 'utf8').split('<!-- CURRENT:BEGIN -->')[1]?.split('<!-- CURRENT:END -->')[0] || '';
-  assert(!/(?:当前唯一中央写者|唯一当前写者绑定|中央登记唯一写者|唯一中央写者|当前写者|writer_id|当前总指挥世代|generation|当前任务\s*ID|平台任务\s*ID|platform_task_id)\s*[:：=]\s*`?[A-Za-z0-9._-]+/.test(enablement), 'INPUT_REQUIRED: static workflow_enablement contains writer identity outside the authorized central plan; keep canonical identity in status_index and navigation in enablement');
+  assert(!/(?:当前唯一中央写者|唯一当前写者绑定|中央登记唯一写者|唯一中央写者|唯一写者|当前写者|writer_id|当前总指挥世代|控制面世代|generation|当前任务\s*ID|平台任务\s*ID|当前平台任务|platform_task_id)\s*[:：=]\s*`?[A-Za-z0-9._-]+/.test(enablement), 'INPUT_REQUIRED: static workflow_enablement contains writer identity outside the authorized central plan; keep canonical identity in status_index and navigation in enablement');
   const files = new Map();
   for (const name of ['status_index', 'central_work_items', 'current_view', 'central_entry']) {
     const source = previous.sources[name], file = resolveSource(source, options);
     if (files.has(file)) { files.get(file).names.push(name); continue; }
     const before = fs.readFileSync(file);
     assert(byteDigest(before) === source.digest, 'source changed before transaction plan');
-    const after = renderCurrent(before, previous, options.recipient, 4, options.eventId);
+    const after = renderCurrent(before, previous, options.recipient, 5, options.eventId);
     assertRenderedCurrentIdentity(after, options.recipient, previous.generation + 1, name === 'status_index');
     files.set(file, { names: [name], root_ref: source.root_ref || 'source_root', path_ref: source.path_ref, before: before.toString('base64'), after: after.toString('base64'), before_sha256: byteDigest(before), after_sha256: byteDigest(after) });
   }
@@ -124,7 +163,7 @@ function buildPlan(previous, options) {
 function checkJournal(journal, options, history) {
   assert(journal.protocol_version === 1 && journal.event_id === options.eventId && Array.isArray(journal.plan) && journal.plan.length > 0 && journal.plan.length <= 4, 'transaction journal mismatch');
   const renderVersion = Object.hasOwn(journal, 'current_render_version') ? journal.current_render_version : 1;
-  assert([1, 2, 3, 4].includes(renderVersion), 'unsupported CURRENT render version');
+  assert([1, 2, 3, 4, 5].includes(renderVersion), 'unsupported CURRENT render version');
   const previous = history.records.find(item => item.seal_digest === journal.previous_seal_digest);
   assert(previous, 'journal predecessor absent from immutable history');
   confirmed(options, previous);
@@ -180,6 +219,9 @@ function commitJournal(journal, paths, options) {
   assert(['PREPARED', 'COMPLETED'].includes(journal.status), 'withdrawn transaction cannot resume dispatch or forward recovery');
   const history = readChain(options.sealDirectory), previous = checkJournal(journal, options, history);
   assert(!history.errors.length, `seal history invalid: ${history.errors.join('; ')}`);
+  // A reproducible legacy transformation may still describe inconsistent
+  // current identity. Refuse forward writes, while exact rollback stays usable.
+  for (const item of journal.plan) assertRenderedCurrentIdentity(Buffer.from(item.after, 'base64'), options.recipient, previous.generation + 1, item.names.includes('status_index'));
   // First inspect ALL files. Recovery never overwrites a third kind of bytes.
   for (const item of journal.plan) {
     const actual = byteDigest(fs.readFileSync(resolveSource(item, options)));
@@ -248,7 +290,7 @@ export function takeoverHandoff(options) {
     const draft = structuredClone(validateWorkspaceAmendment(latest, options));
     Object.assign(draft, { schema_version: 4, generation: latest.generation + 1, writer_id: options.recipient.writerId, old_writer_status: options.confirmation.old_writer_status, event_id: options.eventId, fact_cutoff: stamp, sealed_at: stamp, switch_status: 'COMPLETED', handoff_phase: 'TAKEOVER_COMPLETED', candidate_verification_status: result.status === 'READY' ? 'PASS' : 'PASS_WITH_RESTRICTIONS', control_handoff_confidence: 'HIGH', communications: { status: 'NONE' }, restrictions: result.remote.status === 'UNKNOWN' ? ['REMOTE_UNOBSERVED'] : [], remote: { ...draft.remote, status: result.remote.status, head: result.remote.head || null, observed_at: result.remote.observed_at || null }, transition: null, migration: null, seal_digest: '' });
     for (const item of plan) for (const name of item.names) { draft.sources[name].digest = item.after_sha256; draft.sources[name].fact_cutoff = stamp; }
-    const journal = { protocol_version: 1, current_render_version: 4, ...(workspaceProjection ? { workspace_projection: workspaceProjection } : {}), status: 'PREPARED', event_id: options.eventId, previous_seal_digest: latest.seal_digest, confirmation: structuredClone(options.confirmation), intent_digest: intent.transition_digest, intent_path: `handoff-transition.${intent.previous_sequence}.${intent.transition_digest}.json`, plan, draft, prepared_at: stamp };
+    const journal = { protocol_version: 1, current_render_version: 5, ...(workspaceProjection ? { workspace_projection: workspaceProjection } : {}), status: 'PREPARED', event_id: options.eventId, previous_seal_digest: latest.seal_digest, confirmation: structuredClone(options.confirmation), intent_digest: intent.transition_digest, intent_path: `handoff-transition.${intent.previous_sequence}.${intent.transition_digest}.json`, plan, draft, prepared_at: stamp };
     // Durable evidence precedes the first central file mutation.
     writeJournal(paths.journal, journal); options.fault?.('after-journal');
     return withControlTransaction(latest, options, () => commitJournal(journal, paths, options));

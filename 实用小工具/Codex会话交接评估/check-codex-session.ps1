@@ -74,19 +74,21 @@ $uiCatalog = @{
         RangeSeparator = ' 至 '
         AdditionalSegments = '（另有 {0} 个分段）'
         Unavailable = '无法取得'
-        ContextUnavailableBasis = '未取得最近上下文占比；该提醒不参与综合评分。'
-        ContextCriticalBasis = '最近输入占窗口 {0}，达到 95%；随时可能触发自动压缩，建议现在交接。'
-        ContextHighBasis = '最近输入占窗口 {0}，达到 85% 提醒线；建议准备交接，并在自动压缩前完成断点收尾。'
-        ContextNormalBasis = '最近输入占窗口 {0}，尚未达到 85% 提醒线。'
-        SizeBasis = '聚合文件为 {0}，大小评分 {1}/5 分；档位为 30、50、100、200 和 400 MiB。'
-        CompressionBasis = '已自动压缩 {0} 次，压缩评分 {1}/5 分；档位为 4、7、10、15 和 20 次。压缩是有损的，建议在压缩前交接。'
-        AdviceHandoff = '建议交接：综合评分已进入第一道警戒线。请确认当前阶段已完成，或至少处在一个可交接的断点处。'
-        AdviceRequired = '必须交接：综合评分已达到第二道警戒线。请先收尾当前断点，再在新任务中继续。'
-        AdviceContinue = '暂不建议交接：可以继续当前任务。'
+        ContextUnavailableBasis = '最近输入占窗口估计未知；缺失值不会当作零。'
+        ContextCriticalBasis = '最近已知输入占窗口 {0}，达到 95% 容量提醒线；先核对可恢复断点。压缩阈值取决于运行配置。'
+        ContextHighBasis = '最近已知输入占窗口 {0}，达到 85% 容量提醒线；准备可恢复断点。'
+        ContextNormalBasis = '最近已知输入占窗口 {0}；仅作容量观测，不参与评分，也不能单独判断交接收益。'
+        SizeBasis = '文件大小：{0}；大小分 {1}/5。'
+        CompressionBasis = '上下文压缩：{0}次；压缩分 {1}/5。'
+        AdviceHandoff = '建议交接（3～7分，橙色）：先检查安全断点和重建成本；正在修复且容量仍够时，先完成当前工作单元。分数本身不证明交接更省。'
+        AdviceRequired = '必须交接（8～10分，红色，传统经验评分）：优先安排最近安全断点，不中断在途操作；容量不足以安全收尾时先保存证据和可恢复断点。此分数不证明立刻交接最省Token。'
+        AdviceContinue = '继续（0～2分）：传统经验评分尚未达到3分；仍需独立查看最新输入量与容量提醒。'
         LevelContinue = '继续'
         LevelRecommended = '建议交接'
         LevelRequired = '必须交接'
-        LevelUnknown = '无评分数据'
+        LevelUnknown = '观测未知'
+        AdviceUnknown = '无法取得可靠观测；不据此推断继续或交接。'
+        TrendBasis = '近六个已完成回合、五个间隔的实测均值：{0} Token/回合；有效点 {2}/6。仅比较同模型、提供商声明、窗口和压缩段；样本不足时未知，不预测未来压力。'
         ReportTitle = '# Codex 会话详细分析报告'
         ReportTaskId = '- 任务 ID：{0}'
         ReportTaskName = '- 任务名称：{0}'
@@ -97,8 +99,8 @@ $uiCatalog = @{
         ReportGeneratedAt = '- 生成时间：{0}'
         ReportEncoding = '- 编码：UTF-8 BOM'
         ReportPrivacy = '> 本报告包含完整用户输入，可能带有本地路径、内部信息或其他敏感内容；请只在本地受控范围内使用。'
-        ReportHandoffLine = '- 交接参考评分：{0}/10 分（{1}）；文件大小 {2}/5 分，压缩次数 {3}/5 分。'
-        ReportHandoffContext = '- 上下文提醒（不计入评分）：{0}'
+        ReportHandoffLine = '- 交接评分：{0}/10（{1}）；文件大小分 {2}/5 + 压缩次数分 {3}/5。'
+        ReportHandoffContext = '- 容量与观察提示：{0}'
         ReportTokenHeading = '## Token 消耗最高回合'
         ReportTokenExplanation = '按本地累计 Token 快照增量排序。M tokens 表示百万 Token；MiB 表示本地文件字节，二者不能固定换算。'
         RankNames = @('第一', '第二', '第三')
@@ -141,11 +143,24 @@ $uiCatalog = @{
         ValueNoTurns = '未识别到回合；{0}'
         LabelReport = '详细分析报告：'
         SectionAdvice = '三、交接建议'
-        ScoreSummary = '交接参考综合评分：{0}/10 分（0～2 分继续，3～7 分建议交接，8 分及以上必须交接。）'
+        ScoreSummary = '交接评分：{0}/10（传统大小＋压缩次数；依据如下）'
+        ScoreMethodHeading = '## 评分依据、上下文与交接决策'
+        ScoreEquation = '计分算式：文件大小分 {0} + 压缩次数分 {1} = {2}/10。'
+        SizeThresholds = '文件大小分：达到30、50、100、200、400 MiB依次增加1分，最高5分；按聚合字节数÷1,048,576计算。'
+        CompressionThresholds = '压缩次数分：达到4、7、10、15、20次依次增加1分，最高5分；使用已识别的上下文压缩事件数。'
+        ScoreBoundaries = '等级固定：0～2分继续；3～7分建议交接（橙色）；8～10分必须交接（红色）。当前输入量不直接加分。'
+        ScoreThresholdTable = '总分=大小分＋压缩次数分；0～2分继续，3～7分橙色建议交接，8～10分红色必须交接。当前输入、窗口占比与增长预测均不参与计分。'
+        ScoreCalibration = '证据等级：上述阈值沿用传统经验算法，尚未经全程Token成本和完成质量校准。文件大小不能稳定换算当前Token，压缩次数记录历史事件；3分不是已证实的最省Token点。'
+        TokenThresholdEvidence = 'Token观察：没有足够依据把100,000或150,000 Token设为必须交接线；混合模型/供应商的耗时相关性不能证明统一拐点。85%/95%只是独立容量提醒，不改3/8分界。'
+        PhaseGate = '交接可行性：当前工作单元是否完成、证据是否齐全、能否安全恢复均为未知（日志中的回合结束不等于业务完成）。优先完成当前工作单元，再在安全断点交接；容量不足时先保存证据和断点，不为等整项完成而冒险继续。'
+        CostGate = '交接收益：未知；不把输入Token多直接判为浪费。需比较后续重复携带成本与交接整理、规则重读、证据重建、缓存重建和预期返工的总成本。新窗口仅做少量简单任务，可能尚未回本。'
+        CostEquation = '简化Token回本条件：N × (C - R) > H；C为旧窗口每次模型请求输入，R为新窗口重建后每次输入，H为交接额外开销，N为后续模型请求次数（不是用户对话轮数）；只在同口径且未来输入近似不变时适用。'
+        CostLimit = '金额与耗时须另算：缓存命中率、输入/输出单价、长上下文倍率及交接时间会改变结论；这些输入缺失时不输出伪精确的节省金额或最佳交接分数。本工具只读建议，不执行交接。'
+        ContextRaw = '本次原生用量观测：输入 {0} Token / 窗口 {1} Token = {2}；input_tokens已含缓存输入，不重复相加。'
         AdviceSummary = '交接建议：{0}'
         BasisHeading = '参考依据：'
-        ExperienceRule = '  3. 上述评分档位、85% 与 95% 提醒线都是本地经验规则，并非 OpenAI 官方限制。'
-        ContextReminderHeading = '上下文提醒（不计入评分）：'
+        ExperienceRule = '  3. 输入量、实测增长及85%/95%容量提醒仅作独立诊断，不参与传统评分；容量提醒是经验提示，不是官方交接门槛。'
+        ContextReminderHeading = '最近观测与趋势（仅估计输入，不是界面实测或延迟结论）：'
         HumanReminderHeading = '人工判断提醒：'
         HumanReminder = '请主动判断 AI 是否已出现明显理解不足，例如忘记约束、重复执行或前后矛盾；如已出现，应提高交接优先级。'
         ScanWarningsHeading = '扫描提醒：'
@@ -209,19 +224,21 @@ $uiCatalog = @{
         RangeSeparator = ' to '
         AdditionalSegments = ' ({0} more segment(s))'
         Unavailable = 'Unavailable'
-        ContextUnavailableBasis = 'Recent context usage is unavailable. This reminder is not scored.'
-        ContextCriticalBasis = 'Recent input uses {0} of the context window, reaching 95%. Automatic compaction may trigger at any moment; hand off now.'
-        ContextHighBasis = 'Recent input uses {0} of the context window, reaching the 85% reminder line. Prepare to hand off and close the current stage before automatic compaction.'
-        ContextNormalBasis = 'Recent input uses {0} of the context window, below the 85% reminder line.'
-        SizeBasis = 'Aggregate session size is {0}, for a size score of {1}/5. Steps: 30, 50, 100, 200, and 400 MiB.'
-        CompressionBasis = 'Automatic compaction occurred {0} time(s), for a compaction score of {1}/5. Steps: 4, 7, 10, 15, and 20. Compaction is lossy; hand off before it happens.'
-        AdviceHandoff = 'Handoff recommended: the score has crossed the first warning line. Confirm the current stage is done, or stop at a clear handoff point.'
-        AdviceRequired = 'Handoff required: the score has crossed the second warning line. Close the current breakpoint first, then continue in a new task.'
-        AdviceContinue = 'No handoff recommended yet. Continue in the current task.'
+        ContextUnavailableBasis = 'Recent input/window estimate is unknown; missing values are never zero.'
+        ContextCriticalBasis = 'Latest known input uses {0} of the window, reaching the 95% capacity reminder. Check a recoverable breakpoint; compaction depends on runtime configuration.'
+        ContextHighBasis = 'Latest known input uses {0} of the window, reaching the 85% capacity reminder. Prepare a recoverable breakpoint.'
+        ContextNormalBasis = 'Latest known input uses {0} of the window; capacity observation only, not a score input or proof of handoff savings.'
+        SizeBasis = 'File size: {0}; size score {1}/5.'
+        CompressionBasis = 'Compactions: {0}; compaction score {1}/5.'
+        AdviceHandoff = 'Handoff recommended (3-7, orange): check a safe breakpoint and reconstruction cost; finish the current repair unit if capacity allows. The score alone does not prove savings.'
+        AdviceRequired = 'Handoff required (8-10, red, traditional heuristic): prioritize the next safe breakpoint without interrupting in-flight work. Preserve evidence and a recoverable checkpoint if capacity cannot support completion. This score does not prove immediate handoff minimizes tokens.'
+        AdviceContinue = 'Continue (0-2): the traditional heuristic is below three; review latest input and capacity diagnostics separately.'
         LevelContinue = 'continue'
         LevelRecommended = 'handoff recommended'
         LevelRequired = 'handoff required'
-        LevelUnknown = 'no score'
+        LevelUnknown = 'unknown observation'
+        AdviceUnknown = 'Reliable observation unavailable; no continue or handoff conclusion.'
+        TrendBasis = 'Observed mean across five intervals from six completed turns: {0} tokens/turn; valid points {2}/6. Same model, declared provider, window and compaction segment only; insufficient samples remain unknown. No future-pressure forecast.'
         ReportTitle = '# Codex session detailed analysis report'
         ReportTaskId = '- Task ID: {0}'
         ReportTaskName = '- Task name: {0}'
@@ -232,8 +249,8 @@ $uiCatalog = @{
         ReportGeneratedAt = '- Generated at: {0}'
         ReportEncoding = '- Encoding: UTF-8 BOM'
         ReportPrivacy = '> This report may contain complete user input, local paths, internal information, or other sensitive content. Keep it in a controlled local environment.'
-        ReportHandoffLine = '- Handoff reference score: {0}/10 ({1}); size {2}/5, compaction {3}/5.'
-        ReportHandoffContext = '- Context reminder (not scored): {0}'
+        ReportHandoffLine = '- Handoff score: {0}/10 ({1}); file-size score {2}/5 + compaction-count score {3}/5.'
+        ReportHandoffContext = '- Capacity and observation note: {0}'
         ReportTokenHeading = '## Turns with the highest token usage'
         ReportTokenExplanation = 'Ranked by increases in local cumulative token snapshots. M tokens means one million tokens; MiB measures local file bytes and cannot be converted to tokens at a fixed ratio.'
         RankNames = @('First', 'Second', 'Third')
@@ -276,11 +293,24 @@ $uiCatalog = @{
         ValueNoTurns = 'no turns identified; {0}'
         LabelReport = 'Detailed report:'
         SectionAdvice = '3. Handoff recommendation'
-        ScoreSummary = 'Handoff reference score: {0}/10 (0-2 continue, 3-7 handoff recommended, 8 or more handoff required).'
+        ScoreSummary = 'Handoff score: {0}/10 (traditional size + compaction count; basis below)'
+        ScoreMethodHeading = '## Scoring basis, context and handoff decisions'
+        ScoreEquation = 'Score equation: file-size score {0} + compaction-count score {1} = {2}/10.'
+        SizeThresholds = 'File-size score: add one point at each of 30, 50, 100, 200 and 400 MiB, capped at five; MiB = aggregate bytes / 1,048,576.'
+        CompressionThresholds = 'Compaction-count score: add one point at each of 4, 7, 10, 15 and 20 detected compaction events, capped at five.'
+        ScoreBoundaries = 'Fixed levels: 0-2 continue; 3-7 handoff recommended (orange); 8-10 handoff required (red). Current input does not directly add points.'
+        ScoreThresholdTable = 'Total = size score + compaction-count score; 0-2 continue, 3-7 orange recommendation, 8-10 red required tier. Current input, window utilization and growth forecasts do not contribute to the score.'
+        ScoreCalibration = 'Evidence level: these are restored traditional heuristic thresholds, not calibrated against end-to-end token cost or completion quality. File size cannot reliably convert to current tokens, and compaction count records historical events; three points is not a proven token optimum.'
+        TokenThresholdEvidence = 'Token evidence: neither 100,000 nor 150,000 tokens is established as a mandatory handoff limit. Latency correlations pooled across models/providers cannot establish a universal cliff. The 85%/95% reminders concern capacity only and do not change the three/eight score boundaries.'
+        PhaseGate = 'Handoff feasibility: work-unit completion, evidence completeness and safe recovery are unknown; a terminal log turn does not prove business completion. Prefer completing the current unit and handing off at a safe breakpoint. If capacity is insufficient, preserve evidence and a checkpoint before continuing.'
+        CostGate = 'Handoff benefit: unknown; large input alone is not proof of waste. Compare future repeated-input cost against handoff preparation, rule reloads, evidence reconstruction, cache rebuilding and expected rework. A new window with only a few simple tasks may not break even.'
+        CostEquation = 'Simplified token break-even: N × (C - R) > H; C is old-window input per model request, R is reconstructed new-window input per request, H is handoff overhead, and N counts future model requests, not user turns. This assumes comparable accounting and roughly stable future inputs.'
+        CostLimit = 'Money and time require separate accounting: cache-hit rates, input/output prices, long-context multipliers and handoff time can change the result. Missing inputs do not justify precise savings or an optimal handoff score. This tool provides read-only advice and never performs a handoff.'
+        ContextRaw = 'Native usage observation: input {0} tokens / window {1} tokens = {2}; input_tokens already includes cached input, which is not added twice.'
         AdviceSummary = 'Recommendation: {0}'
         BasisHeading = 'Basis:'
-        ExperienceRule = '  3. These score bands and the 85% and 95% reminder lines are local heuristics, not official OpenAI limits.'
-        ContextReminderHeading = 'Context reminder (not scored):'
+        ExperienceRule = '  3. Input, observed growth and 85%/95% capacity reminders are independent diagnostics, not traditional score inputs; the reminders are heuristics, not official handoff limits.'
+        ContextReminderHeading = 'Latest observation and trend (input estimate, not UI measurement or latency evidence):'
         HumanReminderHeading = 'Manual review reminder:'
         HumanReminder = 'Check whether the AI is forgetting constraints, repeating work, or contradicting itself. If so, raise the handoff priority.'
         ScanWarningsHeading = 'Scan warnings:'
@@ -1295,8 +1325,99 @@ $taskNameInfo = Get-TaskNameFromLocalIndex -CurrentTaskId $taskId
 $taskName = $taskNameInfo.TaskName
 $taskNameIndexWarnings = $taskNameInfo.ParseWarnings
 
+function New-ContextObservationState {
+    return @{ Model = ''; Provider = ''; Window = $null; LastTotal = $null; LastSignature = ''; Current = $null; Request = $null; LastRequestSignature = ''; Points = @{} }
+}
+
+function Reset-ContextObservations {
+    param($State)
+    $State.Current = $null
+    $State.Request = $null
+    $State.Points = @{}
+    $State.Window = $null
+    # Preserve the last request identity across boundaries: a repeated pre-compaction
+    # rate-limit/usage snapshot must not become a new post-compaction observation.
+}
+
+function Get-NullableTokenNumber {
+    param($Object, [string]$Name)
+    if ($null -eq $Object) { return $null }
+    $property = $Object.PSObject.Properties[$Name]
+    if ($null -eq $property -or $null -eq $property.Value -or $property.Value -is [bool]) { return $null }
+    $value = [double]0
+    if (-not [double]::TryParse([string]$property.Value, [Globalization.NumberStyles]::Float,
+        [Globalization.CultureInfo]::InvariantCulture, [ref]$value) -or
+        [double]::IsNaN($value) -or [double]::IsInfinity($value) -or $value -lt 0) { return $null }
+    return $value
+}
+
+function Set-ContextObservationIdentity {
+    param($State, [string]$Model, [string]$Provider)
+    if ($State.Model -cne $Model -or $State.Provider -cne $Provider) {
+        Reset-ContextObservations $State
+        $State.Model = $Model
+        $State.Provider = $Provider
+    }
+}
+
+function Add-ContextObservation {
+    param($State, $Info, [int]$TurnIndex, [string]$Timestamp)
+    $inputValue = Get-NullableTokenNumber $Info.last_token_usage 'input_tokens'
+    $validInput = ($null -ne $inputValue -and $inputValue -le 9007199254740991 -and [Math]::Floor($inputValue) -eq $inputValue)
+    $windowValue = Get-NullableTokenNumber $Info 'model_context_window'
+    $totalValue = Get-NullableTokenNumber $Info.total_token_usage 'total_tokens'
+    # A native per-request input is useful even without capacity or cumulative counters.
+    # Keep an independent signature so a repeated pre-boundary snapshot cannot revive it.
+    $requestPoint = $null
+    if ($validInput) {
+        $requestSignature = '{0}|{1}|{2}|{3}|{4}' -f $State.Model, $State.Provider, $windowValue, $totalValue, $inputValue
+        if ($requestSignature -cne $State.LastRequestSignature) {
+            $requestPoint = [pscustomobject]@{ Input = $inputValue; Timestamp = $Timestamp }
+        } elseif ($null -ne $State.Request) {
+            $requestPoint = $State.Request
+        }
+        $State.LastRequestSignature = $requestSignature
+    }
+    if (-not $validInput -or $null -eq $windowValue -or $windowValue -le 0 -or $null -eq $totalValue) {
+        Reset-ContextObservations $State
+        $State.Request = $requestPoint
+        return
+    }
+    if (($null -ne $State.Window -and $State.Window -ne $windowValue) -or
+        ($null -ne $totalValue -and $null -ne $State.LastTotal -and $totalValue -lt $State.LastTotal)) {
+        Reset-ContextObservations $State
+    }
+    $State.Request = $requestPoint
+    $signature = '{0}|{1}|{2}|{3}|{4}' -f $State.Model, $State.Provider, $windowValue, $totalValue, $inputValue
+    if ($signature -ceq $State.LastSignature) { return }
+    $State.LastSignature = $signature
+    $State.Window = $windowValue
+    $State.LastTotal = $totalValue
+    # Codex input_tokens already includes cached_input_tokens. Never add cached input again.
+    $point = [pscustomobject]@{ Input = $inputValue; Window = $windowValue; Turn = $TurnIndex; Timestamp = $Timestamp }
+    $State.Current = $point
+    if ($TurnIndex -gt 0) { $State.Points[$TurnIndex] = $point }
+}
+
+function Get-ContextTrend {
+    param($State, $Turns)
+    $percent = $null; $growth = $null
+    # Retain empty compatibility fields; no observation target or future pressure is inferred.
+    $rounds = $null; $forecastPercent = $null
+    if ($null -ne $State.Current) { $percent = 100.0 * $State.Current.Input / $State.Current.Window }
+    # Select completed turns first; skipping a turn with no usage would change the denominator.
+    $completed = @($Turns.Keys | Where-Object { $Turns[$_].Status -eq 'completed' } |
+        Sort-Object { [int]$_ } | Select-Object -Last 6)
+    $points = @($completed | Where-Object { $State.Points.ContainsKey([int]$_) } |
+        ForEach-Object { $State.Points[[int]$_] })
+    if ($completed.Count -eq 6 -and $points.Count -eq 6 -and -not [string]::IsNullOrWhiteSpace($State.Model)) {
+        $growth = ($points[-1].Input - $points[0].Input) / 5.0
+    }
+    return [pscustomobject]@{ Percent = $percent; ForecastPercent = $forecastPercent; Growth = $growth; Rounds = $rounds; Samples = $points.Count }
+}
+
+$contextState = New-ContextObservationState
 $compactCount = 0
-$lastTokenInfo = $null
 $parseWarnings = 0
 $tokenResetWarnings = 0
 $tokenBaselineWarnings = 0
@@ -1387,6 +1508,10 @@ for ($segmentIndex = 0; $segmentIndex -lt $files.Count; $segmentIndex++) {
 
         $head = $line.Substring(0, [Math]::Min(4096, $line.Length))
         $shape = Get-RecordShape -Line $line
+        if ($null -eq $shape.Record) {
+            Reset-ContextObservations $contextState
+            if ($shape.PayloadType -notin @('token_count','user_message')) { $parseWarnings++ }
+        }
         $recordTurnId = $shape.TurnId
         $recordTimestamp = $shape.Timestamp
         $category = Get-RecordCategory $shape.TopType $shape.PayloadType
@@ -1440,6 +1565,17 @@ for ($segmentIndex = 0; $segmentIndex -lt $files.Count; $segmentIndex++) {
 
         if ($shape.TopType -eq 'compacted') {
             $compactCount++
+            Reset-ContextObservations $contextState
+        }
+        if ($shape.TopType -in @('session_meta', 'turn_context')) {
+            try {
+                $identityRecord = if ($null -ne $shape.Record) { $shape.Record } else { $line | ConvertFrom-Json -ErrorAction Stop }
+                if ($shape.TopType -eq 'session_meta') {
+                    Set-ContextObservationIdentity $contextState $contextState.Model ([string]$identityRecord.payload.model_provider)
+                } else {
+                    Set-ContextObservationIdentity $contextState ([string]$identityRecord.payload.model) $contextState.Provider
+                }
+            } catch { Reset-ContextObservations $contextState }
         }
 
         $isTurnStartEvent = (
@@ -1597,25 +1733,13 @@ for ($segmentIndex = 0; $segmentIndex -lt $files.Count; $segmentIndex++) {
             try {
                 $record = if ($null -ne $shape.Record) { $shape.Record } else { $line | ConvertFrom-Json -ErrorAction Stop }
                 $info = $record.payload.info
-                if ($null -ne $info) {
-                    $candidateLastUsage = $info.last_token_usage
-                    $candidateWindow = Get-LongProperty `
-                        $info `
-                        'model_context_window'
-                    $candidateInputProperty = if ($null -ne $candidateLastUsage) {
-                        $candidateLastUsage.PSObject.Properties['input_tokens']
-                    }
-                    else {
-                        $null
-                    }
-                    if (
-                        $null -ne $candidateInputProperty -and
-                        $null -ne $candidateInputProperty.Value -and
-                        $candidateWindow -gt 0
-                    ) {
-                        $lastTokenInfo = $info
-                    }
+                if ($currentTurnIndex -le 0) {
+                    $turnSequenceCount++
+                    $currentTurnIndex = $turnSequenceCount
                 }
+                $contextTurnIndex = if ($turnUsages.ContainsKey($currentTurnIndex) -and
+                    $turnUsages[$currentTurnIndex].Status -eq 'unfinished') { $currentTurnIndex } else { 0 }
+                Add-ContextObservation $contextState $info $contextTurnIndex $recordTimestamp
 
                 $snapshot = Get-TokenSnapshot $info
                 if ($null -ne $snapshot -and $snapshot.TotalTokens -gt 0) {
@@ -1692,6 +1816,7 @@ for ($segmentIndex = 0; $segmentIndex -lt $files.Count; $segmentIndex++) {
             }
             catch {
                 $parseWarnings++
+                Reset-ContextObservations $contextState
             }
         }
 
@@ -1889,35 +2014,30 @@ $segmentTimeRangeText = '{0}{1}{2}' -f `
     (Get-UiText 'RangeSeparator'), `
     (Format-EventTimestamp $segmentEndTime.ToString('o'))
 
+$contextTrend = Get-ContextTrend $contextState $turnUsages
+$contextPercent = $contextTrend.Percent
+$contextGrowth = $contextTrend.Growth
+$roundsToObservation = $contextTrend.Rounds
+$contextForecastPercent = $contextTrend.ForecastPercent
+$assessmentVersion = 'handoff-score-v6-traditional'
 $contextText = Get-UiText 'Unavailable'
-$contextPercent = $null
-
-if ($null -ne $lastTokenInfo) {
-    $lastUsage = $lastTokenInfo.last_token_usage
-    $inputProperty = if ($null -ne $lastUsage) {
-        $lastUsage.PSObject.Properties['input_tokens']
-    }
-    else {
-        $null
-    }
-    $windowTokens = Get-LongProperty $lastTokenInfo 'model_context_window'
-
-    if (
-        $null -ne $inputProperty -and
-        $null -ne $inputProperty.Value -and
-        $windowTokens -gt 0
-    ) {
-        $inputTokens = [long]$inputProperty.Value
-        $contextPercent = [Math]::Round(
-            100 * [double]$inputTokens / [double]$windowTokens,
-            1
-        )
-        $contextText = $contextPercent.ToString(
-            'F1',
-            [Globalization.CultureInfo]::InvariantCulture
-        ) + '%'
-    }
+if ($null -ne $contextPercent) {
+    $contextText = $contextPercent.ToString('F1', [Globalization.CultureInfo]::InvariantCulture) + '%'
 }
+$growthText = Get-UiText 'Unavailable'
+if ($null -ne $contextGrowth) {
+    $growthText = $contextGrowth.ToString('F0', [Globalization.CultureInfo]::InvariantCulture)
+}
+$roundsText = Get-UiText 'Unavailable'
+if ($null -ne $roundsToObservation) { $roundsText = [string]$roundsToObservation }
+$trendBasis = Get-UiText 'TrendBasis' @($growthText, $roundsText, $contextTrend.Samples)
+$inputTextCurrent = Get-UiText 'Unavailable'
+$windowTextCurrent = Get-UiText 'Unavailable'
+if ($null -ne $contextState.Request) { $inputTextCurrent = Format-Integer $contextState.Request.Input }
+if ($null -ne $contextState.Current) {
+    $windowTextCurrent = Format-Integer $contextState.Current.Window
+}
+$contextRaw = Get-UiText 'ContextRaw' @($inputTextCurrent, $windowTextCurrent, $contextText)
 
 $maximumTurnIndex = if ($turnUsages.Count -gt 0) {
     [int]($turnUsages.Keys | Measure-Object -Maximum).Maximum
@@ -1928,49 +2048,47 @@ else {
 $startedTurnCount = $maximumTurnIndex
 
 function Get-HandoffAssessmentScore {
-    # 单一评分来源：文件体积 0-5 分 + 压缩次数 0-5 分，合计 0-10 分。
-    # 上下文档位不参与评分，由调用方单独提示。
+    # Traditional historical-load heuristic. Context observations never change this score.
     param(
         [Parameter(Mandatory)][double]$SizeMiB,
         [Parameter(Mandatory)][int]$CompactCount
     )
-
+    if ([double]::IsNaN($SizeMiB) -or [double]::IsInfinity($SizeMiB) -or $SizeMiB -lt 0 -or $CompactCount -lt 0) {
+        return [pscustomobject]@{ SizeScore=$null; CompressionScore=$null; Basis='unavailable'; TotalScore=$null; Level='unknown' }
+    }
     $sizeScore = 0
     foreach ($sizeStep in @(30, 50, 100, 200, 400)) {
         if ($SizeMiB -ge $sizeStep) { $sizeScore++ }
     }
-
     $compressionScore = 0
     foreach ($compactStep in @(4, 7, 10, 15, 20)) {
         if ($CompactCount -ge $compactStep) { $compressionScore++ }
     }
-
     $totalScore = $sizeScore + $compressionScore
     $level = 'continue'
     if ($totalScore -ge 8) { $level = 'required' }
     elseif ($totalScore -ge 3) { $level = 'recommended' }
-
     return [pscustomobject]@{
-        SizeScore        = $sizeScore
-        CompressionScore = $compressionScore
-        TotalScore       = $totalScore
-        Level            = $level
+        SizeScore=$sizeScore; CompressionScore=$compressionScore
+        Basis='traditional'; TotalScore=$totalScore; Level=$level
     }
 }
 
-$handoffScore = Get-HandoffAssessmentScore `
-    -SizeMiB $sizeMiB `
-    -CompactCount $compactCount
+$handoffScore = Get-HandoffAssessmentScore -SizeMiB $sizeMiB -CompactCount $compactCount
 $sizeScore = $handoffScore.SizeScore
 $compressionScore = $handoffScore.CompressionScore
+$scoreBasis = $handoffScore.Basis
 $totalScore = $handoffScore.TotalScore
 $handoffLevel = $handoffScore.Level
 
-if ($handoffLevel -eq 'required') {
-    $levelText = Get-UiText 'LevelRequired'
+if ($handoffLevel -eq 'unknown') {
+    $levelText = Get-UiText 'LevelUnknown'
 }
 elseif ($handoffLevel -eq 'recommended') {
     $levelText = Get-UiText 'LevelRecommended'
+}
+elseif ($handoffLevel -eq 'required') {
+    $levelText = Get-UiText 'LevelRequired'
 }
 else {
     $levelText = Get-UiText 'LevelContinue'
@@ -1990,16 +2108,20 @@ else {
 }
 
 $sizeBasis = Get-UiText 'SizeBasis' @($sizeText, $sizeScore)
-$compressionBasis = Get-UiText 'CompressionBasis' @(
-    $compactCount,
-    $compressionScore
-)
+$compressionBasis = Get-UiText 'CompressionBasis' @($compactCount, $compressionScore)
+$scoreText = Get-UiText 'Unavailable'
+if ($null -ne $totalScore) {
+    $scoreText = [string]$totalScore
+}
 
-if ($handoffLevel -eq 'required') {
-    $advice = Get-UiText 'AdviceRequired'
+if ($handoffLevel -eq 'unknown') {
+    $advice = Get-UiText 'AdviceUnknown'
 }
 elseif ($handoffLevel -eq 'recommended') {
     $advice = Get-UiText 'AdviceHandoff'
+}
+elseif ($handoffLevel -eq 'required') {
+    $advice = Get-UiText 'AdviceRequired'
 }
 else {
     $advice = Get-UiText 'AdviceContinue'
@@ -2068,7 +2190,7 @@ Add-ReportLine -Builder $reportBuilder -Value (
 )
 Add-ReportLine -Builder $reportBuilder -Value (
     Get-UiText 'ReportHandoffLine' @(
-        $totalScore,
+        $scoreText,
         $levelText,
         $sizeScore,
         $compressionScore
@@ -2077,6 +2199,8 @@ Add-ReportLine -Builder $reportBuilder -Value (
 Add-ReportLine -Builder $reportBuilder -Value (
     Get-UiText 'ReportHandoffContext' @($contextBasis)
 )
+Add-ReportLine -Builder $reportBuilder -Value $contextRaw
+Add-ReportLine -Builder $reportBuilder -Value $trendBasis
 Add-ReportLine -Builder $reportBuilder -Value (
     Get-UiText 'ReportTimeRange' @($segmentTimeRangeText)
 )
@@ -2091,6 +2215,18 @@ Add-ReportLine -Builder $reportBuilder -Value (
 Add-ReportLine -Builder $reportBuilder -Value (Get-UiText 'ReportEncoding')
 Add-ReportLine -Builder $reportBuilder
 Add-ReportLine -Builder $reportBuilder -Value (Get-UiText 'ReportPrivacy')
+Add-ReportLine -Builder $reportBuilder
+Add-ReportLine -Builder $reportBuilder -Value (Get-UiText 'ScoreMethodHeading')
+Add-ReportLine -Builder $reportBuilder -Value (Get-UiText 'ScoreEquation' @(
+    $sizeScore,
+    $compressionScore,
+    $scoreText))
+foreach ($key in @('SizeThresholds','CompressionThresholds','ScoreThresholdTable','ScoreBoundaries','ScoreCalibration','TokenThresholdEvidence','PhaseGate','CostGate','CostEquation','CostLimit')) {
+    Add-ReportLine -Builder $reportBuilder -Value (Get-UiText $key)
+}
+Add-ReportLine -Builder $reportBuilder -Value $sizeBasis
+Add-ReportLine -Builder $reportBuilder -Value $compressionBasis
+Add-ReportLine -Builder $reportBuilder -Value (Get-UiText 'AdviceSummary' @($advice))
 Add-ReportLine -Builder $reportBuilder
 Add-ReportLine -Builder $reportBuilder -Value (Get-UiText 'ReportTokenHeading')
 Add-ReportLine -Builder $reportBuilder
@@ -2301,16 +2437,19 @@ Format-StatusLine (Get-UiText 'LabelReport') $resolvedReportPath
 
 ''
 Get-UiText 'SectionAdvice'
-Get-UiText 'ScoreSummary' @($totalScore)
+Get-UiText 'ScoreSummary' @($scoreText)
 Get-UiText 'AdviceSummary' @($advice)
 ''
 Get-UiText 'BasisHeading'
 "  1. $sizeBasis"
 "  2. $compressionBasis"
-Get-UiText 'ExperienceRule'
+Get-UiText 'ScoreEquation' @($sizeScore, $compressionScore, $scoreText)
+foreach ($key in @('SizeThresholds','CompressionThresholds','ScoreThresholdTable','ScoreBoundaries','ScoreCalibration','TokenThresholdEvidence','PhaseGate','CostGate','CostEquation','CostLimit')) { Get-UiText $key }
 ''
 Get-UiText 'ContextReminderHeading'
 "  - $contextBasis"
+$contextRaw
+$trendBasis
 ''
 Get-UiText 'HumanReminderHeading'
 Get-UiText 'HumanReminder'

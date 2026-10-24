@@ -328,6 +328,42 @@ function atomicWriteExclusive(finalPath, bytes) {
   fs.unlinkSync(tempPath);
 }
 
+// Hashes bind bytes, not their meaning. Check explicitly declared source facts
+// against the prepared candidate, never against a later completed identity.
+export function verifyHandoffInventory(draft, { sourceRoot, externalControlPlaneRoot } = {}) {
+  const source = draft.sources?.handoff_inventory;
+  if (!source) return { status: 'NOT_DECLARED', checked_fields: [], business_freshness: 'REQUIRES_SOURCE_READBACK' };
+  const bytes = fs.readFileSync(resolveSource(source, sourceRoot, externalControlPlaneRoot, 'handoff_inventory'));
+  if (sha256(bytes) !== source.digest) throw new Error('HANDOFF_INVENTORY_MISMATCH: handoff_inventory source digest mismatch');
+  const record = JSON.parse(bytes.toString('utf8'));
+  if (!record || typeof record !== 'object' || Array.isArray(record)) throw new Error('INPUT_REQUIRED: handoff_inventory must be an object');
+  const checked = [];
+  const match = (field, actual, expected, digest = false) => {
+    if (digest ? typeof actual !== 'string' || actual.toLowerCase() !== String(expected).toLowerCase() : actual !== expected) throw new Error(`HANDOFF_INVENTORY_MISMATCH: ${field}; refresh the source record from current facts before freezing a new candidate`);
+    checked.push(field);
+  };
+  for (const field of ['generation', 'commander_generation']) if (Object.hasOwn(record, field)) match(field, record[field], draft.generation);
+  if (Object.hasOwn(record, 'writer_id')) match('writer_id', record.writer_id, draft.writer_id);
+  const controlIdentity = verifyControlIdentity(draft, { sourceRoot, externalControlPlaneRoot });
+  if (controlIdentity.status !== 'PASS') throw new Error(`HANDOFF_INVENTORY_MISMATCH: canonical source identity unavailable: ${controlIdentity.errors.join('; ')}`);
+  for (const field of ['platform_task_id', 'window_task_id']) if (Object.hasOwn(record, field)) match(field, record[field], controlIdentity.identity.platform_task_id);
+  if (Object.hasOwn(record, 'rule_baseline')) {
+    match('rule_baseline.rule_version', record.rule_baseline?.rule_version, draft.rule_baseline?.rule_version);
+    match('rule_baseline.manifest_sha256', record.rule_baseline?.manifest_sha256, draft.rule_baseline?.manifest_sha256, true);
+  }
+  if (Object.hasOwn(record, 'objective')) {
+    match('objective.summary', record.objective?.summary, draft.objective?.summary);
+    match('objective.breakpoint', record.objective?.breakpoint, draft.objective?.breakpoint);
+  }
+  if (record.remote && typeof record.remote === 'object') {
+    if (record.remote.head != null) match('remote.head', record.remote.head, draft.remote?.head, true);
+    for (const field of ['ref', 'default_ref']) if (Object.hasOwn(record.remote, field)) match(`remote.${field}`, record.remote[field], draft.remote?.default_ref);
+  }
+  const complete = ['generation', 'commander_generation'].some(field => Object.hasOwn(record, field)) && ['writer_id', 'rule_baseline', 'objective'].every(field => Object.hasOwn(record, field)) && ['platform_task_id', 'window_task_id'].some(field => Object.hasOwn(record, field));
+  if (record.record_type === 'handoff_inventory' && !complete) throw new Error('INPUT_REQUIRED: handoff_inventory requires source generation, writer_id, source platform task ID, rule_baseline and objective; fill from current facts, not the old filename');
+  return { status: complete ? 'PASS' : 'NOT_DECLARED', checked_fields: checked, business_freshness: 'REQUIRES_SOURCE_READBACK' };
+}
+
 function hydrateSnapshotTemplate(template, { draft, sourceRoot, externalControlPlaneRoot, ruleRoot, ruleManifest, ruleManifestDigest, sealDirectory, receiptPath }) {
   const machineRecord = draft.sources?.handoff_inventory?.path_ref
     ? resolveSource(draft.sources.handoff_inventory, sourceRoot, externalControlPlaneRoot, 'handoff_inventory')
@@ -487,6 +523,7 @@ export function prepareFormalHandoff(configPath) {
     if (Date.parse(source.fact_cutoff) > Date.parse(draft.fact_cutoff)) sourceDigestErrors.push(`${name}: source fact_cutoff is after draft fact_cutoff`);
   }
   if (sourceDigestErrors.length) throw new Error(`preflight source verification failed: ${sourceDigestErrors.join('; ')}`);
+  const inventoryVerification = verifyHandoffInventory(draft, { sourceRoot, externalControlPlaneRoot });
   // Sources are verified before parsing their inventory or rendering links.
   // A malformed delivery template must not advance the immutable seal chain.
   let rendered = hydrateSnapshotTemplate(fs.readFileSync(templatePath, 'utf8'), {
@@ -554,6 +591,7 @@ export function prepareFormalHandoff(configPath) {
     source_root: sourceRoot,
     external_control_plane_root: externalControlPlaneRoot,
     source_count: Object.keys(draft.sources ?? {}).length,
+    inventory_verification: inventoryVerification,
     workspace_protection: {
       staged_count: draft.workspace?.staged_count ?? null,
       tracked_modified_count: draft.workspace?.tracked_modified_count ?? null,
@@ -620,6 +658,7 @@ export function prepareFormalHandoff(configPath) {
       rule_drift_status: draft.rule_baseline?.compatibility ?? 'SAME',
       live_rule_manifest_sha256: liveRuleManifestDigest,
       unicode_inventory: inventory,
+      inventory_verification: inventoryVerification,
       verification: {
         tool: 'HandoffSeal.mjs',
         command: verificationCommand,

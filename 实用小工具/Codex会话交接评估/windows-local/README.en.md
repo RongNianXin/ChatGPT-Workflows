@@ -2,16 +2,18 @@
 
 [简体中文](README.md)
 
-<!-- README-SOURCE-SHA256: 6ce8255b72fc2cadf65edcc7d023ec91d2c32650decf42fce880642c82c3c463 -->
+<!-- README-SOURCE-SHA256: dfdddc3877243dbc0c68a6f317a4ebebc62a68235a2da5b8e7bfc6ea46070635 -->
 
 Version: `0.2.0-dev.10`. **Real local session queries are enabled.** Enter a task ID, save it, and query to view the original analyzer's statistics and report. Source sessions are read-only. No data is uploaded and no dependencies are installed.
+
+Local source includes missing-result rendering and Chinese text encoding fixes; the published ZIP is unchanged. Reload the page for the renderer fix; restart only this tool to adopt backend/analyzer edits. No Codex logout or restart is needed.
 
 ## Usage
 
 1. Extract the complete package to a short path and double-click the root `Start-SessionDesk.cmd`; in a checkout, use the launcher in this directory. Do not open HTML directly. Windows PowerShell 5.1 starts the background service and opens the default browser; Windows Edge was tested.
 2. Enter the required task ID and save. Names and projects are no longer entered manually. There is no fixed task-count limit; regression covers 20 tasks, not very large lists. Duplicate IDs are rejected without replacing saved records.
 3. Click Query / Refresh, then read the output or View detailed report. Only local log files matching that ID and passing session-identity checks are analyzed, across active and archived directories. Cloud tasks are not queried; missing local logs produce an explicit failure.
-4. Search by project, name or ID, view existing results, or remove list entries. Each row displays project on the left, name on the right and ID below. Sort all changes only the complete-list order; Refresh all updates every saved task in the current language.
+4. Search by project, name or ID, view existing results, or remove list entries. Each row displays project on the left, name on the right and ID below. Sort by project changes only the complete-list order; Refresh all updates every saved task in the current language.
 5. Choose Simplified Chinese or English at the top. Prompts, statistics and reports switch together; names, projects, paths and log content are not translated. Switching is unavailable during a running query. Each task retains per-language results and reports in this page. Returning to an available language restores its original snapshot; a missing language queries only the selected task. Other tasks retain their results. Viewing a result in the other language shows a notice. Manual Query / Refresh clears both old language variants for that task, and a failure does not restore old success. Successful output and detailed reports are saved as local per-task, per-language snapshots and restored after page reload or service restart, with the original query time and a non-live notice.
 6. Click Exit tool at the top when finished. A persistent reminder to its left reads “Closing this page leaves the service running. Click Exit tool to stop it.” Close the page after the prominent “You can now close this page” message appears. Closing the page alone does not stop the service; exiting does not delete saved tasks or results.
 
@@ -23,13 +25,13 @@ View result is enabled only for a successful cached result with output. It is di
 
 ## List ordering
 
-Sort all retains the former Group by project algorithm. Projects stay in first-appearance order. Within each project, commanders come first, ordinary tasks retain their order, and paired specialist tasks follow. A title containing 总指挥 or the word Commander receives display priority only; this grants no authority. Pairs require matching topics and numbers, exactly one `【topic】专项审查者1号` and one `【topic】专项执行者1号`; square brackets are also accepted. Pairs follow first-appearance order and retain their internal order. Missing, duplicate or unrecognized roles remain ordinary tasks. Unresolved projects are not combined across tasks. Sorting applies to the complete list and starts no query.
+Sort by project retains the former Group by project algorithm. Projects stay in first-appearance order. Within each project, commanders come first, ordinary tasks retain their order, and paired specialist tasks follow. A title containing 总指挥 or the word Commander receives display priority only; this grants no authority. Pairs require matching topics and numbers, exactly one `【topic】专项审查者1号` and one `【topic】专项执行者1号`; square brackets are also accepted. Pairs follow first-appearance order and retain their internal order. Missing, duplicate or unrecognized roles remain ordinary tasks. Unresolved projects are not combined across tasks. Sorting applies to the complete list and starts no query.
+
+Sort by handoff urgency uses existing valid scores: tasks scoring 3 or above come first in descending score order. Ties and all other tasks retain their relative order. Unknown, old-rule and changed-source results receive no priority. Both buttons apply to the full list and save its order without querying or performing a handoff; choose either as needed.
 
 Refresh all queries the complete list with at most two tasks running concurrently. One failure does not stop the remaining tasks or overwrite that task's previous successful snapshot. The task selected before refresh remains selected afterward; an empty selection stays empty. Operations that could change list or query context are disabled during refresh.
 
-When the latest successful snapshot reaches an analyzer score line, the task row uses pale-yellow/orange styling with **Handoff recommended** or pink/red styling with **Handoff required**. A selected row keeps a teal border. Each scored row also shows a static 10-segment slider with subtle ticks at 3 and 8; hover or keyboard focus exposes the score. Continue and unknown states keep their ordinary style. The marker reflects the latest successful query; it is not live monitoring and does not change analyzer statistics.
-
-The total score is 0–10: file size contributes 0–5 points at 30, 50, 100, 200 and 400 MiB, and automatic compaction contributes 0–5 points at 4, 7, 10, 15 and 20 events. Scores 0–2 mean continue, 3–7 recommend handoff, and 8–10 require handoff. Context usage is not scored and does not create a handoff reminder on task cards; the terminal and report retain the metric for diagnosis. These are local heuristics, not official OpenAI limits. Legacy snapshots without score fields show **No score data**.
+Source results use `handoff-score-v6-traditional`, restoring file-size plus compaction-count scoring with the 0-10 scale, orange recommendation at three, red required tier at eight and ten fixed segments. Cards show the latest request input tokens; historical or failed-refresh results are labeled previous query input. Input, utilization and observed growth do not affect scoring, and future pressure is not forecast. Dynamic results remain historical until queried again. Traditional bands are not calibrated against handoff cost; three is not a proven token optimum, and 100,000/150,000 tokens is not a universal hard limit. See [Scoring and slider](../README.en.md#score-and-slider) for all bands, examples and source accounting.
 
 Arrow moves retain selection and bring the moved task into view, without automatically regrouping. Desktop columns align at the bottom; narrow screens retain a vertical layout.
 
@@ -45,7 +47,7 @@ These are locally observed desktop formats, not a guaranteed stable public inter
 
 Instance data lives in this directory's `.local/`, with `main` as the default instance:
 
-- `main/tasks.json` stores IDs, last-known names/projects and language. Writes use atomic replacement; corrupt files are not cleared. Successful snapshots may include a `continue`, `recommended` or `required` level, a 0–10 score and a context reminder. Legacy snapshots without these fields remain compatible and use the ordinary style.
+- `main/tasks.json` stores IDs, last-known names/projects and language. Writes use atomic replacement; corrupt files are not cleared. New snapshots store the scoring version, level, 0-10 score, and independent input/window estimates and trend. Earlier versions are not reinterpreted. Only integer scores from zero through ten are accepted; levels are derived at three/eight, while invalid or missing scores remain unknown.
 - Schema 1 and 2 lists are accepted. Schema 1 is copied exactly to `tasks.schema1.<random-id>.bak` before migration. Old manual labels are historical values until replaced by detected metadata. Manual metadata editing is removed.
 - Before upgrading, stop the old service and copy its `.local` to the new package's `windows-local/.local`. Do not overwrite an existing new list. Independently retained backups may also be restored. To roll back, stop the service and restore the pre-migration backup; later additions are not automatically merged into that backup.
 - `main/reports/` contains original analyzer reports and metadata. Reports may include complete user inputs from high-usage turns and local paths. They stay local; removing a task entry does not remove its reports.
@@ -87,11 +89,9 @@ Automated regression uses isolated synthetic data. The operator reported success
 
 Each task’s ↑ / ↓ moves it one position in the full list and saves the order to disk. “Move to top” moves a task to the first position in the full list and saves the order; it is disabled for the first item. The first item cannot move up, and the last cannot move down. The selected task has a pale blue background and border without shifting its content.
 
-Sort all, beside Saved tasks, groups projects in first-appearance order while preserving their internal order. For example, 2, 4, 3, 1, 5 becomes 2, 1, 4, 3, 5. Grouping uses verified project identifiers: distinct projects with the same name remain separate, and unresolved tasks remain separate. Search filtering does not change the scope; sorting applies to the full list and starts no query.
+Project grouping, commander/specialist ordering and batch-refresh rules are defined under “List ordering” above. Manual moves do not automatically regroup the list.
 
-Refresh all updates every saved task in the current language, with at most two queries running concurrently. One failure does not stop the rest or overwrite a previous successful snapshot. The previous selection remains selected; an empty selection stays empty. Query, delete, move, sort and language controls are disabled during refresh. The two buttons share one row and provide separate bilingual hover and keyboard-focus help.
-
-If the latest successful snapshot is `recommended` or `required`, the row shows the matching recommendation styling and a 10-segment score slider. A selected row retains a teal border. `continue` and unknown states keep the ordinary style. The marker is not live monitoring and does not change analyzer scoring.
+See the context-observation and compatibility rules above.
 
 This release adds synthetic regression for multi-task results and reports across language round trips, aligned name values, selection without shifting, arrow ordering across restart, stable and repeated grouping, invalid sort requests, and bilingual hover help.
 
@@ -103,7 +103,7 @@ The add-task form contains only the task ID and Save task; the redundant reset b
 
 Each task retains only its latest successful basic output and detailed report per language, in `.local/main/snapshots/`; this is not a multi-version archive. Manual Query / Refresh clears the current display; only a successful save replaces that language’s history. Failure or exit during a query preserves the previous successful history. Relaunch shows its original time and a history notice, never presenting it as a successful fresh query. Other language snapshots retain their own timestamps. Deleting a task clears its restorable snapshots; report files and atomic-replacement backups are not automatically deleted.
 
-History is bound to its data source, mode and analyzer fingerprint. A changed source or corrupt snapshot marks that task’s history unavailable without blocking others. Each task snapshot is limited to 16 MiB. Oversized data or write failure displays a saving warning; that result may not survive relaunch. History may contain conversation text; it stays local and is excluded from ZIP packages.
+History remains strictly bound to the data directory and mode. A change to either, or a corrupt snapshot, makes only the affected history unavailable. An analyzer fingerprint change alone retains valid history with an explicit historical label and query time, without presenting it as a new-algorithm result. Each task snapshot is limited to 16 MiB. Oversized data or write failure displays a saving warning; that result may not survive relaunch. History may contain conversation text; it stays local and is excluded from ZIP packages.
 
 Upgrading from dev.5 preserves saved tasks but cannot reconstruct basic output that the old version never saved. History starts with successful dev.6 queries. Preserve the entire `.local` directory during future upgrades. Exit/relaunch was verified with synthetic data; operating-system reboot and real-session analysis were not tested.
 
