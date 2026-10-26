@@ -2,8 +2,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
-import { verifyChain } from './HandoffSeal.mjs';
-import { assertPrivateControlStorage } from './HandoffControl.mjs';
+import { verifyChain, observeControlIdentity } from './HandoffSeal.mjs';
+import { assertPrivateControlStorage, controlPaths } from './HandoffControl.mjs';
 import { validateWorkspaceAmendment } from './HandoffWorkspaceAmendment.mjs';
 import { classifyRuleDrift, verifyRuleManifest, verifyWorkspaceBaseline, readLiveRemoteBaseline, verifyHandoffInventory } from './Prepare-Handoff.mjs';
 
@@ -36,7 +36,19 @@ export function verifyHandoffCandidate({ sealDirectory, sourceRoot, externalCont
   let chain;
   try { chain = verifyChain(sealDirectory, { sourceRoot, externalControlPlaneRoot }); } catch (error) { result.errors.push(`SEAL_VERIFY_FAILED: ${error.message}`); return result; }
   result.chain = { status: chain.status, control_status: chain.control_status, handoff_ready: chain.handoff_ready, latest_source_status: chain.latest_source_status, phase: chain.latest?.handoff_phase ?? null };
-  if (chain.status !== 'PASS' || chain.control_status !== 'READY' || !chain.latest) { result.errors.push(...(chain.errors || ['candidate seal is not ready'])); return result; }
+  if (chain.status !== 'PASS' || chain.control_status !== 'READY' || !chain.latest) {
+    result.errors.push(...(chain.errors || ['candidate seal is not ready']));
+    if (chain.latest && chain.pending_intents?.length === 0 && chain.pending_authority_recoveries?.length === 0) {
+      try {
+        const options = { sourceRoot, externalControlPlaneRoot }, text = fs.readFileSync(controlPaths(chain.latest, options).index, 'utf8');
+        const body = text.split('<!-- CURRENT:BEGIN -->')[1]?.split('<!-- CURRENT:END -->')[0];
+        const identity = JSON.parse(body?.match(/<!-- CONTROL_IDENTITY: (.*?) -->/)?.[1] || 'null');
+        const observed = observeControlIdentity({ ...chain.latest, generation: identity?.generation, writer_id: identity?.writer_id }, options);
+        if (observed.status === 'PASS' && identity.generation === chain.latest.generation + 1 && identity.writer_id !== chain.latest.writer_id) result.actions.push('AUTHORITY_RECOVERY_REQUIRED: 中央登记与正式链脱节；保留原链及现场，按04取得当前操作者异常恢复授权。不能补签旧身份、把保全包当正式候选或恢复旧调度');
+      } catch { /* Missing or inconsistent identity keeps the original blocked diagnosis. */ }
+    }
+    return result;
+  }
   if (chain.latest.handoff_phase !== 'MATERIAL_PREPARED') {
     result.errors.push(`CANDIDATE_PHASE_INVALID: expected MATERIAL_PREPARED, found ${chain.latest.handoff_phase}`);
     result.actions.push('已完成接管的封条只能按历史/当前状态核验，不能重复作为候选输入');

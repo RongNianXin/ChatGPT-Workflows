@@ -16,6 +16,7 @@ const schema = JSON.parse(fs.readFileSync(path.join(workflow, 'templates', 'HAND
 const REFRESH_REQUIRED_RULES = [
   '.github/scripts/HandoffWorkspaceScope.mjs',
   '.github/scripts/HandoffSeal.mjs',
+  '.github/scripts/Recover-CommanderAuthority.mjs',
   '.github/scripts/Prepare-Handoff.mjs',
   '.github/scripts/Mark-Handoff-Delivered.mjs',
   '.github/scripts/Inspect-RuleRefresh.mjs',
@@ -48,6 +49,7 @@ for (const name of ['README.md', 'README.en.md']) {
   }
 }
 const checks = [
+  ['project source triage preserves provenance and disposition authority', fs.readFileSync(path.join(root, 'AGENTS.md'), 'utf8'), ['远端同步前的未知来源文件处置', '先在已有读取授权内核对', '独立判断是否有必要保留', '历史来源仍记“未确认”', '不得把接管写成原作者或原始来源已确认', '取得针对精确对象的最终删除确认前保留原件', '满足发布门禁后才可列入同步候选', '不据此阻断无依赖工作', '不新增平行台账或后台巡检']],
   ['workflow feedback preserves the main task and gives a scoped change decision', read('02-总指挥核心规则.md'), ['先回应新增内容，再沿仍有效的主线继续', '主线目标、实际结果、未完断点及下一行动方和推荐动作', '是否需要修改工作流、判断依据是什么、修改后会有什么影响', '不另造模板或推定新增实施、通信与其他项目权限']],
   ['handoff planning shares locked admission without reviving stopped writers', `${read('04-状态、目标变更与交接规范.md')}\n${read('01-操作者操作手册.md')}`, ['planSealAppend', '原有双锁内重新核验', '预检不创建目录、锁、证明或附件', 'CURRENT_ATTESTATION_REQUIRED', '无需为正常内部准备反复请求操作者继续', '不要求即时续签封条']],
   ['business on-demand adapter loading does not skip formal refresh text', read('docs/CROSS_SOFTWARE_COLLABORATION.md'), ['普通业务只在命中跨软件协作时加载本文', '0A/0B 规则刷新、规则维护及明确全文审计', '不因“业务按需”跳过必读正文']],
@@ -295,6 +297,11 @@ checks.push(['lightweight entry separates readiness from authority and hides int
 checks.push(['lightweight handoff reuses deterministic checks without weakening control gates', read('总指挥轻量交接启动配置.md'), ['先定位唯一CURRENT', 'HISTORY仅在来源冲突或必要恢复时定点展开', '同实例已完整读取', '新实例独立读必要正文并核权', '无变化不再先重复运行组合入口', '--summary', '仍执行完整核验并保留全部错误', '锁内前后复核及完成回读保持', '历史日志按原渲染版本核验']]);
 checks.push(['shared role loading reuses only verified evidence from the same instance', fs.readFileSync(path.join(root, '引用的外部工具/外部工具自动对接规范.md'), 'utf8'), ['新实例独立读取所需角色正文', '同实例已有可核的完整读取记录', '实物、适用职责和依赖未变', '核目标、版本、实物、当前权限及原消费', '不继承其他实例“已读”']]);
 checks.push(['direct protocol preserves legacy intent and interrupted writes', read('04-状态、目标变更与交接规范.md'), ['接收方直接准备、受控提交与中断恢复', 'handoff-direct-transition-intent', 'schema v4', '所有受支持v3 prepare/recover/append', '第三种字节保留现场', '不自行授予跨任务发送权限', '不能代替修复后的新确认']]);
+checks.push(['authority recovery certifies only the current transfer with immutable withdrawal settlement', read('04-状态、目标变更与交接规范.md'), ['中央登记与正式链脱节的当前权限恢复', 'AUTHORITY_RECOVERY_ONLY', 'ACKNOWLEDGED_NOT_CERTIFIED', 'handoff-authority-recovery', 'AUTHORITY_RECOVERY_COMPLETED', 'historical_transition=NOT_CERTIFIED', 'handoff-authority-withdrawal', '不可变撤回历史', '原事件不可复活', '不要求其冒充更早写者补票据']]);
+checks.push(['manual separates repairable material from stopped-writer authority recovery', read('01-操作者操作手册.md'), ['异常恢复复制提示词', '现有接收窗口', '不要新建第三个总指挥', '不要求已停止旧方返回更早身份补签', '保留原队列、成果和预算状态']]);
+checks.push(['failure section routes material repair and authority recovery to the appropriate window', read('04-状态、目标变更与交接规范.md').split('## 7. 交接失败处理')[1] || '', ['仅当问题属于原移交方仍可合法有限修正的材料问题', '由现有接收窗口处理', '不要求已停止旧方补签', '当前操作者直接授权', '完成回读', '#中央登记与正式链脱节的当前权限恢复)']]);
+checks.push(['lightweight path never treats preservation material as ordinary readiness', read('总指挥轻量交接启动配置.md'), ['本配置不能代签正常候选通过', 'schema5只记录本次当前恢复', 'Recover-CommanderAuthority.mjs']]);
+checks.push(['authority recovery regression wired into repository quality entry', fs.readFileSync(path.join(root, '.github/scripts/Test-Repository.ps1'), 'utf8'), ["& node (Join-Path $PSScriptRoot 'Test-Recover-CommanderAuthority.mjs')"]]);
 checks.push(['workflow regression is wired into the real repository quality entry', fs.readFileSync(path.join(root, '.github/scripts/Test-Repository.ps1'), 'utf8'), ["& node (Join-Path $PSScriptRoot 'Test-Verify-Handoff-Candidate.mjs')", "if ($LASTEXITCODE -ne 0) { throw '候选材料与停旧前轮换准备组合检查失败。' }"]]);
 checks.push(['in-flight scope preserves strict defaults and live source separation', read('04-状态、目标变更与交接规范.md'), ['在途专项与交接保护范围', 'git-scoped-index-worktree-sha256-v2', 'ownership_source_ref', '候选不能临时扩大排除范围', '分别核验 Git 索引与工作树', '旧票据恢复只登记旧来源漂移', '旧封条、票据及恢复记录不改签', '交接保存可靠阶段观察']]);
 checks.push(['scope behavioral regression is part of repository quality', fs.readFileSync(path.join(root, '.github/scripts/Test-Repository.ps1'), 'utf8'), ["& node (Join-Path $PSScriptRoot 'Test-HandoffWorkspaceScope.mjs')"]]);
@@ -375,6 +382,68 @@ checks.push(['deployment manual and PR entry consume the same contract', `${depl
   '实际代码提交/tree及本次相关工作区增量', '本地相关未提交成果不能只由HEAD代表',
   '“最新”的范围与缺口处理沿[02部署门禁]', '不因本条扩大PR最终提交树或远端授权'
 ]]);
+const lifecycleRequirements = [
+  '已完成接管后的局部问题不撤销接管',
+  '事务已启动或结果未知', '先核原事务日志与中央完成回读',
+  '按同一事件恢复，不重放结果未知动作，不另开异常恢复事务',
+  '先核验原移交方仍有材料有限修正权限',
+  '不要求我填写置信度或机器字段',
+  '材料修复、候选通过或允许停旧都不等于正式交接完成'
+];
+const lifecycleErrors = manual => {
+  const repair = manual.split('### 场景 1I：')[1]?.split('## 跨场景操作：')[0] || '';
+  const errors = lifecycleRequirements.filter(text => !repair.includes(text));
+  if (/当前恢复置信度为【中\/低】|除非新候选已完成独立只读核验/.test(repair)) errors.push('obsolete completion or scoring gate');
+  if (/场景\s*1J|请按场景0B核验发送者身份/.test(manual)) errors.push('active retired scene');
+  const alias = '<a id="scenario-cross-project-rule-update"></a>';
+  const canonical = '<a id="scenario-project-rule-broadcast"></a>';
+  if (manual.split(alias).length !== 2 || !manual.includes(alias + '\n' + canonical)) errors.push('alias must precede canonical 0B');
+  const broadcast = manual.split('### 场景 0B：')[1]?.split('<a id="scenario-lifecycle">')[0] || '';
+  if (!broadcast.includes('跨项目只允许本次规则通知') || !broadcast.includes('每批最多5个')) errors.push('broadcast capability lost');
+  return errors;
+};
+checks.push(['scene lifecycle uses evidence and transaction recovery', ordinaryManual, lifecycleRequirements]);
+if (lifecycleErrors(ordinaryManual).length) { failed++; console.error('FAIL: scene lifecycle: ' + lifecycleErrors(ordinaryManual).join('; ')); }
+else console.log('PASS: scene lifecycle boundaries and retired entry');
+const lifecycleMutations = [
+  ...lifecycleRequirements.map(text => [text, ordinaryManual.replace(text, '')]),
+  ['active retired template', ordinaryManual + '\n### 场景 1J：旧入口\n请按场景0B核验发送者身份'],
+  ['wrong alias order', ordinaryManual.replace('<a id="scenario-cross-project-rule-update"></a>\n<a id="scenario-project-rule-broadcast"></a>', '<a id="scenario-project-rule-broadcast"></a>\n<a id="scenario-cross-project-rule-update"></a>')],
+  ['lost broadcast capability', ordinaryManual.replaceAll('跨项目只允许本次规则通知', '')]
+];
+for (const [name, mutated] of lifecycleMutations) {
+  if (!lifecycleErrors(mutated).length) { failed++; console.error('FAIL: lifecycle mutation accepted: ' + name); }
+  else console.log('PASS: lifecycle mutation rejected: ' + name);
+}
+// Check the written preparation -> execution -> compaction contract, not model behavior.
+const goalPhaseDocuments = { manual: ordinaryManual, core: read('02-总指挥核心规则.md') };
+const goalPhaseSections = ({ manual, core }) => ({
+  preparation: manual.split('#### 场景 Gen1.2：')[1]?.split('#### 场景 Gen1.3：')[0] || '',
+  recovery: core.split('### 上下文压缩后的恢复与增量读取（默认）')[1]?.split('\n### ')[0] || ''
+});
+const goalPhaseRequirements = [
+  ['preparation is request-scoped', 'preparation', '本次准备请求只审查准备'],
+  ['delivered preparation does not reactivate', 'preparation', '准备已交付后，本请求的准备阶段限制不因历史保留或上下文压缩重新生效'],
+  ['continuation retains permission, budget and stop boundaries', 'preparation', '后续获准Goal续作按当前目标、断点及仍有效的权限、预算和停止条件执行'],
+  ['a genuinely new preparation request remains valid', 'preparation', '真实新增准备请求仍按其范围处理'],
+  ['recovery recognizes a verifiable Goal continuation', 'recovery', '实际入站事件或可核验的平台 Goal 续作'],
+  ['completed work is not reopened', 'recovery', '已结束且已交付的动作不重开'],
+  ['new requests are not deduplicated by text alone', 'recovery', '真实新增请求不得仅因文字或编号与历史相同而被拒绝']
+];
+const goalPhaseErrors = documents => {
+  const sections = goalPhaseSections(documents);
+  return goalPhaseRequirements.filter(([, section, needle]) => !sections[section].includes(needle)).map(([name]) => name);
+};
+for (const [name, section, needle] of goalPhaseRequirements) {
+  checks.push([`Goal phase contract: ${name}`, goalPhaseSections(goalPhaseDocuments)[section], [needle]]);
+  if (goalPhaseErrors(goalPhaseDocuments).length) continue;
+  const document = section === 'preparation' ? 'manual' : 'core';
+  // Moving the clause outside the relevant section must not satisfy the contract.
+  const mutated = { ...goalPhaseDocuments, [document]: `${needle}\n${goalPhaseDocuments[document].replace(needle, '')}` };
+  if (!goalPhaseErrors(mutated).includes(name)) throw new Error(`Goal phase mutation accepted: ${name}`);
+  console.log(`PASS: Goal phase out-of-scope mutation rejected: ${name}`);
+}
+console.log('PASS: Goal phase checks bind prose only; no live compaction or resumed model request was tested');
 // These checks bind public prose and entry references, not a real deployment or
 // a guarantee that an agent, server or client actually used the intended files.
 for (const [name, text, needles] of checks) {
@@ -638,6 +707,8 @@ if (modelSuggestions.length < 40 || brandedSuggestions.length || tierlessSuggest
 }
 console.log(`PASS: model suggestions use neutral tiers (${modelSuggestions.length} scenarios)`);
 const v3SourceRef = schema.allOf?.find(rule => rule.if?.properties?.schema_version?.const === 3)?.then?.properties?.sources?.additionalProperties?.$ref;
+const authoritySchema = schema.allOf?.find(rule => rule.if?.properties?.schema_version?.const === 5);
+if (schema.properties.schema_version.enum.join(',') !== '3,4,5' || schema.properties.authority_recovery?.$ref !== '#/$defs/transition' || !authoritySchema?.then?.required?.includes('authority_recovery') || authoritySchema.then.properties.handoff_phase.const !== 'AUTHORITY_RECOVERY_COMPLETED' || !authoritySchema.else?.not) throw new Error('Schema5 must isolate explicit authority completion and exclude its evidence from ordinary seals');
 if (schema.properties?.sources?.additionalProperties?.$ref !== '#/$defs/source' || v3SourceRef !== '#/$defs/sourceV3') {
   console.error('FAIL: schema must keep legacy source compatibility and bind v3 sources to sourceV3');
   process.exit(1);

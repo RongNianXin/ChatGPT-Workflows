@@ -7,7 +7,7 @@ import { validWorkspaceFingerprint, validateScopedWorkspaceSources } from './Han
 import { assertControlReady, withControlLock, resolveSource } from './HandoffControl.mjs';
 
 const HEX = /^[0-9a-f]{64}$/;
-const TOP_LEVEL_KEYS = new Set(['schema_version', 'record_type', 'generation', 'writer_id', 'old_writer_status', 'seal_sequence', 'previous_seal_digest', 'fact_cutoff', 'sealed_at', 'event_id', 'sources', 'source_digest_status', 'rule_baseline', 'objective', 'prohibitions', 'communications', 'workspace', 'remote', 'control_handoff_confidence', 'candidate_verification_status', 'switch_status', 'handoff_phase', 'runtime_acceptance_status', 'professional_acceptance_status', 'transition', 'migration', 'invalidation_conditions', 'seal_digest', 'restrictions']);
+const TOP_LEVEL_KEYS = new Set(['schema_version', 'record_type', 'generation', 'writer_id', 'old_writer_status', 'seal_sequence', 'previous_seal_digest', 'fact_cutoff', 'sealed_at', 'event_id', 'sources', 'source_digest_status', 'rule_baseline', 'objective', 'prohibitions', 'communications', 'workspace', 'remote', 'control_handoff_confidence', 'candidate_verification_status', 'switch_status', 'handoff_phase', 'runtime_acceptance_status', 'professional_acceptance_status', 'transition', 'migration', 'invalidation_conditions', 'seal_digest', 'restrictions', 'authority_recovery']);
 const exactKeys = (value, allowed) => value && typeof value === 'object' && !Array.isArray(value) && Object.keys(value).every(key => allowed.includes(key));
 const relativeRef = value => typeof value === 'string' && value.length > 0 && !path.isAbsolute(value) && !path.win32.isAbsolute(value) && !value.split(/[\\/]+/).includes('..');
 const iso = value => typeof value === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/.test(value) && !Number.isNaN(Date.parse(value));
@@ -44,7 +44,7 @@ function validateRuleBaseline(value, errors) {
   if (value.mode === 'PINNED_SNAPSHOT' && value.source_role !== 'CANDIDATE_PINNED_BASELINE') fail(errors, 'pinned rule baseline must identify candidate source role');
   if (value.mode === 'PINNED_SNAPSHOT' && (!value.snapshot_ref || !value.snapshot_sha256)) fail(errors, 'pinned rule baseline requires snapshot reference and digest');
 }
-function verifySourceFiles(seal, sourceRoot, externalControlPlaneRoot) {
+export function verifySourceFiles(seal, sourceRoot, externalControlPlaneRoot) {
   if (!sourceRoot) return ['INPUT_REQUIRED: provide <source-root> to verify the code source'];
   let internalRoot;
   try { internalRoot = fs.realpathSync(path.resolve(sourceRoot)); } catch (error) { return [`source root verification failed: ${error.message}`]; }
@@ -109,12 +109,17 @@ export const CONTROL_IDENTITY_SOURCES = ['status_index', 'central_work_items', '
 
 // Live identity evidence is separate from immutable history and byte integrity.
 export function verifyControlIdentity(seal, { sourceRoot, externalControlPlaneRoot } = {}) {
+  if (!CONTROL_IDENTITY_SOURCES.every(name => seal?.sources?.[name])) return observeControlIdentity(seal, { sourceRoot, externalControlPlaneRoot });
+  try { assertControlReady(seal, { sourceRoot, externalControlPlaneRoot }); }
+  catch (error) { return { status: error.message.includes('INPUT_REQUIRED:') ? 'NOT_CHECKED' : 'FAIL', errors: [error.message], platform_mapping_status: 'NOT_CHECKED' }; }
+  return observeControlIdentity(seal, { sourceRoot, externalControlPlaneRoot });
+}
+// Evidence-only observation is usable during a stopped recovery; it grants no READY.
+export function observeControlIdentity(seal, { sourceRoot, externalControlPlaneRoot } = {}) {
   if (!CONTROL_IDENTITY_SOURCES.every(name => seal?.sources?.[name])) {
     return { status: 'NOT_CHECKED', errors: ['CONTROL_IDENTITY_REQUIRED: missing canonical identity/navigation sources'] };
   }
   const errors = [];
-  try { assertControlReady(seal, { sourceRoot, externalControlPlaneRoot }); }
-  catch (error) { return { status: error.message.includes('INPUT_REQUIRED:') ? 'NOT_CHECKED' : 'FAIL', errors: [error.message], platform_mapping_status: 'NOT_CHECKED' }; }
   const bodies = {};
   let platformMappingStatus = 'NOT_CHECKED';
   let canonicalIdentity = null;
@@ -174,9 +179,15 @@ export function validateSeal(seal, { checkDigest = true, requireExtensions = fal
   const errors = [];
   if (!seal || typeof seal !== 'object' || Array.isArray(seal)) return ['seal must be an object'];
   for (const key of Object.keys(seal)) if (!TOP_LEVEL_KEYS.has(key)) fail(errors, `unknown top-level field: ${key}`);
-  if (![1, 2, 3, 4].includes(seal.schema_version)) fail(errors, 'schema_version must be 1, 2, 3, or 4');
+  if (![1, 2, 3, 4, 5].includes(seal.schema_version)) fail(errors, 'schema_version must be 1, 2, 3, 4, or 5');
   if (seal.schema_version < 4 && Object.hasOwn(seal, 'restrictions')) fail(errors, 'legacy seal cannot contain v4 restrictions');
-  if (seal.schema_version === 4 && (!Array.isArray(seal.restrictions) || seal.restrictions.some(value => value !== 'REMOTE_UNOBSERVED') || new Set(seal.restrictions).size !== seal.restrictions.length || (seal.remote?.status === 'UNKNOWN') !== seal.restrictions.includes('REMOTE_UNOBSERVED'))) fail(errors, 'invalid v4 dependency restrictions');
+  if (seal.schema_version >= 4 && (!Array.isArray(seal.restrictions) || seal.restrictions.some(value => value !== 'REMOTE_UNOBSERVED') || new Set(seal.restrictions).size !== seal.restrictions.length || (seal.remote?.status === 'UNKNOWN') !== seal.restrictions.includes('REMOTE_UNOBSERVED'))) fail(errors, 'invalid v4 dependency restrictions');
+  const authorityRecovery = seal.schema_version === 5 && seal.handoff_phase === 'AUTHORITY_RECOVERY_COMPLETED';
+  if (seal.schema_version === 5 && !authorityRecovery) fail(errors, 'schema 5 is reserved for explicit authority recovery');
+  if (authorityRecovery) {
+    if (!exactKeys(seal.authority_recovery, ['intent_digest', 'previous_seal_digest', 'prepared_at']) || !HEX.test(seal.authority_recovery?.intent_digest || '') || !HEX.test(seal.authority_recovery?.previous_seal_digest || '') || !iso(seal.authority_recovery?.prepared_at)) fail(errors, 'invalid authority recovery reference');
+    if (seal.switch_status !== 'COMPLETED' || seal.transition !== null || seal.migration !== null) fail(errors, 'authority recovery requires a separate completed record without a normal transition');
+  } else if (Object.hasOwn(seal, 'authority_recovery')) fail(errors, 'ordinary seal cannot contain authority recovery evidence');
   if (seal.record_type !== 'handoff-seal') fail(errors, 'record_type must be handoff-seal');
   if (!Number.isInteger(seal.generation) || seal.generation < 1) fail(errors, 'generation must be a positive integer');
   if (!/^[A-Za-z0-9._-]+$/.test(seal.writer_id || '')) fail(errors, 'writer_id is not a portable logical id');
@@ -226,7 +237,7 @@ export function validateSeal(seal, { checkDigest = true, requireExtensions = fal
   if (!['READY', 'READY_WITH_RESTRICTIONS', 'BLOCKED', 'COMPLETED'].includes(seal.switch_status)) fail(errors, 'invalid switch_status');
   if (seal.schema_version >= 2) {
     if (!['NOT_RUN', 'PASS', 'PASS_WITH_RESTRICTIONS', 'FAIL'].includes(seal.candidate_verification_status)) fail(errors, 'invalid candidate_verification_status');
-    if (!['MATERIAL_PREPARED', 'TAKEOVER_COMPLETED', 'CURRENT_MIGRATION', 'CURRENT_ATTESTATION'].includes(seal.handoff_phase)) fail(errors, 'invalid handoff_phase');
+    if (!['MATERIAL_PREPARED', 'TAKEOVER_COMPLETED', 'CURRENT_MIGRATION', 'CURRENT_ATTESTATION'].includes(seal.handoff_phase) && !authorityRecovery) fail(errors, 'invalid handoff_phase');
     if (seal.handoff_phase === 'MATERIAL_PREPARED' && seal.switch_status === 'COMPLETED') fail(errors, 'material preparation cannot be COMPLETED');
     if (seal.handoff_phase === 'TAKEOVER_COMPLETED' && seal.switch_status !== 'COMPLETED') fail(errors, 'takeover phase requires COMPLETED');
     if (seal.handoff_phase === 'CURRENT_MIGRATION') {
@@ -240,19 +251,19 @@ export function validateSeal(seal, { checkDigest = true, requireExtensions = fal
   const requiresReadyEvidence = seal.control_handoff_confidence === 'HIGH' || ['READY', 'READY_WITH_RESTRICTIONS', 'COMPLETED'].includes(seal.switch_status);
   if (requiresReadyEvidence && !['central_work_items', 'current_view', 'status_index'].every(key => seal.sources?.[key])) fail(errors, 'control handoff requires all canonical sources');
   if (requiresReadyEvidence && r?.observed_at !== null && Date.parse(r.observed_at) > Date.parse(seal.fact_cutoff)) fail(errors, 'remote observed_at must not be after fact_cutoff');
-  if (seal.control_handoff_confidence === 'HIGH' && ((r?.status !== 'PASS' && !(seal.schema_version === 4 && r?.status === 'UNKNOWN' && seal.restrictions?.includes('REMOTE_UNOBSERVED'))) || seal.source_digest_status !== 'PASS')) fail(errors, 'HIGH control handoff requires remote PASS and source digest PASS');
+  if (seal.control_handoff_confidence === 'HIGH' && ((r?.status !== 'PASS' && !(seal.schema_version >= 4 && r?.status === 'UNKNOWN' && seal.restrictions?.includes('REMOTE_UNOBSERVED'))) || seal.source_digest_status !== 'PASS')) fail(errors, 'HIGH control handoff requires remote PASS and source digest PASS');
   // A restricted candidate may be handed off when the remote is temporarily
   // unobservable, provided all local/control-plane evidence is current.  A
   // v3 READY/COMPLETED still requires a live remote baseline; v4 may use
   // UNKNOWN with the explicit REMOTE_UNOBSERVED restriction below.
-  if (['READY', 'COMPLETED'].includes(seal.switch_status) && ((r?.status !== 'PASS' && !(seal.schema_version === 4 && r?.status === 'UNKNOWN' && seal.restrictions?.includes('REMOTE_UNOBSERVED'))) || seal.source_digest_status !== 'PASS')) fail(errors, 'READY status requires remote PASS and source digest PASS');
+  if (['READY', 'COMPLETED'].includes(seal.switch_status) && ((r?.status !== 'PASS' && !(seal.schema_version >= 4 && r?.status === 'UNKNOWN' && seal.restrictions?.includes('REMOTE_UNOBSERVED'))) || seal.source_digest_status !== 'PASS')) fail(errors, 'READY status requires remote PASS and source digest PASS');
   if (seal.switch_status === 'READY_WITH_RESTRICTIONS' && seal.source_digest_status !== 'PASS') fail(errors, 'READY_WITH_RESTRICTIONS requires source digest PASS');
   // READY describes candidate material readiness, not a transfer of authority.
   if (seal.switch_status === 'COMPLETED' && !['STOPPED_DISPATCH', 'ARCHIVED'].includes(seal.old_writer_status)) fail(errors, 'COMPLETED requires old writer stopped or archived');
   if (seal.switch_status === 'COMPLETED' && seal.control_handoff_confidence !== 'HIGH') fail(errors, 'COMPLETED requires control_handoff_confidence HIGH');
   if (seal.schema_version >= 2 && seal.switch_status === 'COMPLETED') {
     if (!['PASS', 'PASS_WITH_RESTRICTIONS'].includes(seal.candidate_verification_status)) fail(errors, 'COMPLETED requires candidate verification');
-    if (!['CURRENT_MIGRATION', 'CURRENT_ATTESTATION'].includes(seal.handoff_phase) && (!exactKeys(seal.transition, ['intent_digest', 'previous_seal_digest', 'prepared_at']) || !HEX.test(seal.transition?.intent_digest || '') || !HEX.test(seal.transition?.previous_seal_digest || '') || !iso(seal.transition?.prepared_at))) fail(errors, 'COMPLETED requires a valid transition intent');
+    if (!authorityRecovery && !['CURRENT_MIGRATION', 'CURRENT_ATTESTATION'].includes(seal.handoff_phase) && (!exactKeys(seal.transition, ['intent_digest', 'previous_seal_digest', 'prepared_at']) || !HEX.test(seal.transition?.intent_digest || '') || !HEX.test(seal.transition?.previous_seal_digest || '') || !iso(seal.transition?.prepared_at))) fail(errors, 'COMPLETED requires a valid transition intent');
   }
   if (!HEX.test(seal.seal_digest || '')) fail(errors, 'invalid seal_digest');
   if (checkDigest && seal.seal_digest !== sealDigest(seal)) fail(errors, 'seal_digest mismatch');
@@ -273,10 +284,93 @@ export function validateSealDraftForAppend(draft) {
 function sealFiles(dir) {
   return fs.readdirSync(dir).filter(name => /^handoff-state\.\d+\.[0-9a-f]{64}\.json$/.test(name)).sort((a, b) => Number(a.split('.')[1]) - Number(b.split('.')[1]));
 }
+const AUTHORITY_PHASE = 'AUTHORITY_RECOVERY_COMPLETED';
+const authorityHash = record => digest(canonicalJson(Object.fromEntries(Object.entries(record).filter(([key]) => key !== 'recovery_digest'))));
+const controlNames = ['status_index', 'central_work_items', 'current_view', 'central_entry'];
+
+// Like the direct entry, these are evidence bindings, not authentication of a human.
+export function validateAuthorityConfirmation(value, observation, recipient, previous) {
+  const keys = ['protocol_version', 'origin', 'evidence_ref', 'confirmed_at', 'project_key', 'previous_seal_digest', 'observed_generation', 'observed_writer_id', 'observed_platform_id', 'old_writer_status', 'recipient_writer_id', 'recipient_platform_id', 'scope', 'transfer_confirmed', 'unique_writer_confirmed', 'unproved_transition'];
+  if (!exactKeys(value, keys) || keys.some(key => !Object.hasOwn(value, key))) return ['authority recovery confirmation fields required'];
+  const errors = [];
+  if (value.protocol_version !== 1 || value.origin !== 'CURRENT_OPERATOR_MESSAGE' || !value.evidence_ref?.trim() || !iso(value.confirmed_at) || value.scope !== 'AUTHORITY_RECOVERY_ONLY' || value.transfer_confirmed !== true || value.unique_writer_confirmed !== true || value.unproved_transition !== 'ACKNOWLEDGED_NOT_CERTIFIED') errors.push('current direct operator recovery authorization required');
+  if (!previous || previous.schema_version < 3 || value.previous_seal_digest !== previous.seal_digest || observation?.generation !== previous.generation + 1 || observation.writer_id === previous.writer_id || value.observed_generation !== observation.generation || value.observed_writer_id !== observation.writer_id) errors.push('authority recovery requires exactly one observed unsealed generation');
+  if (!['STOPPED_DISPATCH', 'ARCHIVED'].includes(value.old_writer_status)) errors.push('observed predecessor must remain stopped');
+  if (!recipient || !/^[A-Za-z0-9._-]+$/.test(recipient.writerId || '') || [previous?.writer_id, observation?.writer_id].includes(recipient.writerId) || !/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(recipient.platformTaskId || '') || !/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(value.observed_platform_id || '') || recipient.platformTaskId === value.observed_platform_id || typeof recipient.projectKey !== 'string' || !recipient.projectKey.trim() || value.project_key !== recipient.projectKey || value.recipient_writer_id !== recipient.writerId || value.recipient_platform_id !== recipient.platformTaskId) errors.push('authority recipient, platform or project mismatch');
+  return errors;
+}
+
+export function validateAuthorityObservation(observation, confirmation, preparedAt) {
+  const errors = validateSeal(observation, { requireExtensions: true });
+  if (observation?.schema_version !== 4 || observation.handoff_phase !== 'MATERIAL_PREPARED' || !['READY', 'READY_WITH_RESTRICTIONS'].includes(observation.switch_status) || observation.transition !== null || observation.migration !== null) errors.push('authority observation must be a fresh v4 material baseline, not a signature by the observed writer');
+  if (!iso(preparedAt) || Date.parse(preparedAt) < Date.parse(observation?.sealed_at) || Date.parse(preparedAt) < Date.parse(confirmation?.confirmed_at)) errors.push('authority preparation time rollback');
+  return errors;
+}
+
+// Withdrawal history, not the replaceable canonical journal, gates a new attempt.
+export function validateFreshAuthorityAttempt(history, transaction, preparedAt = null) {
+  const errors = [];
+  for (const withdrawal of history.authority_withdrawals ?? []) {
+    const prior = history.authority_intents.find(item => item.recovery_digest === withdrawal.intent_digest);
+    if (!prior || (preparedAt && Date.parse(prior.prepared_at) >= Date.parse(preparedAt))) continue;
+    if (transaction.confirmation.evidence_ref === prior.transaction.confirmation.evidence_ref || Date.parse(transaction.confirmation.confirmed_at) <= Date.parse(withdrawal.withdrawn_at) || Date.parse(transaction.observation.fact_cutoff) <= Date.parse(withdrawal.withdrawn_at)) errors.push('withdrawn recovery requires new current operator authorization and fresh observation');
+  }
+  return errors;
+}
+export function validateAuthorityEventAvailability(history, eventId) {
+  const reserved = new Set([...history.records, ...history.intents, ...history.recoveries, ...history.authority_intents, ...history.authority_withdrawals].map(item => item.event_id));
+  for (const intent of history.authority_intents) reserved.add(`${intent.event_id}:withdrawal`);
+  return [eventId, `${eventId}:withdrawal`].some(value => reserved.has(value)) ? ['authority recovery event or reserved withdrawal event already exists'] : [];
+}
+
+function validateAuthorityIntent(intent) {
+  const keys = ['record_type', 'event_id', 'previous_seal_digest', 'previous_sequence', 'previous_generation', 'previous_writer_id', 'prepared_at', 'transaction', 'recovery_digest'];
+  if (!exactKeys(intent, keys) || keys.some(key => !Object.hasOwn(intent, key)) || intent.record_type !== 'handoff-authority-recovery-intent' || !HEX.test(intent.recovery_digest || '') || intent.recovery_digest !== authorityHash(intent)) return ['invalid immutable authority recovery intent'];
+  const errors = [], tx = intent.transaction;
+  if (!exactKeys(tx, ['observation', 'recipient', 'confirmation', 'plan', 'workspace_projection', 'prior_journal']) || !tx) return ['invalid authority transaction evidence'];
+  const o = tx.observation;
+  errors.push(...validateAuthorityObservation(o, tx.confirmation, intent.prepared_at));
+  if (!iso(intent.prepared_at) || !/^[A-Za-z0-9._:-]+$/.test(intent.event_id || '') || !HEX.test(intent.previous_seal_digest || '') || !Number.isInteger(intent.previous_sequence) || intent.previous_sequence < 1 || !Number.isInteger(intent.previous_generation) || !/^[A-Za-z0-9._-]+$/.test(intent.previous_writer_id || '')) errors.push('invalid authority predecessor or event');
+  errors.push(...validateAuthorityConfirmation(tx.confirmation, o, tx.recipient, { schema_version: 4, seal_digest: intent.previous_seal_digest, generation: intent.previous_generation, writer_id: intent.previous_writer_id }));
+  if (!Array.isArray(tx.plan) || !tx.plan.length || tx.plan.length > 4 || tx.plan.flatMap(item => item.names ?? []).sort().join(',') !== [...controlNames].sort().join(',')) return [...errors, 'authority write scope must be exactly the four canonical targets'];
+  for (const item of tx.plan) {
+    if (!exactKeys(item, ['names', 'root_ref', 'path_ref', 'before', 'after', 'before_sha256', 'after_sha256']) || !relativeRef(item.path_ref) || !['source_root', 'external_control_plane'].includes(item.root_ref) || typeof item.before !== 'string' || typeof item.after !== 'string' || digest(Buffer.from(item.before, 'base64')) !== item.before_sha256 || digest(Buffer.from(item.after, 'base64')) !== item.after_sha256) { errors.push('invalid authority before/after evidence'); continue; }
+    for (const name of item.names) {
+      const source = o.sources?.[name];
+      if (source?.path_ref !== item.path_ref || (source.root_ref || 'source_root') !== item.root_ref || source.digest !== item.before_sha256) errors.push('authority plan does not match observed sources');
+    }
+  }
+  if (tx.workspace_projection?.version !== 2) errors.push('authority recovery requires an unamended frozen workspace projection');
+  if (tx.prior_journal !== null) {
+    try { const prior = JSON.parse(Buffer.from(tx.prior_journal, 'base64')); if (!((prior.protocol_version === 1 && prior.status === 'COMPLETED') || (prior.protocol_version === 2 && prior.record_type === 'handoff-authority-recovery-transaction' && ['COMPLETED', 'ROLLED_BACK_STOPPED'].includes(prior.status)))) errors.push('only settled original journals may be archived'); }
+    catch { errors.push('invalid prior completed journal backup'); }
+  }
+  return errors;
+}
+export function readAuthorityIntent(file) {
+  const intent = JSON.parse(fs.readFileSync(file, 'utf8')), errors = validateAuthorityIntent(intent);
+  if (path.basename(file) !== `handoff-authority-recovery.${intent.previous_sequence}.${intent.recovery_digest}.json`) errors.push('authority intent filename mismatch');
+  if (errors.length) throw new Error(errors.join('; '));
+  return intent;
+}
+function authorityLinkErrors(seal, previous, intent) {
+  if (!previous || !intent) return ['authority recovery requires its immutable intent and strict predecessor'];
+  const tx = intent.transaction, o = tx.observation, errors = [];
+  if (intent.previous_seal_digest !== previous.seal_digest || intent.previous_sequence !== previous.seal_sequence || intent.previous_generation !== previous.generation || intent.previous_writer_id !== previous.writer_id || o.generation !== previous.generation + 1 || seal.generation !== o.generation + 1 || seal.writer_id !== tx.recipient.writerId || seal.event_id !== intent.event_id || seal.old_writer_status !== tx.confirmation.old_writer_status || seal.authority_recovery?.previous_seal_digest !== previous.seal_digest || seal.authority_recovery?.prepared_at !== intent.prepared_at || Date.parse(seal.sealed_at) < Date.parse(intent.prepared_at) || Date.parse(o.fact_cutoff) < Date.parse(previous.fact_cutoff)) errors.push('authority recovery three-anchor or time mismatch');
+  if (Object.keys(previous.sources).sort().join(',') !== Object.keys(o.sources).sort().join(',') || Object.keys(o.sources).sort().join(',') !== Object.keys(seal.sources).sort().join(',')) errors.push('authority recovery cannot change the source set');
+  for (const [name, source] of Object.entries(o.sources)) {
+    const historical = previous.sources[name], target = seal.sources[name], change = tx.plan.find(item => item.names.includes(name));
+    if (!historical || !target || historical.path_ref !== source.path_ref || (historical.root_ref || 'source_root') !== (source.root_ref || 'source_root') || target.path_ref !== source.path_ref || target.root_ref !== source.root_ref || target.owner !== source.owner || target.digest !== (change ? change.after_sha256 : source.digest)) errors.push(`authority recovery source binding mismatch: ${name}`);
+  }
+  for (const key of ['objective', 'prohibitions', 'rule_baseline', 'invalidation_conditions', 'remote', 'restrictions']) if (canonicalJson(seal[key]) !== canonicalJson(o[key])) errors.push(`authority recovery changed frozen ${key}`);
+  for (const key of ['root_ref', 'head', 'tree', 'branch', 'required_untracked', 'inflight_scope']) if (canonicalJson(seal.workspace?.[key]) !== canonicalJson(o.workspace?.[key])) errors.push(`authority recovery changed protected workspace ${key}`);
+  if (seal.communications?.status !== 'NONE' || seal.runtime_acceptance_status !== 'NOT_RUN' || seal.professional_acceptance_status !== 'NOT_RUN') errors.push('authority recovery cannot inherit business acceptance or communication authority');
+  return errors;
+}
 export function readChain(dir, { ignoreOwnLock = false } = {}) {
   const errors = [];
   if (!fs.existsSync(dir)) return { records: [], errors: ['seal directory missing'] };
-  const leftovers = fs.readdirSync(dir).filter(name => (name === '.handoff.lock' && !ignoreOwnLock) || name.includes('.tmp') || (!/^handoff-state\.\d+\.[0-9a-f]{64}\.json$/.test(name) && !/^handoff-transition\.\d+\.[0-9a-f]{64}\.json$/.test(name) && !/^handoff-transition-recovery\.\d+\.[0-9a-f]{64}\.json$/.test(name) && name !== '.handoff.lock'));
+  const leftovers = fs.readdirSync(dir).filter(name => (name === '.handoff.lock' && !ignoreOwnLock) || name.includes('.tmp') || (!/^handoff-state\.\d+\.[0-9a-f]{64}\.json$/.test(name) && !/^handoff-transition\.\d+\.[0-9a-f]{64}\.json$/.test(name) && !/^handoff-transition-recovery\.\d+\.[0-9a-f]{64}\.json$/.test(name) && !/^handoff-authority-(?:recovery|withdrawal)\.\d+\.[0-9a-f]{64}\.json$/.test(name) && name !== '.handoff.lock'));
   leftovers.forEach(name => fail(errors, `recovery artifact present: ${name}`));
   const records = [];
   for (const file of sealFiles(dir)) {
@@ -311,6 +405,18 @@ export function readChain(dir, { ignoreOwnLock = false } = {}) {
   }
   const seen = new Set();
   const seenEventIds = new Set();
+  const authorityIntents = new Map(), authorityWithdrawals = new Map();
+  for (const file of fs.readdirSync(dir).filter(name => /^handoff-authority-recovery\./.test(name))) {
+    try { const intent = readAuthorityIntent(path.join(dir, file)); authorityIntents.set(intent.recovery_digest, intent); }
+    catch (error) { fail(errors, `${file}: ${error.message}`); }
+  }
+  for (const file of fs.readdirSync(dir).filter(name => /^handoff-authority-withdrawal\./.test(name))) {
+    try {
+      const value = JSON.parse(fs.readFileSync(path.join(dir, file), 'utf8')), intent = authorityIntents.get(value.intent_digest);
+      if (!exactKeys(value, ['record_type', 'intent_digest', 'event_id', 'withdrawn_at', 'restored_control', 'recovery_digest']) || value.record_type !== 'handoff-authority-withdrawal' || value.recovery_digest !== authorityHash(value) || !iso(value.withdrawn_at) || !intent || value.event_id !== `${intent.event_id}:withdrawal` || Date.parse(value.withdrawn_at) < Date.parse(intent.prepared_at) || canonicalJson(value.restored_control) !== canonicalJson(intent.transaction.plan.map(item => ({ path_ref: item.path_ref, root_ref: item.root_ref, sha256: item.before_sha256 }))) || file !== `handoff-authority-withdrawal.${intent.previous_sequence}.${value.recovery_digest}.json` || authorityWithdrawals.has(value.intent_digest)) throw new Error('invalid or duplicate authority withdrawal');
+      authorityWithdrawals.set(value.intent_digest, value);
+    } catch (error) { fail(errors, `${file}: ${error.message}`); }
+  }
   let hasLegacyRecords = false;
   let seenStrictV3 = false;
   records.sort((a, b) => a.seal_sequence - b.seal_sequence);
@@ -325,7 +431,8 @@ export function readChain(dir, { ignoreOwnLock = false } = {}) {
     if (previous && (seal.seal_sequence !== previous.seal_sequence + 1 || seal.previous_seal_digest !== previous.seal_digest)) fail(errors, `chain break at sequence ${seal.seal_sequence}`);
     if (previous && seal.generation < previous.generation) fail(errors, `generation rollback at sequence ${seal.seal_sequence}`);
     if (previous && seal.generation === previous.generation && seal.writer_id !== previous.writer_id) fail(errors, `writer change without generation transition at sequence ${seal.seal_sequence}`);
-    if (previous && seal.generation > previous.generation && (seal.generation !== previous.generation + 1 || seal.writer_id === previous.writer_id || !['STOPPED_DISPATCH', 'ARCHIVED'].includes(seal.old_writer_status))) fail(errors, `unsafe generation transition at sequence ${seal.seal_sequence}`);
+    if (seal.handoff_phase === AUTHORITY_PHASE && seal.schema_version === 5) authorityLinkErrors(seal, previous, authorityIntents.get(seal.authority_recovery?.intent_digest)).forEach(error => fail(errors, error));
+    else if (previous && seal.generation > previous.generation && (seal.generation !== previous.generation + 1 || seal.writer_id === previous.writer_id || !['STOPPED_DISPATCH', 'ARCHIVED'].includes(seal.old_writer_status))) fail(errors, `unsafe generation transition at sequence ${seal.seal_sequence}`);
     if (seal.schema_version >= 3 && seenEventIds.has(seal.event_id)) fail(errors, `duplicate event_id at sequence ${seal.seal_sequence}: ${seal.event_id}`);
     if (seal.schema_version >= 3 && previous && Date.parse(seal.fact_cutoff) < Date.parse(previous.fact_cutoff)) fail(errors, `fact_cutoff rollback at sequence ${seal.seal_sequence}`);
     if (seal.schema_version >= 3 && previous && Date.parse(seal.sealed_at) < Date.parse(previous.sealed_at)) fail(errors, `sealed_at rollback at sequence ${seal.seal_sequence}`);
@@ -358,14 +465,37 @@ export function readChain(dir, { ignoreOwnLock = false } = {}) {
   const pendingIntents = [...intents.values()].filter(intent => !consumed.has(intent.transition_digest) && !recoveries.has(intent.transition_digest));
   const latest = records.at(-1);
   for (const intent of pendingIntents) if (!latest || intent.previous_seal_digest !== latest.seal_digest || intent.previous_sequence !== latest.seal_sequence || intent.previous_generation !== latest.generation || intent.previous_writer_id !== latest.writer_id) fail(errors, `stale unconsumed transition intent: ${intent.transition_digest}`);
-  return { records, intents: [...intents.values()], recoveries: [...recoveries.values()], pending_intents: pendingIntents, historical_assurance: hasLegacyRecords ? 'LEGACY_UNVERIFIED' : 'STRICT_V3', errors };
+  const pendingAuthority = [];
+  const authorityEvents = new Set();
+  for (const intent of authorityIntents.values()) {
+    validateFreshAuthorityAttempt({ authority_intents: [...authorityIntents.values()], authority_withdrawals: [...authorityWithdrawals.values()] }, intent.transaction, intent.prepared_at).forEach(error => fail(errors, error));
+    const predecessor = records.find(record => record.seal_digest === intent.previous_seal_digest);
+    if (!predecessor || predecessor.schema_version < 3 || predecessor.seal_sequence !== intent.previous_sequence || predecessor.generation !== intent.previous_generation || predecessor.writer_id !== intent.previous_writer_id || Date.parse(intent.prepared_at) < Date.parse(predecessor.sealed_at)) fail(errors, 'authority recovery predecessor missing, mismatched or time rollback');
+    if (authorityEvents.has(intent.event_id) || [...intents.values(), ...recoveries.values()].some(record => record.event_id === intent.event_id)) fail(errors, 'authority recovery event reused');
+    if ([...records, ...intents.values(), ...recoveries.values(), ...authorityIntents.values()].some(record => record.event_id === `${intent.event_id}:withdrawal`)) fail(errors, 'authority reserved withdrawal event reused');
+    authorityEvents.add(intent.event_id);
+    const completed = records.filter(record => record.authority_recovery?.intent_digest === intent.recovery_digest);
+    if (completed.length > 1 || (completed.length && authorityWithdrawals.has(intent.recovery_digest))) fail(errors, 'authority intent cannot be completed twice or both completed and withdrawn');
+    if (records.some(record => record.event_id === intent.event_id && record.authority_recovery?.intent_digest !== intent.recovery_digest)) fail(errors, 'authority recovery event conflicts with ordinary seal');
+    if (!completed.length && !authorityWithdrawals.has(intent.recovery_digest)) {
+      pendingAuthority.push(intent);
+      if (latest?.seal_digest !== intent.previous_seal_digest) fail(errors, 'stale pending authority recovery');
+    }
+  }
+  if (pendingAuthority.length > 1 || (pendingAuthority.length && pendingIntents.length)) fail(errors, 'competing authority/normal recovery intents');
+  const withdrawalEvents = new Set();
+  for (const withdrawal of authorityWithdrawals.values()) {
+    if (withdrawalEvents.has(withdrawal.event_id) || [...records, ...intents.values(), ...recoveries.values(), ...authorityIntents.values()].some(record => record.event_id === withdrawal.event_id)) fail(errors, 'authority withdrawal event reused');
+    withdrawalEvents.add(withdrawal.event_id);
+  }
+  return { records, intents: [...intents.values()], recoveries: [...recoveries.values()], pending_intents: pendingIntents, authority_intents: [...authorityIntents.values()], authority_withdrawals: [...authorityWithdrawals.values()], pending_authority_recoveries: pendingAuthority, historical_assurance: hasLegacyRecords ? 'LEGACY_UNVERIFIED' : 'STRICT_V3', errors };
 }
 
 export function verifyChain(dir, options = {}) {
   const result = readChain(dir, options);
   const latest = result.records.at(-1) ?? null;
   if (!latest) result.errors.push('no immutable seal record');
-  if (latest?.sources?.status_index && options.verifyLatestSources !== false) { try { assertControlReady(latest, options); } catch (error) { result.errors.push(error.message); } }
+  if (latest?.sources?.status_index && options.verifyLatestSources !== false) { try { assertControlReady(latest, options, result.records.find(record => record.schema_version === 5 && record.generation === latest.generation)); } catch (error) { result.errors.push(error.message); } }
   const requiresLiveSources = options.verifyLatestSources !== false && latest && latest.source_digest_status === 'PASS' && latest.sources;
   const sourceVerificationErrors = requiresLiveSources
     ? verifySourceFiles(latest, options.sourceRoot, options.externalControlPlaneRoot)
@@ -382,7 +512,7 @@ export function verifyChain(dir, options = {}) {
     ? verifyControlIdentity(latest, options) : { status: 'NOT_CHECKED', errors: [] };
   if (identity.status === 'FAIL') result.errors.push(...identity.errors);
   const awaitingRecoveryAttestation = result.recoveries?.some(recovery => recovery.previous_seal_digest === latest?.seal_digest);
-  const controlStatus = result.errors.length || awaitingRecoveryAttestation || latest?.switch_status === 'BLOCKED' || latestSourceStatus !== 'PASS' || identity.status !== 'PASS' ? 'BLOCKED' : 'READY';
+  const controlStatus = result.errors.length || result.pending_authority_recoveries?.length || awaitingRecoveryAttestation || latest?.switch_status === 'BLOCKED' || latestSourceStatus !== 'PASS' || identity.status !== 'PASS' ? 'BLOCKED' : 'READY';
   const handoffReady = controlStatus === 'READY' && latest && ['READY', 'READY_WITH_RESTRICTIONS', 'COMPLETED'].includes(latest.switch_status);
   return { ...result, latest, latest_source_status: latestSourceStatus, control_identity_status: identity.status, control_identity_errors: identity.errors, control_status: controlStatus, handoff_ready: Boolean(handoffReady), transition_status: result.pending_intents?.length ? 'PENDING' : 'SETTLED', recovery_status: awaitingRecoveryAttestation ? 'AWAITING_ATTESTATION' : 'SETTLED', status: result.errors.length ? 'BLOCKED' : 'PASS' };
 }
@@ -441,7 +571,7 @@ function recoverTransitionLocked(dir, { sourceRoot, externalControlPlaneRoot, ex
     const predecessor = current.latest;
     if (predecessor.seal_digest !== expectedPreviousDigest) throw new Error('expected previous digest mismatch');
     if (current.pending_intents.length !== 1 || current.pending_intents[0].transition_digest !== expectedIntentDigest) throw new Error('expected unique pending transition intent mismatch');
-    if (current.records.some(record => record.event_id === eventId) || current.intents.some(intent => intent.event_id === eventId) || current.recoveries.some(recovery => recovery.event_id === eventId)) throw new Error('event_id already exists in the handoff chain');
+    if (current.records.some(record => record.event_id === eventId) || current.intents.some(intent => intent.event_id === eventId) || current.recoveries.some(recovery => recovery.event_id === eventId) || [...(current.authority_intents ?? []), ...(current.authority_withdrawals ?? [])].some(record => record.event_id === eventId) || current.authority_intents?.some(record => `${record.event_id}:withdrawal` === eventId)) throw new Error('event_id already exists in the handoff chain');
     const intent = current.pending_intents[0];
     if (Date.parse(recoveredAt) < Date.parse(intent.prepared_at) || Date.parse(recoveredAt) < Date.parse(predecessor.sealed_at)) throw new Error('recovery time precedes the intent or predecessor');
     const protectedSources = new Set([...CONTROL_IDENTITY_SOURCES, 'control_plane_registry']);
@@ -487,9 +617,9 @@ function prepareTransitionLocked(dir, { sourceRoot, externalControlPlaneRoot, ex
     if (expectedPreviousDigest !== undefined && expectedPreviousDigest !== previous.seal_digest) throw new Error('expected previous digest mismatch');
     const generationTransition = nextGeneration === previous.generation + 1 && nextWriterId !== previous.writer_id;
     if (!generationTransition) throw new Error('transition intent requires the next generation and a different writer');
-    if (current.pending_intents.length) throw new Error('an unconsumed transition intent already exists');
+    if (current.pending_intents.length || current.pending_authority_recoveries?.length) throw new Error('an unconsumed transition intent or authority recovery intent already exists');
     if (current.recoveries.some(recovery => recovery.previous_seal_digest === previous.seal_digest)) throw new Error('recovered intent requires a new current attestation before preparing another transition');
-    if (current.records.some(record => record.event_id === eventId) || current.intents.some(intent => intent.event_id === eventId) || current.recoveries.some(recovery => recovery.event_id === eventId)) throw new Error('event_id already exists in the handoff chain');
+    if (current.records.some(record => record.event_id === eventId) || current.intents.some(intent => intent.event_id === eventId) || current.recoveries.some(recovery => recovery.event_id === eventId) || [...(current.authority_intents ?? []), ...(current.authority_withdrawals ?? [])].some(record => record.event_id === eventId) || current.authority_intents?.some(record => `${record.event_id}:withdrawal` === eventId)) throw new Error('event_id already exists in the handoff chain');
     if (Date.parse(preparedAt) < Date.parse(previous.sealed_at)) throw new Error('transition prepared_at precedes predecessor seal');
     const intent = {
       record_type: authorization ? 'handoff-direct-transition-intent' : 'handoff-transition-intent', previous_seal_digest: previous.seal_digest, previous_sequence: previous.seal_sequence,
@@ -513,19 +643,76 @@ function prepareTransitionLocked(dir, { sourceRoot, externalControlPlaneRoot, ex
 }
 
 // The public plan is read-only. Only the private locked writer may ignore its own chain lock.
-export function planSealAppend(dir, draft, { expectedPreviousDigest, sourceRoot, externalControlPlaneRoot, transitionTicket, allowReuse = false } = {}) {
-  const current = verifyChain(dir, { sourceRoot, externalControlPlaneRoot, verifyLatestSources: false });
-  return planSealAppendFromState(dir, draft, { expectedPreviousDigest, sourceRoot, externalControlPlaneRoot, transitionTicket, allowReuse }, current);
+function writeAuthorityRecord(dir, create) {
+  const lock = path.join(dir, '.handoff.lock'), fd = fs.openSync(lock, 'wx');
+  try {
+    const { record, filename } = create(readChain(dir, { ignoreOwnLock: true }));
+    const file = path.join(dir, filename), bytes = `${JSON.stringify(record, null, 2)}\n`;
+    if (fs.existsSync(file)) { if (fs.readFileSync(file, 'utf8') !== bytes) throw new Error('immutable authority record conflict'); return { record, file }; }
+    const temp = `${file}.${process.pid}.tmp`, out = fs.openSync(temp, 'wx');
+    try { fs.writeFileSync(out, bytes); fs.fsyncSync(out); } finally { fs.closeSync(out); }
+    fs.renameSync(temp, file);
+    return { record, file };
+  } finally { fs.closeSync(fd); fs.unlinkSync(lock); }
+}
+export function prepareAuthorityRecovery(dir, transaction, options) {
+  return withControlLock(transaction.observation, options, () => writeAuthorityRecord(dir, history => {
+    if (history.errors.length || history.pending_intents.length || history.pending_authority_recoveries.length) throw new Error('authority recovery requires intact, settled original history');
+    const previous = history.records.at(-1);
+    if (!previous || previous.seal_digest !== options.expectedPreviousDigest) throw new Error('authority recovery predecessor changed');
+    if (history.recoveries.some(item => item.previous_seal_digest === previous.seal_digest)) throw new Error('original recovery still awaits attestation');
+    const eventErrors = validateAuthorityEventAvailability(history, options.eventId);
+    if (eventErrors.length) throw new Error(eventErrors.join('; '));
+    const record = { record_type: 'handoff-authority-recovery-intent', event_id: options.eventId, previous_seal_digest: previous.seal_digest, previous_sequence: previous.seal_sequence, previous_generation: previous.generation, previous_writer_id: previous.writer_id, prepared_at: options.preparedAt || new Date().toISOString(), transaction: structuredClone(transaction), recovery_digest: '' };
+    if (Date.parse(record.prepared_at) < Date.parse(previous.sealed_at)) throw new Error('authority prepared_at precedes predecessor seal');
+    record.recovery_digest = authorityHash(record);
+    const errors = validateAuthorityIntent(record);
+    errors.push(...validateFreshAuthorityAttempt(history, transaction));
+    const observation = transaction.observation;
+    errors.push(...validateAuthorityConfirmation(transaction.confirmation, observation, transaction.recipient, previous));
+    errors.push(...verifySourceFiles(observation, options.sourceRoot, options.externalControlPlaneRoot));
+    const identity = observeControlIdentity(observation, options);
+    if (identity.status !== 'PASS' || identity.identity?.platform_task_id !== transaction.confirmation.observed_platform_id) errors.push('observed authority identity is not live-valid');
+    if (errors.length) throw new Error(errors.join('; '));
+    return { record, filename: `handoff-authority-recovery.${previous.seal_sequence}.${record.recovery_digest}.json` };
+  }));
+}
+export function authorityWithdrawalTime(history, intent) {
+  const existing = history.authority_withdrawals.find(item => item.intent_digest === intent.recovery_digest);
+  if (existing) return existing.withdrawn_at;
+  const now = new Date().toISOString(), previous = history.records.find(item => item.seal_digest === intent.previous_seal_digest);
+  if (!previous || Date.parse(now) < Date.parse(intent.prepared_at) || Date.parse(now) < Date.parse(previous.sealed_at)) throw new Error('authority withdrawal clock precedes immutable intent or predecessor; preserve transaction');
+  return now;
+}
+export function withdrawAuthorityRecovery(dir, intent, options) {
+  return withControlLock(intent.transaction.observation, options, () => writeAuthorityRecord(dir, history => {
+    if (history.errors.length || history.records.at(-1)?.seal_digest !== intent.previous_seal_digest || history.records.some(item => item.authority_recovery?.intent_digest === intent.recovery_digest)) throw new Error('authority withdrawal forbidden after completion or history change');
+    const stored = history.authority_intents.find(item => item.recovery_digest === intent.recovery_digest);
+    if (!stored || canonicalJson(stored) !== canonicalJson(intent)) throw new Error('authority withdrawal intent missing');
+    for (const item of intent.transaction.plan) if (digest(fs.readFileSync(resolveSource(item, options))) !== item.before_sha256) throw new Error('authority withdrawal requires all observed control bytes restored');
+    let record = history.authority_withdrawals.find(item => item.intent_digest === intent.recovery_digest);
+    if (!record) {
+      if ([...history.records, ...history.intents, ...history.recoveries, ...history.authority_intents, ...history.authority_withdrawals].some(item => item.event_id === `${intent.event_id}:withdrawal`)) throw new Error('authority withdrawal event already exists');
+      record = { record_type: 'handoff-authority-withdrawal', intent_digest: intent.recovery_digest, event_id: `${intent.event_id}:withdrawal`, withdrawn_at: authorityWithdrawalTime(history, intent), restored_control: intent.transaction.plan.map(item => ({ path_ref: item.path_ref, root_ref: item.root_ref, sha256: item.before_sha256 })), recovery_digest: '' };
+      record.recovery_digest = authorityHash(record);
+    }
+    return { record, filename: `handoff-authority-withdrawal.${intent.previous_sequence}.${record.recovery_digest}.json` };
+  }));
 }
 
-function planSealAppendFromState(dir, draft, { expectedPreviousDigest, sourceRoot, externalControlPlaneRoot, transitionTicket, allowReuse = false }, state) {
+export function planSealAppend(dir, draft, { expectedPreviousDigest, sourceRoot, externalControlPlaneRoot, transitionTicket, authorityTicket, allowReuse = false } = {}) {
+  const current = verifyChain(dir, { sourceRoot, externalControlPlaneRoot, verifyLatestSources: false });
+  return planSealAppendFromState(dir, draft, { expectedPreviousDigest, sourceRoot, externalControlPlaneRoot, transitionTicket, authorityTicket, allowReuse }, current);
+}
+
+function planSealAppendFromState(dir, draft, { expectedPreviousDigest, sourceRoot, externalControlPlaneRoot, transitionTicket, authorityTicket, allowReuse = false }, state) {
   const current = { ...state, pending_intents: state.pending_intents ?? [], intents: state.intents ?? [], recoveries: state.recoveries ?? [] };
   const emptyChainErrors = current.records.length === 0 && current.errors.every(error => error === 'no immutable seal record' || (error === 'seal directory missing' && !fs.existsSync(dir)));
   if (current.errors.length && !emptyChainErrors) throw new Error(`existing chain invalid: ${current.errors.join('; ')}`);
   const previous = current.latest;
   const actualPreviousDigest = previous?.seal_digest ?? null;
   const anchor = previous || draft;
-  assertControlReady(anchor, { sourceRoot, externalControlPlaneRoot });
+  assertControlReady(anchor, { sourceRoot, externalControlPlaneRoot }, current.records.find(record => record.schema_version === 5 && record.generation === anchor.generation));
   if (previous && resolveSource(previous.sources.status_index, { sourceRoot, externalControlPlaneRoot }) !== resolveSource(draft.sources.status_index, { sourceRoot, externalControlPlaneRoot })) throw new Error('canonical index change requires explicit migration');
   const reusable = allowReuse && previous && previous.event_id === draft.event_id
     && previous.generation === draft.generation && previous.writer_id === draft.writer_id
@@ -533,7 +720,7 @@ function planSealAppendFromState(dir, draft, { expectedPreviousDigest, sourceRoo
     && previous.seal_digest === sealDigest({ ...draft, seal_sequence: previous.seal_sequence, previous_seal_digest: previous.previous_seal_digest });
   if (reusable) {
     if (expectedPreviousDigest !== undefined && expectedPreviousDigest !== previous.previous_seal_digest && expectedPreviousDigest !== previous.seal_digest) throw new Error('expected previous digest mismatch');
-    if (current.pending_intents.length || transitionTicket) throw new Error('an unconsumed transition intent must be consumed or explicitly recovered before appending');
+    if (current.pending_intents.length || transitionTicket || current.pending_authority_recoveries?.length) throw new Error('an unconsumed transition intent must be consumed or explicitly recovered before appending');
     if (current.recoveries.some(item => item.previous_seal_digest === previous.seal_digest)) throw new Error('recovered intent requires a later same-writer current attestation');
     const errors = validateSeal(previous, { requireExtensions: true });
     errors.push(...verifySourceFiles(previous, sourceRoot, externalControlPlaneRoot));
@@ -545,14 +732,30 @@ function planSealAppendFromState(dir, draft, { expectedPreviousDigest, sourceRoo
     return { action: 'REUSE', seal: structuredClone(previous) };
   }
   if (expectedPreviousDigest !== undefined && expectedPreviousDigest !== actualPreviousDigest) throw new Error('expected previous digest mismatch');
+  if (current.pending_authority_recoveries?.length && !authorityTicket) throw new Error('AUTHORITY_RECOVERY_PENDING: ordinary writes cannot consume a recovery intent');
   if (current.pending_intents.length && !transitionTicket) throw new Error('an unconsumed transition intent must be consumed or explicitly recovered before appending');
   const seal = structuredClone(draft);
+  let authority = null;
+  if (authorityTicket) {
+    if (path.dirname(fs.realpathSync(authorityTicket)) !== fs.realpathSync(dir) || transitionTicket) throw new Error('authority ticket must be in the existing chain, without a normal transition ticket');
+    authority = readAuthorityIntent(authorityTicket);
+    if (current.pending_authority_recoveries?.length !== 1 || current.pending_authority_recoveries[0].recovery_digest !== authority.recovery_digest || current.pending_intents.length || current.authority_withdrawals?.some(item => item.intent_digest === authority.recovery_digest)) throw new Error('authority recovery intent is not uniquely pending');
+    const errors = authorityLinkErrors(seal, previous, authority);
+    if (seal.schema_version !== 5 || seal.handoff_phase !== AUTHORITY_PHASE || seal.authority_recovery?.intent_digest !== authority.recovery_digest || errors.length) throw new Error(`invalid authority recovery append: ${errors.join('; ')}`);
+    const body = fs.readFileSync(resolveSource(seal.sources.status_index, { sourceRoot, externalControlPlaneRoot }), 'utf8').split('<!-- CURRENT:BEGIN -->')[1]?.split('<!-- CURRENT:END -->')[0];
+    const mapping = JSON.parse(body?.match(/<!-- CONTROL_IDENTITY: (.*?) -->/)?.[1] || 'null');
+    if (mapping?.platform_task_id !== authority.transaction.recipient.platformTaskId || body?.match(/^项目键：([^\r\n]+)$/m)?.[1]?.trim() !== authority.transaction.recipient.projectKey) throw new Error('authority recovery recipient platform or project mismatch');
+  } else if (seal.schema_version === 5 || seal.handoff_phase === AUTHORITY_PHASE) throw new Error('authority recovery requires its separate immutable intent');
   const recovery = current.recoveries.find(item => item.previous_seal_digest === previous?.seal_digest);
   if (recovery && (seal.handoff_phase !== 'CURRENT_ATTESTATION' || Date.parse(seal.sealed_at) < Date.parse(recovery.recovered_at))) throw new Error('recovered intent requires a later same-writer current attestation');
-  if (![3, 4].includes(seal.schema_version)) throw new Error('new seal writes require schema_version 3 or 4; schema 1/2 records are read-only legacy history');
+  if (![3, 4, 5].includes(seal.schema_version)) throw new Error('new seal writes require schema_version 3 or 4 (or explicit recovery schema 5); schema 1/2 records are read-only legacy history');
+  if (!authority && !transitionTicket && previous && seal.generation === previous.generation + 1 && seal.writer_id !== previous.writer_id && seal.handoff_phase === 'MATERIAL_PREPARED' && verifyControlIdentity(seal, { sourceRoot, externalControlPlaneRoot }).status === 'PASS') {
+    const error = new Error('AUTHORITY_RECOVERY_REQUIRED: current registered authority differs from the formal predecessor; generation transition requires a pre-update intent or a separately authorized recovery, never an old writer signature');
+    error.code = 'AUTHORITY_RECOVERY_REQUIRED'; throw error;
+  }
   if (previous && seal.generation < previous.generation) throw new Error('generation rollback');
   if (previous && seal.generation === previous.generation && seal.writer_id !== previous.writer_id) throw new Error('writer change without generation transition');
-  if (previous && seal.generation > previous.generation && (seal.generation !== previous.generation + 1 || seal.writer_id === previous.writer_id || !['STOPPED_DISPATCH', 'ARCHIVED'].includes(seal.old_writer_status))) throw new Error('unsafe generation transition');
+  if (!authority && previous && seal.generation > previous.generation && (seal.generation !== previous.generation + 1 || seal.writer_id === previous.writer_id || !['STOPPED_DISPATCH', 'ARCHIVED'].includes(seal.old_writer_status))) throw new Error('unsafe generation transition');
   const previousSourceErrors = previous ? verifySourceFiles(previous, sourceRoot, externalControlPlaneRoot) : [];
   let intent = null;
   if (transitionTicket) {
@@ -569,13 +772,18 @@ function planSealAppendFromState(dir, draft, { expectedPreviousDigest, sourceRoo
     }
     seal.transition = { intent_digest: intent.transition_digest, previous_seal_digest: intent.previous_seal_digest, prepared_at: intent.prepared_at };
   }
-  if (previous && seal.generation > previous.generation && !intent) throw new Error('generation transition requires a pre-update intent');
+  if (previous && seal.generation > previous.generation && !intent && !authority) {
+    const identity = verifyControlIdentity(seal, { sourceRoot, externalControlPlaneRoot });
+    const error = new Error(`${identity.status === 'PASS' ? 'AUTHORITY_RECOVERY_REQUIRED: registered authority changed outside the formal chain; use explicit current-operator recovery, not an old writer signature; ' : ''}generation transition requires a pre-update intent`);
+    if (identity.status === 'PASS') error.code = 'AUTHORITY_RECOVERY_REQUIRED';
+    throw error;
+  }
   if (intent && (!previous || seal.generation === previous.generation)) throw new Error('transition intent may only be consumed by a generation transition');
   if (previous && seal.generation > previous.generation && seal.switch_status !== 'COMPLETED') throw new Error('generation transition requires a completed seal');
   if (seal.handoff_phase === 'CURRENT_ATTESTATION' && (!previous || seal.generation !== previous.generation || seal.writer_id !== previous.writer_id || transitionTicket)) throw new Error('current attestation requires an existing seal with the same generation and writer');
   seal.seal_sequence = (previous?.seal_sequence ?? 0) + 1;
   seal.previous_seal_digest = previous?.seal_digest ?? null;
-  if (current.records.some(record => record.event_id === seal.event_id) || current.intents.some(previousIntent => previousIntent.event_id === seal.event_id && previousIntent.transition_digest !== intent?.transition_digest) || current.recoveries.some(recovery => recovery.event_id === seal.event_id)) throw new Error('event_id already exists in the handoff chain');
+  if (current.authority_withdrawals?.some(record => record.event_id === seal.event_id) || current.authority_intents?.some(record => `${record.event_id}:withdrawal` === seal.event_id) || current.records.some(record => record.event_id === seal.event_id) || current.intents.some(previousIntent => previousIntent.event_id === seal.event_id && previousIntent.transition_digest !== intent?.transition_digest) || current.recoveries.some(recovery => recovery.event_id === seal.event_id) || current.authority_intents?.some(record => record.event_id === seal.event_id && record.recovery_digest !== authority?.recovery_digest)) throw new Error('event_id already exists in the handoff chain');
   if (previous && Date.parse(seal.fact_cutoff) < Date.parse(previous.fact_cutoff)) throw new Error('fact_cutoff rollback');
   if (previous && Date.parse(seal.sealed_at) < Date.parse(previous.sealed_at)) throw new Error('sealed_at rollback');
   if (intent && Date.parse(intent.prepared_at) > Date.parse(seal.sealed_at)) throw new Error('transition prepared_at follows takeover seal');
@@ -596,7 +804,7 @@ function planSealAppendFromState(dir, draft, { expectedPreviousDigest, sourceRoo
       currentIdentityVerified = true;
     }
   }
-  if (!intent && previousSourceErrors.length && seal.handoff_phase !== 'CURRENT_ATTESTATION') {
+  if (!intent && !authority && previousSourceErrors.length && seal.handoff_phase !== 'CURRENT_ATTESTATION') {
     const error = new Error(previousSourceErrors.join('; '));
     if (seal.handoff_phase === 'MATERIAL_PREPARED' && previous?.generation === seal.generation
       && previous.writer_id === seal.writer_id && currentIdentityVerified
@@ -609,13 +817,13 @@ function planSealAppendFromState(dir, draft, { expectedPreviousDigest, sourceRoo
   return { action: 'APPEND', seal };
 }
 
-function appendSealLocked(dir, draft, { expectedPreviousDigest, sourceRoot, externalControlPlaneRoot, transitionTicket } = {}) {
+function appendSealLocked(dir, draft, { expectedPreviousDigest, sourceRoot, externalControlPlaneRoot, transitionTicket, authorityTicket } = {}) {
   fs.mkdirSync(dir, { recursive: true });
   const lock = path.join(dir, '.handoff.lock');
   const fd = fs.openSync(lock, 'wx');
   try {
     const current = verifyChain(dir, { ignoreOwnLock: true, sourceRoot, externalControlPlaneRoot, verifyLatestSources: false });
-    const { seal } = planSealAppendFromState(dir, draft, { expectedPreviousDigest, sourceRoot, externalControlPlaneRoot, transitionTicket }, current);
+    const { seal } = planSealAppendFromState(dir, draft, { expectedPreviousDigest, sourceRoot, externalControlPlaneRoot, transitionTicket, authorityTicket }, current);
     const finalName = `handoff-state.${seal.seal_sequence}.${seal.seal_digest}.json`;
     const tempName = `${finalName}.${process.pid}.tmp`;
     const tempPath = path.join(dir, tempName);

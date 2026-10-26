@@ -12,6 +12,7 @@ export const REQUIRED_RULES = [
   '.github/scripts/HandoffControl.mjs',
   '.github/scripts/HandoffTransactionWorkspace.mjs',
   '.github/scripts/Takeover-Handoff.mjs',
+  '.github/scripts/Recover-CommanderAuthority.mjs',
   '.github/scripts/HandoffWorkspaceScope.mjs',
   '.github/scripts/HandoffSeal.mjs',
   '.github/scripts/Prepare-Handoff.mjs',
@@ -46,6 +47,7 @@ const verificationCommandPattern = /node\s+"[^"]*HandoffSeal\.mjs"\s+verify\s+"[
 
 const RULE_CRITICAL_PATHS = new Set(['.github/scripts/HandoffControl.mjs', '.github/scripts/Takeover-Handoff.mjs', '01-操作者操作手册.md', '02-总指挥核心规则.md', '04-状态、目标变更与交接规范.md', '07-总指挥交接记录模板.md', '09-自动化授权与风险分级.md', '10-自动状态索引规范.md', '总指挥轻量交接启动配置.md', 'templates/HANDOFF_STATE.schema.json', '.github/scripts/HandoffSeal.mjs', '.github/scripts/Prepare-Handoff.mjs', '.github/scripts/Verify-Handoff-Candidate.mjs', '.github/scripts/HandoffWorkspaceScope.mjs', '.github/scripts/Rebase-Handoff-Draft.mjs', '.github/scripts/Mark-Handoff-Delivered.mjs']);
 RULE_CRITICAL_PATHS.add('.github/scripts/HandoffTransactionWorkspace.mjs');
+RULE_CRITICAL_PATHS.add('.github/scripts/Recover-CommanderAuthority.mjs');
 const RULE_CRITICAL_NAMES = new Set([...RULE_CRITICAL_PATHS].map(value => path.posix.basename(value)));
 function ruleEpoch(value) {
   if (typeof value !== 'string') return null;

@@ -344,6 +344,22 @@ function selfTests() {
     assert.equal(validateOperatorManual(projected.text,scenarioCatalog(projected.text),pair.metadata).status,'FAIL');
   });
   check('projection cannot self-certify an invalid pre-edit pair', () => assert.throws(()=>synchronizeOperatorManual(pair.text+'x',pair.text,pair.metadata)));
+  check('retired alias before canonical anchor preserves one scenario and old links', () => {
+    const cleanPair = externalizeOperatorManual(fixture.replace(/^旧 .*\n/m, ''));
+    const alias = '<a id="scenario-retired-task"></a>\n';
+    const text = cleanPair.text.replace('<a id="scenario-local-task">', alias + '<a id="scenario-local-task">');
+    const c = scenarioCatalog(text), metadata = {...cleanPair.metadata, manual_sha256: manualDigest(text)};
+    assert.equal(c.byAnchor.size, externalCatalog.byAnchor.size);
+    assert.ok(c.byAnchor.has('scenario-local-task'));
+    assert.ok(!c.byAnchor.has('scenario-retired-task'));
+    assert.equal(validateOperatorManual(text, c, metadata).status, 'PASS');
+    assert.equal(validateScenarioDocument('<!-- SCENARIO_REFS: {} -->\n[旧入口](../01-操作者操作手册.md#scenario-retired-task)', c).status, 'PASS');
+    const stale = structuredClone(metadata);
+    stale.sections.push({anchor: 'scenario-retired-task', references: {}, history: []});
+    assert.equal(validateOperatorManual(text, c, stale).status, 'FAIL');
+    const wrongOrder = cleanPair.text.replace('<a id="scenario-local-task"></a>', '<a id="scenario-local-task"></a>\n' + alias);
+    assert.equal(validateOperatorManual(wrongOrder, scenarioCatalog(wrongOrder), {...metadata, manual_sha256: manualDigest(wrongOrder)}).status, 'FAIL');
+  });
   check('machine comments may not return to manual', () => assert.equal(validateOperatorManual(pair.text+'\n<!-- SCENARIO_REFS: {} -->',externalCatalog,{...pair.metadata,manual_sha256:manualDigest(pair.text+'\n<!-- SCENARIO_REFS: {} -->')}).status,'FAIL'));
   return checks;
 }

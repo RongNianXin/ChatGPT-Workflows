@@ -28,7 +28,7 @@
     },
     {
       "if": { "properties": { "switch_status": { "const": "COMPLETED" } } },
-      "then": { "properties": { "control_handoff_confidence": { "const": "HIGH" }, "candidate_verification_status": { "enum": ["PASS", "PASS_WITH_RESTRICTIONS"] }, "handoff_phase": { "enum": ["TAKEOVER_COMPLETED", "CURRENT_MIGRATION", "CURRENT_ATTESTATION"] }, "old_writer_status": { "enum": ["STOPPED_DISPATCH", "ARCHIVED"] } } }
+      "then": { "properties": { "control_handoff_confidence": { "const": "HIGH" }, "candidate_verification_status": { "enum": ["PASS", "PASS_WITH_RESTRICTIONS"] }, "handoff_phase": { "enum": ["TAKEOVER_COMPLETED", "CURRENT_MIGRATION", "CURRENT_ATTESTATION", "AUTHORITY_RECOVERY_COMPLETED"] }, "old_writer_status": { "enum": ["STOPPED_DISPATCH", "ARCHIVED"] } } }
     },
     {
       "if": { "properties": { "handoff_phase": { "const": "MATERIAL_PREPARED" } } },
@@ -47,14 +47,15 @@
       "then": { "properties": { "switch_status": { "const": "COMPLETED" }, "previous_seal_digest": { "type": "string", "pattern": "^[0-9a-f]{64}$" }, "transition": { "type": "null" }, "migration": { "type": "null" } } }
     }
 ,
-    {"if":{"properties":{"schema_version":{"const":4}}},"then":{"required":["restrictions"],"properties":{"sources":{"required":["central_work_items","current_view","status_index"],"additionalProperties":{"$ref":"#/$defs/sourceV3"}},"source_digest_status":{"const":"PASS"},"remote":{"properties":{"status":{"enum":["PASS","UNKNOWN","FAIL","NOT_APPLICABLE"]}}}}}},
+    {"if":{"properties":{"schema_version":{"enum":[4,5]}}},"then":{"required":["restrictions"],"properties":{"sources":{"required":["central_work_items","current_view","status_index"],"additionalProperties":{"$ref":"#/$defs/sourceV3"}},"source_digest_status":{"const":"PASS"},"remote":{"properties":{"status":{"enum":["PASS","UNKNOWN","FAIL","NOT_APPLICABLE"]}}}}}},
     {"if":{"properties":{"schema_version":{"const":3}}},"then":{"not":{"required":["restrictions"]}}},
-    {"if":{"properties":{"schema_version":{"const":4},"remote":{"properties":{"status":{"const":"UNKNOWN"}}}}},"then":{"properties":{"restrictions":{"contains":{"const":"REMOTE_UNOBSERVED"}}}},"else":{"properties":{"restrictions":{"maxItems":0}}}},
-    {"if":{"properties":{"schema_version":{"const":4},"switch_status":{"enum":["READY","COMPLETED"]}}},"then":{"properties":{"remote":{"properties":{"status":{"enum":["PASS","UNKNOWN"]}}}}}}
-    ,{"if":{"properties":{"schema_version":{"const":4},"control_handoff_confidence":{"const":"HIGH"}}},"then":{"properties":{"remote":{"properties":{"status":{"enum":["PASS","UNKNOWN"]}}}}}}
+    {"if":{"properties":{"schema_version":{"enum":[4,5]},"remote":{"properties":{"status":{"const":"UNKNOWN"}}}}},"then":{"properties":{"restrictions":{"contains":{"const":"REMOTE_UNOBSERVED"}}}},"else":{"properties":{"restrictions":{"maxItems":0}}}},
+    {"if":{"properties":{"schema_version":{"enum":[4,5]},"switch_status":{"enum":["READY","COMPLETED"]}}},"then":{"properties":{"remote":{"properties":{"status":{"enum":["PASS","UNKNOWN"]}}}}}}
+    ,{"if":{"properties":{"schema_version":{"enum":[4,5]},"control_handoff_confidence":{"const":"HIGH"}}},"then":{"properties":{"remote":{"properties":{"status":{"enum":["PASS","UNKNOWN"]}}}}}}
+    ,{"if":{"properties":{"schema_version":{"const":5}}},"then":{"required":["authority_recovery"],"properties":{"handoff_phase":{"const":"AUTHORITY_RECOVERY_COMPLETED"},"switch_status":{"const":"COMPLETED"},"transition":{"type":"null"},"migration":{"type":"null"},"previous_seal_digest":{"type":"string","pattern":"^[0-9a-f]{64}$"},"communications":{"properties":{"status":{"const":"NONE"}}},"runtime_acceptance_status":{"const":"NOT_RUN"},"professional_acceptance_status":{"const":"NOT_RUN"}}},"else":{"not":{"anyOf":[{"required":["authority_recovery"]},{"properties":{"handoff_phase":{"const":"AUTHORITY_RECOVERY_COMPLETED"}}}]}}}
   ],
   "properties": {
-    "schema_version": { "enum": [3, 4] },
+    "schema_version": { "enum": [3, 4, 5] },
     "record_type": { "const": "handoff-seal" },
     "generation": { "type": "integer", "minimum": 1 },
     "writer_id": { "type": "string", "minLength": 1, "pattern": "^[A-Za-z0-9._-]+$" },
@@ -75,11 +76,12 @@
     "control_handoff_confidence": { "enum": ["HIGH", "MEDIUM", "LOW"] },
     "candidate_verification_status": { "enum": ["NOT_RUN", "PASS", "PASS_WITH_RESTRICTIONS", "FAIL"] },
     "switch_status": { "enum": ["READY", "READY_WITH_RESTRICTIONS", "BLOCKED", "COMPLETED"] },
-    "handoff_phase": { "enum": ["MATERIAL_PREPARED", "TAKEOVER_COMPLETED", "CURRENT_MIGRATION", "CURRENT_ATTESTATION"] },
+    "handoff_phase": { "enum": ["MATERIAL_PREPARED", "TAKEOVER_COMPLETED", "CURRENT_MIGRATION", "CURRENT_ATTESTATION", "AUTHORITY_RECOVERY_COMPLETED"] },
     "runtime_acceptance_status": { "enum": ["PASS", "FAIL", "NOT_RUN", "UNKNOWN", "NOT_APPLICABLE"] },
     "professional_acceptance_status": { "enum": ["PASS", "FAIL", "NOT_RUN", "UNKNOWN", "NOT_APPLICABLE"] },
     "transition": { "anyOf": [{ "type": "null" }, { "$ref": "#/$defs/transition" }] },
     "restrictions": {"type":"array","uniqueItems":true,"items":{"const":"REMOTE_UNOBSERVED"}},
+    "authority_recovery": { "$ref": "#/$defs/transition" },
     "migration": { "anyOf": [{ "type": "null" }, { "$ref": "#/$defs/migration" }] },
     "invalidation_conditions": { "type": "array", "minItems": 1, "items": { "type": "string" } },
     "seal_digest": { "type": "string", "pattern": "^[0-9a-f]{64}$" }

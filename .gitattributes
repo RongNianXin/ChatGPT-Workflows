@@ -10,6 +10,7 @@
 .github/scripts/HandoffTransactionWorkspace.mjs text eol=lf
 .github/scripts/HandoffWorkspaceAmendment.mjs text eol=lf
 .github/scripts/Takeover-Handoff.mjs text eol=lf
+.github/scripts/Recover-CommanderAuthority.mjs text eol=lf
 .github/scripts/HandoffWorkspaceScope.mjs text eol=lf
 .github/scripts/Prepare-Handoff.mjs text eol=lf
 .github/scripts/Inspect-WorkspaceTracking.mjs text eol=lf

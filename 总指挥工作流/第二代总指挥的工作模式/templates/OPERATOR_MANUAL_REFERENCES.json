@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "document_ref": "01-操作者操作手册.md",
-  "manual_sha256": "19a99354d77e6083ffb24e8f94e497f95c250fc95606567ee9bd17583436055b",
+  "manual_sha256": "4e4510b4a841e316874f0b66b5b3868a3c2f974b17628c88e10d21caf70689b4",
   "sections": [
     {
       "anchor": null,
@@ -27,7 +27,6 @@
         "scenario-interruption-recovery": "1G",
         "scenario-contextless-recovery": "1H",
         "scenario-handoff-repair": "1I",
-        "scenario-cross-project-rule-update": "1J",
         "scenario-normal-task": "2",
         "scenario-planning-to-work-items": "2A",
         "scenario-code-simplification": "2B",
@@ -187,7 +186,8 @@
     {
       "anchor": "scenario-commander-takeover",
       "references": {
-        "scenario-commander-takeover": "1D"
+        "scenario-commander-takeover": "1D",
+        "scenario-handoff-repair": "1I"
       },
       "history": []
     },
@@ -230,14 +230,6 @@
       "anchor": "scenario-handoff-repair",
       "references": {
         "scenario-commander-takeover": "1D"
-      },
-      "history": []
-    },
-    {
-      "anchor": "scenario-cross-project-rule-update",
-      "references": {
-        "scenario-commander-takeover": "1D",
-        "scenario-project-rule-broadcast": "0B"
       },
       "history": []
     },

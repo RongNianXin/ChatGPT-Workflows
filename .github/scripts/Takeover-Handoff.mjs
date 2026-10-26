@@ -62,7 +62,7 @@ function projectSourceFields(current) {
   }
   return projected;
 }
-function assertRenderedCurrentIdentity(bytes, recipient, generation, requireMarker = false) {
+export function assertRenderedCurrentIdentity(bytes, recipient, generation, requireMarker = false) {
   const text = bytes.toString('utf8');
   const begin = '<!-- CURRENT:BEGIN -->', end = '<!-- CURRENT:END -->';
   const start = text.indexOf(begin), finish = text.indexOf(end);
@@ -123,8 +123,12 @@ function renderCurrentV5(bytes, previous, recipient, eventId) {
 }
 // Versions 1..4 are frozen: historical journals keep their original byte
 // transformation for recovery, rollback and completed readback.
-function renderCurrent(bytes, previous, recipient, version, eventId) {
-  assert([1, 2, 3, 4, 5].includes(version), 'unsupported CURRENT render version');
+export function renderCurrent(bytes, previous, recipient, version, eventId) {
+  assert([1, 2, 3, 4, 5, 6].includes(version), 'unsupported CURRENT render version');
+  if (version === 6) {
+    const rendered = renderCurrentV5(bytes, previous, recipient, eventId).toString('utf8');
+    return Buffer.from(rendered.replace(/(<!-- CURRENT:BEGIN -->)([\s\S]*?)(<!-- CURRENT:END -->)/, (_, begin, current, end) => `${begin}${current.replace('接管协议：DIRECT_OPERATOR_V1', '接管协议：AUTHORITY_RECOVERY_V1').replace('状态：TAKEOVER_COMPLETED', '状态：AUTHORITY_RECOVERY_COMPLETED')}历史边界：此前未封存换任的规范转权未获证明；本次只确认接收方当前恢复，不补造旧签认\n${end}`));
+  }
   if (version === 5) return renderCurrentV5(bytes, previous, recipient, eventId);
   const legacy = replaceCurrent(bytes, previous, recipient);
   if (version === 1) return legacy;
@@ -142,7 +146,7 @@ function renderCurrent(bytes, previous, recipient, version, eventId) {
     return `${begin}${current}\n状态：TAKEOVER_COMPLETED（仅规范事务日志COMPLETED且完成回读一致后生效）\n完成事件：${eventId}\n本任务加载记录：待接收方独立建立，不继承来源已读\n接续门禁：来源目标、断点和队列保留；业务授权、依赖、预算及停止条件逐项重核\n下一行动方：接收方完成回读后核验原队列，继续当前有效授权范围内动作\n${end}`;
   }));
 }
-function buildPlan(previous, options) {
+export function buildControlPlan(previous, options, renderVersion = 5) {
   // Enablement is a navigation source, outside the four central write targets.
   // Older accepted documents may redundantly state the writer here. Detect that
   // compatibility limit before preparing an intent or touching central bytes.
@@ -154,7 +158,7 @@ function buildPlan(previous, options) {
     if (files.has(file)) { files.get(file).names.push(name); continue; }
     const before = fs.readFileSync(file);
     assert(byteDigest(before) === source.digest, 'source changed before transaction plan');
-    const after = renderCurrent(before, previous, options.recipient, 5, options.eventId);
+    const after = renderCurrent(before, previous, options.recipient, renderVersion, options.eventId);
     assertRenderedCurrentIdentity(after, options.recipient, previous.generation + 1, name === 'status_index');
     files.set(file, { names: [name], root_ref: source.root_ref || 'source_root', path_ref: source.path_ref, before: before.toString('base64'), after: after.toString('base64'), before_sha256: byteDigest(before), after_sha256: byteDigest(after) });
   }
@@ -201,7 +205,7 @@ function checkJournal(journal, options, history) {
   }
   return previous;
 }
-function recheckDependencies(journal, options, previous) {
+export function recheckDependencies(journal, options, previous) {
   const workflowRoot = options.workflowRoot || path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../总指挥工作流/第二代总指挥的工作模式');
   const manifestPath = options.manifestPath || path.join(workflowRoot, '规则刷新manifest.json');
   const manifest = verifyRuleManifest(workflowRoot, manifestPath);
@@ -276,7 +280,7 @@ export function takeoverHandoff(options) {
     assertControlReady(latest, options);
     const result = verifyHandoffCandidate({ ...options, nextGeneration: latest.generation + 1, nextWriterId: options.recipient.writerId, eventId: options.eventId });
     assert(['READY', 'READY_WITH_RESTRICTIONS'].includes(result.status) && !result.errors.length, `candidate verification failed: ${result.errors.join('; ')}`);
-    const plan = buildPlan(latest, options);
+    const plan = buildControlPlan(latest, options);
     let workspaceProjection = captureTransactionWorkspace(latest, plan, options);
     let intent;
     if (history.pending_intents.length) {
@@ -288,6 +292,7 @@ export function takeoverHandoff(options) {
     } else intent = prepareDirectTransition(options.sealDirectory, { ...options, expectedPreviousDigest: latest.seal_digest, workspace_projection_sha256: byteDigest(Buffer.from(JSON.stringify(workspaceProjection))) }).intent;
     const stamp = new Date().toISOString();
     const draft = structuredClone(validateWorkspaceAmendment(latest, options));
+    delete draft.authority_recovery;
     Object.assign(draft, { schema_version: 4, generation: latest.generation + 1, writer_id: options.recipient.writerId, old_writer_status: options.confirmation.old_writer_status, event_id: options.eventId, fact_cutoff: stamp, sealed_at: stamp, switch_status: 'COMPLETED', handoff_phase: 'TAKEOVER_COMPLETED', candidate_verification_status: result.status === 'READY' ? 'PASS' : 'PASS_WITH_RESTRICTIONS', control_handoff_confidence: 'HIGH', communications: { status: 'NONE' }, restrictions: result.remote.status === 'UNKNOWN' ? ['REMOTE_UNOBSERVED'] : [], remote: { ...draft.remote, status: result.remote.status, head: result.remote.head || null, observed_at: result.remote.observed_at || null }, transition: null, migration: null, seal_digest: '' });
     for (const item of plan) for (const name of item.names) { draft.sources[name].digest = item.after_sha256; draft.sources[name].fact_cutoff = stamp; }
     const journal = { protocol_version: 1, current_render_version: 5, ...(workspaceProjection ? { workspace_projection: workspaceProjection } : {}), status: 'PREPARED', event_id: options.eventId, previous_seal_digest: latest.seal_digest, confirmation: structuredClone(options.confirmation), intent_digest: intent.transition_digest, intent_path: `handoff-transition.${intent.previous_sequence}.${intent.transition_digest}.json`, plan, draft, prepared_at: stamp };
