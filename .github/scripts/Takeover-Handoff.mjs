@@ -124,7 +124,11 @@ function renderCurrentV5(bytes, previous, recipient, eventId) {
 // Versions 1..4 are frozen: historical journals keep their original byte
 // transformation for recovery, rollback and completed readback.
 export function renderCurrent(bytes, previous, recipient, version, eventId) {
-  assert([1, 2, 3, 4, 5, 6].includes(version), 'unsupported CURRENT render version');
+  assert([1, 2, 3, 4, 5, 6, 7].includes(version), 'unsupported CURRENT render version');
+  if (version === 7) {
+    const rendered = renderCurrentV5(bytes, previous, recipient, eventId).toString('utf8');
+    return Buffer.from(rendered.replace(/(<!-- CURRENT:BEGIN -->)([\s\S]*?)(<!-- CURRENT:END -->)/, (_, begin, current, end) => `${begin}${current.replace('接管协议：DIRECT_OPERATOR_V1', '接管协议：CONTROL_ONLY_V1').replace('状态：TAKEOVER_COMPLETED', '状态：CONTROL_ONLY_COMPLETED').replace('下一行动方：接收方完成回读后核验原队列，继续当前有效授权范围内动作', '下一行动方：接收方核账并保留未完事项；依赖历史成果完整性的业务恢复须另核证据和当前授权')}历史保全：HISTORICAL_WORKSPACE_PRESERVATION_UNVERIFIED；旧V1未获验证，本次当前观察不代签历史保全\n业务恢复：NOT_AUTHORIZED_BY_THIS_TRANSFER；不恢复产品、旧Goal、自动化、预算、远端或泛化通信\n${end}`));
+  }
   if (version === 6) {
     const rendered = renderCurrentV5(bytes, previous, recipient, eventId).toString('utf8');
     return Buffer.from(rendered.replace(/(<!-- CURRENT:BEGIN -->)([\s\S]*?)(<!-- CURRENT:END -->)/, (_, begin, current, end) => `${begin}${current.replace('接管协议：DIRECT_OPERATOR_V1', '接管协议：AUTHORITY_RECOVERY_V1').replace('状态：TAKEOVER_COMPLETED', '状态：AUTHORITY_RECOVERY_COMPLETED')}历史边界：此前未封存换任的规范转权未获证明；本次只确认接收方当前恢复，不补造旧签认\n${end}`));

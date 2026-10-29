@@ -17,7 +17,7 @@ const temp = fs.mkdtempSync(path.join(cache, 'authority-'));
 const workflowRoot = path.join(root, '总指挥工作流/第二代总指挥的工作模式'), manifestPath = path.join(workflowRoot, '规则刷新manifest.json');
 const platform = n => `${String(n).padStart(8, '0')}-1111-4111-8111-111111111111`;
 let sequence = 0, passed = 0;
-function fixture({ external = false, trackedEntry = false, unknownRemote = false, reservedWithdrawal = false } = {}) {
+function fixture({ external = false, trackedEntry = false, unknownRemote = false, reservedWithdrawal = false, controlOnly = false, historicalInventory = false, historicalRemoteUnknown = false, inventoryMismatch = null } = {}) {
   const base = path.join(temp, String(++sequence)), sourceRoot = path.join(base, 'source'), externalControlPlaneRoot = external ? path.join(base, 'external') : undefined;
   fs.mkdirSync(sourceRoot, { recursive: true }); if (external) fs.mkdirSync(externalControlPlaneRoot);
   const git = args => { const result = spawnSync('git', ['-C', sourceRoot, ...args], { encoding: 'utf8' }); assert.equal(result.status, 0, result.stderr); return result.stdout.trim(); };
@@ -33,8 +33,44 @@ function fixture({ external = false, trackedEntry = false, unknownRemote = false
   if (trackedEntry && !external) { git(['add', '-f', '--', '.control/central_entry.md']); git(['-c', 'user.name=Synthetic Test', '-c', 'user.email=test@example.invalid', 'commit', '--quiet', '-m', 'synthetic control layout']); }
   const draft = { schema_version: 4, record_type: 'handoff-seal', generation: 1, writer_id: 'SYNTHETIC-ONE', old_writer_status: 'UNKNOWN', fact_cutoff: stamp, sealed_at: stamp, event_id: 'synthetic-initial-material', sources, source_digest_status: 'PASS', rule_baseline: { rule_version: JSON.parse(fs.readFileSync(manifestPath)).rule_version, manifest_sha256: hash(fs.readFileSync(manifestPath)) }, objective: { summary: 'synthetic preserved objective', breakpoint: 'synthetic checkpoint' }, prohibitions: ['remote-write', 'business-resume'], communications: { status: 'NONE' }, workspace: { root_ref: '<PROJECT_ROOT>', ...readGitWorkspaceBaseline(sourceRoot), required_untracked: [] }, remote: { status: 'PASS', default_ref: 'refs/heads/main', head: git(['rev-parse', 'HEAD']), observed_at: stamp }, restrictions: [], control_handoff_confidence: 'HIGH', candidate_verification_status: 'PASS', switch_status: 'READY', handoff_phase: 'MATERIAL_PREPARED', runtime_acceptance_status: 'NOT_RUN', professional_acceptance_status: 'NOT_RUN', transition: null, migration: null, invalidation_conditions: ['source drift'], seal_digest: '' };
   if (reservedWithdrawal) draft.event_id = 'synthetic-reserved:withdrawal';
+  if (controlOnly) {
+    fs.writeFileSync(path.join(sourceRoot, 'result.txt'), 'old required result\n');
+    const required = ['result.txt', ...(!external ? ['.control/central_entry.md'] : [])].map(ref => ({ path_ref: ref, sha256: hash(fs.readFileSync(path.join(sourceRoot, ref))), reason: 'preserve current evidence' }));
+    draft.workspace = { root_ref: '<PROJECT_ROOT>', ...readGitWorkspaceBaseline(sourceRoot, required.map(f => f.path_ref)), required_untracked: required };
+  }
+  if (historicalInventory) {
+    draft.rule_baseline = { rule_version: '2026-01-01.1', manifest_sha256: '1'.repeat(64) };
+    if (historicalRemoteUnknown) {
+      draft.remote = { ...draft.remote, status: 'UNKNOWN', head: null, observed_at: null };
+      draft.restrictions = ['REMOTE_UNOBSERVED']; draft.switch_status = 'READY_WITH_RESTRICTIONS'; draft.candidate_verification_status = 'PASS_WITH_RESTRICTIONS';
+    }
+    const record = { record_type: 'handoff_inventory', generation: draft.generation, writer_id: draft.writer_id, platform_task_id: platform(1), rule_baseline: draft.rule_baseline, objective: draft.objective, remote: draft.remote };
+    if (inventoryMismatch === 'rule') record.rule_baseline = { ...record.rule_baseline, rule_version: 'WRONG' };
+    if (inventoryMismatch === 'generation') record.generation++;
+    if (inventoryMismatch === 'platform') record.platform_task_id = platform(9);
+    if (inventoryMismatch === 'remote') record.remote = { ...record.remote, head: '0'.repeat(40) };
+    const ref = '.control/historical-inventory.json', bytes = Buffer.from(JSON.stringify(record));
+    fs.writeFileSync(path.join(sourceRoot, ref), bytes);
+    draft.sources.handoff_inventory = { owner: 'synthetic', path_ref: ref, root_ref: 'source_root', digest: hash(bytes), fact_cutoff: stamp };
+  }
   const sealDirectory = path.join(sourceRoot, '.control/seals');
   const first = appendSeal(sealDirectory, draft, { sourceRoot, externalControlPlaneRoot });
+  if (controlOnly) {
+    fs.appendFileSync(path.join(sourceRoot, 'product.txt'), 'accepted uncommitted result\n');
+    git(['add', '--', 'product.txt']); git(['-c', 'user.name=Synthetic Test', '-c', 'user.email=test@example.invalid', 'commit', '--quiet', '-m', 'specialist result']);
+    fs.appendFileSync(path.join(sourceRoot, 'product.txt'), 'new dirty result\n');
+    fs.writeFileSync(path.join(sourceRoot, 'result.txt'), 'current required result\n');
+    const observation = structuredClone(first); observation.fact_cutoff = observation.sealed_at = new Date().toISOString();
+    if (historicalInventory) observation.rule_baseline = { rule_version: JSON.parse(fs.readFileSync(manifestPath)).rule_version, manifest_sha256: hash(fs.readFileSync(manifestPath)) };
+    const required = first.workspace.required_untracked.map(f => ({ ...f, sha256: hash(fs.readFileSync(path.join(sourceRoot, f.path_ref))) }));
+    observation.workspace = { root_ref: '<PROJECT_ROOT>', ...readGitWorkspaceBaseline(sourceRoot, required.map(f => f.path_ref)), required_untracked: required };
+    observation.remote = { ...observation.remote, status: 'PASS', head: git(['rev-parse', 'HEAD']), observed_at: observation.fact_cutoff };
+    observation.restrictions = []; observation.switch_status = 'READY'; observation.candidate_verification_status = 'PASS';
+    if (unknownRemote) { git(['remote', 'remove', 'origin']); observation.remote = { ...observation.remote, status: 'UNKNOWN', head: null, observed_at: null }; observation.restrictions = ['REMOTE_UNOBSERVED']; observation.switch_status = 'READY_WITH_RESTRICTIONS'; }
+    const recipient = { writerId: 'SYNTHETIC-TWO', platformTaskId: platform(2), projectKey: 'SYNTHETIC' };
+    const confirmation = { protocol_version: 2, origin: 'CURRENT_OPERATOR_MESSAGE', evidence_ref: 'synthetic-control-only-original-message', confirmed_at: new Date().toISOString(), project_key: 'SYNTHETIC', previous_seal_digest: first.seal_digest, observed_generation: 1, observed_writer_id: first.writer_id, observed_platform_id: platform(1), old_writer_status: 'STOPPED_DISPATCH', recipient_writer_id: recipient.writerId, recipient_platform_id: recipient.platformTaskId, scope: 'CONTROL_ONLY_TAKEOVER', transfer_confirmed: true, unique_writer_confirmed: true, historical_workspace: 'ACKNOWLEDGED_NOT_CERTIFIED' };
+    return { sourceRoot, externalControlPlaneRoot, sealDirectory, workflowRoot, manifestPath, observation, recipient, confirmation, eventId: 'synthetic-control-only', previous: first, historyBytes: fs.readdirSync(sealDirectory).map(file => [file, hash(fs.readFileSync(path.join(sealDirectory, file)))]), git };
+  }
   const oldRecipient = { writerId: 'SYNTHETIC-TWO', platformTaskId: platform(2), projectKey: 'SYNTHETIC' };
   const oldConfirmation = { protocol_version: 1, origin: 'CURRENT_OPERATOR_MESSAGE', evidence_ref: 'synthetic-old-original-message', confirmed_at: new Date().toISOString(), project_key: 'SYNTHETIC', previous_seal_digest: first.seal_digest, old_generation: 1, old_writer_id: first.writer_id, old_writer_status: 'STOPPED_DISPATCH', recipient_writer_id: oldRecipient.writerId, recipient_platform_id: oldRecipient.platformTaskId, scope: 'HANDOFF_PREPARE_COMMIT_ONLY', transfer_confirmed: true };
   const baseOptions = { sourceRoot, externalControlPlaneRoot, sealDirectory, workflowRoot, manifestPath };
@@ -54,7 +90,143 @@ function fixture({ external = false, trackedEntry = false, unknownRemote = false
   const confirmation = { protocol_version: 1, origin: 'CURRENT_OPERATOR_MESSAGE', evidence_ref: 'synthetic-current-original-message', confirmed_at: new Date().toISOString(), project_key: 'SYNTHETIC', previous_seal_digest: previous.seal_digest, observed_generation: 3, observed_writer_id: observation.writer_id, observed_platform_id: platform(3), old_writer_status: 'STOPPED_DISPATCH', recipient_writer_id: recipient.writerId, recipient_platform_id: recipient.platformTaskId, scope: 'AUTHORITY_RECOVERY_ONLY', transfer_confirmed: true, unique_writer_confirmed: true, unproved_transition: 'ACKNOWLEDGED_NOT_CERTIFIED' };
   return { ...baseOptions, observation, recipient, confirmation, eventId: 'synthetic-authority-recovery', previous, historyBytes, git };
 }
-function check(name, run) { run(); passed++; console.log(`PASS: ${name}`); }
+function check(name, run) { if (process.argv.includes('--control-only') && !name.startsWith('control-only')) return; if (process.argv.includes('--inventory') && !name.startsWith('control-only inventory')) return; run(); passed++; console.log(`PASS: ${name}`); }
+for (const historicalRemoteUnknown of [false, true]) check(`control-only inventory preserves historical rules and remote while observing current facts ${historicalRemoteUnknown}`, () => {
+  const f = fixture({ controlOnly: true, historicalInventory: true, historicalRemoteUnknown });
+  const file = path.join(f.sourceRoot, f.previous.sources.handoff_inventory.path_ref), before = fs.readFileSync(file);
+  const result = recoverCommanderAuthority(f); assert.equal(result.status, 'COMPLETED');
+  const live = verifyChain(f.sealDirectory, f); assert.equal(live.status, 'PASS', live.errors.join('; '));
+  assert.notEqual(live.latest.rule_baseline.rule_version, f.previous.rule_baseline.rule_version);
+  assert.equal(live.latest.remote.status, 'PASS'); assert.equal(live.latest.remote.head, f.git(['rev-parse', 'HEAD']));
+  assert(!live.latest.restrictions.includes('REMOTE_UNOBSERVED')); assert.equal(result.business_resume_allowed, false);
+  assert(fs.readFileSync(file).equals(before)); assert.equal(live.latest.sources.handoff_inventory.digest, f.previous.sources.handoff_inventory.digest);
+});
+for (const inventoryMismatch of ['rule', 'generation', 'platform', 'remote']) check(`control-only inventory still rejects inconsistent historical ${inventoryMismatch}`, () => {
+  const f = fixture({ controlOnly: true, historicalInventory: true, inventoryMismatch });
+  const file = path.join(f.sourceRoot, '.control/status_index.md'), before = fs.readFileSync(file);
+  assert.throws(() => recoverCommanderAuthority(f), /HANDOFF_INVENTORY_MISMATCH/);
+  assert(fs.readFileSync(file).equals(before)); assert.equal(readChain(f.sealDirectory).authority_intents.length, 0);
+});
+check('control-only transfers central authority without certifying old dirty preservation', () => {
+  const f = fixture({ controlOnly: true });
+  const product = fs.readFileSync(path.join(f.sourceRoot, 'product.txt')), required = fs.readFileSync(path.join(f.sourceRoot, 'result.txt'));
+  assert.equal(verifyHandoffCandidate(f).status, 'BLOCKED');
+  const result = recoverCommanderAuthority(f);
+  assert.equal(result.status, 'COMPLETED'); assert.equal(result.generation, 2); assert.equal(result.protocol, 'CONTROL_ONLY_V1');
+  assert.equal(result.historical_workspace, 'NOT_CERTIFIED'); assert.equal(result.business_resume_allowed, false);
+  assert(result.restrictions.includes('HISTORICAL_WORKSPACE_PRESERVATION_UNVERIFIED'));
+  assert(fs.readFileSync(path.join(f.sourceRoot, 'product.txt')).equals(product)); assert(fs.readFileSync(path.join(f.sourceRoot, 'result.txt')).equals(required));
+  for (const [file, h] of f.historyBytes) assert.equal(hash(fs.readFileSync(path.join(f.sealDirectory, file))), h);
+  const live = verifyChain(f.sealDirectory, f); assert.equal(live.status, 'PASS');
+  const entry = fs.readFileSync(path.join(f.sourceRoot, '.control/central_entry.md'), 'utf8');
+  assert.match(entry, /CONTROL_ONLY_V1/); assert.match(entry, /HISTORICAL_WORKSPACE_PRESERVATION_UNVERIFIED/); assert.match(entry, /Queue: A WAIT; B BLOCKED/); assert.match(entry, /Budget: ENDED; remaining=0/);
+  const ref = live.latest.workspace.required_untracked.find(f => f.path_ref === '.control/central_entry.md');
+  assert.equal(ref.sha256, hash(Buffer.from(entry)));
+  assert.equal(recoverCommanderAuthority(f).generation, 2);
+});
+for (const variant of ['scope', 'version', 'acknowledgment', 'writer', 'platform', 'generation', 'not-stopped', 'central', 'source-owner', 'objective', 'required-scope', 'required-hash', 'branch', 'remote-target', 'excluded-scope']) check(`control-only rejects invalid ${variant} before central writes`, () => {
+  const f = fixture({ controlOnly: true });
+  const file = path.join(f.sourceRoot, '.control/status_index.md'), before = fs.readFileSync(file);
+  if (variant === 'scope') f.confirmation.scope = 'HANDOFF_PREPARE_COMMIT_ONLY';
+  if (variant === 'version') f.confirmation.protocol_version = 1;
+  if (variant === 'acknowledgment') f.confirmation.historical_workspace = 'PASS';
+  if (variant === 'writer') f.confirmation.recipient_writer_id = 'OTHER';
+  if (variant === 'platform') f.confirmation.recipient_platform_id = platform(9);
+  if (variant === 'generation') { f.observation.generation++; f.confirmation.observed_generation++; }
+  if (variant === 'not-stopped') f.confirmation.old_writer_status = 'UNKNOWN';
+  if (variant === 'central') { fs.appendFileSync(file, 'unauthorized drift'); f.observation.sources.status_index.digest = hash(fs.readFileSync(file)); }
+  if (variant === 'source-owner') f.observation.sources.status_index.owner = 'OTHER';
+  if (variant === 'objective') f.observation.objective.breakpoint = 'pretend product done';
+  if (variant === 'required-scope') f.observation.workspace.required_untracked.pop();
+  if (variant === 'required-hash') f.observation.workspace.required_untracked[0].sha256 = '0'.repeat(64);
+  if (variant === 'branch') f.observation.workspace.branch = 'other';
+  if (variant === 'remote-target') f.observation.remote.default_ref = 'refs/heads/other';
+  if (variant === 'excluded-scope') f.observation.workspace.inflight_scope = { excluded_roots: [] };
+  const actualBefore = fs.readFileSync(file);
+  assert.throws(() => recoverCommanderAuthority(f));
+  assert(fs.readFileSync(file).equals(actualBefore)); assert.equal(readChain(f.sealDirectory).authority_intents.length, 0);
+  if (variant !== 'central') assert(actualBefore.equals(before));
+});
+for (const stage of ['after-intent', 'after-journal', 'after-write-1', 'after-seal']) check(`control-only recovers ${stage} without another generation`, () => {
+  const f = fixture({ controlOnly: true }); const product = fs.readFileSync(path.join(f.sourceRoot, 'product.txt'));
+  assert.throws(() => recoverCommanderAuthority({ ...f, fault: point => { if (point === stage) throw new Error('control-only interruption'); } }), /control-only interruption/);
+  assert.equal(recoverCommanderAuthority(f).generation, 2); assert.equal(recoverCommanderAuthority(f).generation, 2);
+  assert(fs.readFileSync(path.join(f.sourceRoot, 'product.txt')).equals(product)); assert.equal(verifyChain(f.sealDirectory, f).status, 'PASS');
+});
+for (const change of ['product', 'index', 'required', 'confirmation']) check(`control-only rejects frozen ${change} drift and rollback preserves it`, () => {
+  const f = fixture({ controlOnly: true });
+  assert.throws(() => recoverCommanderAuthority({ ...f, fault: point => { if (point === 'after-write-1') throw new Error('control-only interruption'); } }));
+  if (change === 'product' || change === 'index') fs.appendFileSync(path.join(f.sourceRoot, 'product.txt'), 'concurrent update\n');
+  if (change === 'index') f.git(['add', '--', 'product.txt']);
+  if (change === 'required') fs.appendFileSync(path.join(f.sourceRoot, 'result.txt'), 'concurrent required update\n');
+  const changedConfirmation = { ...f.confirmation, evidence_ref: 'another-message' };
+  assert.throws(() => recoverCommanderAuthority(change === 'confirmation' ? { ...f, confirmation: changedConfirmation } : f));
+  const product = fs.readFileSync(path.join(f.sourceRoot, 'product.txt')), required = fs.readFileSync(path.join(f.sourceRoot, 'result.txt'));
+  assert.equal(rollbackCommanderAuthority(f).status, 'ROLLED_BACK_STOPPED');
+  assert(fs.readFileSync(path.join(f.sourceRoot, 'product.txt')).equals(product)); assert(fs.readFileSync(path.join(f.sourceRoot, 'result.txt')).equals(required));
+  assert.throws(() => recoverCommanderAuthority(f), /withdrawn/);
+});
+check('control-only immutable intent tampering and third control bytes never overwrite evidence', () => {
+  const f = fixture({ controlOnly: true });
+  assert.throws(() => recoverCommanderAuthority({ ...f, fault: point => { if (point === 'after-journal') throw new Error('control-only interruption'); } }));
+  const intent = readChain(f.sealDirectory).authority_intents[0], file = path.join(f.sourceRoot, '.control/current_view.md');
+  fs.appendFileSync(file, 'third bytes'); const before = fs.readFileSync(file);
+  assert.throws(() => recoverCommanderAuthority(f), /control byte conflict/); assert.throws(() => rollbackCommanderAuthority(f), /control byte conflict/); assert(fs.readFileSync(file).equals(before));
+  const intentFile = path.join(f.sealDirectory, `handoff-authority-recovery.${intent.previous_sequence}.${intent.recovery_digest}.json`);
+  intent.transaction.confirmation.historical_workspace = 'PASS'; fs.writeFileSync(intentFile, JSON.stringify(intent));
+  assert.throws(() => recoverCommanderAuthority(f), /history invalid/);
+});
+check('control-only external authority and unknown remote keep independent restrictions', () => {
+  const f = fixture({ controlOnly: true, external: true, unknownRemote: true });
+  const result = recoverCommanderAuthority(f); assert.equal(result.generation, 2);
+  assert.deepEqual(result.restrictions, ['REMOTE_UNOBSERVED', 'HISTORICAL_WORKSPACE_PRESERVATION_UNVERIFIED']);
+  assert.equal(verifyChain(f.sealDirectory, f).status, 'PASS');
+});
+check('control-only completion forbids rollback and ordinary erasure of the historical restriction', () => {
+  const f = fixture({ controlOnly: true }); recoverCommanderAuthority(f); assert.throws(() => rollbackCommanderAuthority(f), /completion/);
+  const latest = readChain(f.sealDirectory).records.at(-1);
+  for (const action of ['drop', 'accept']) {
+    const draft = { ...structuredClone(latest), schema_version: 4, handoff_phase: 'MATERIAL_PREPARED', switch_status: 'READY_WITH_RESTRICTIONS', event_id: `synthetic-launder-${action}`, seal_digest: '' };
+    delete draft.authority_recovery;
+    if (action === 'drop') draft.restrictions = []; else draft.runtime_acceptance_status = 'PASS';
+    assert.throws(() => appendSeal(f.sealDirectory, draft, f), /restriction cannot be cleared/);
+  }
+});
+check('control-only CLI inspect is read-only and commit keeps its limited result', () => {
+  const f = fixture({ controlOnly: true }), config = path.join(path.dirname(f.sourceRoot), 'receiver.json');
+  fs.writeFileSync(config, JSON.stringify(Object.fromEntries(Object.entries(f).filter(([key]) => !['git', 'historyBytes', 'previous'].includes(key)))));
+  const files = fs.readdirSync(f.sealDirectory);
+  const cli = mode => spawnSync(process.execPath, [path.join(root, '.github/scripts/Recover-CommanderAuthority.mjs'), mode, config], { encoding: 'utf8' });
+  const inspect = cli('inspect'); assert.equal(inspect.status, 0, inspect.stderr); assert.deepEqual(fs.readdirSync(f.sealDirectory), files);
+  assert.equal(JSON.parse(inspect.stdout).protocol, 'CONTROL_ONLY_V1'); assert.equal(JSON.parse(inspect.stdout).business_resume_allowed, false); assert.equal(JSON.parse(inspect.stdout).writes, 0);
+  const commit = cli('commit'); assert.equal(commit.status, 0, commit.stderr); assert.equal(JSON.parse(commit.stdout).business_resume_allowed, false);
+});
+check('control-only cannot discard a pending ordinary transition or replace a pending authority event', () => {
+  const f = fixture({ controlOnly: true });
+  prepareTransition(f.sealDirectory, { ...f, nextGeneration: 2, nextWriterId: 'OTHER', eventId: 'synthetic-pending-normal' });
+  assert.throws(() => recoverCommanderAuthority(f), /unresolved/); assert.equal(readChain(f.sealDirectory).authority_intents.length, 0);
+  const g = fixture({ controlOnly: true });
+  assert.throws(() => recoverCommanderAuthority({ ...g, fault: point => { if (point === 'after-intent') throw new Error('synthetic stop'); } }), /synthetic stop/);
+  assert.throws(() => recoverCommanderAuthority({ ...g, eventId: 'synthetic-replacement' }), /pending/);
+  assert.equal(readChain(g.sealDirectory).authority_intents.length, 1);
+});
+check('control-only frozen rule fingerprint drift rejects recovery without further central writes', () => {
+  const f = fixture({ controlOnly: true }), manifest = path.join(path.dirname(f.sourceRoot), 'manifest.json');
+  fs.copyFileSync(manifestPath, manifest); f.manifestPath = manifest;
+  assert.throws(() => recoverCommanderAuthority({ ...f, fault: point => { if (point === 'after-write-1') throw new Error('synthetic stop'); } }), /synthetic stop/);
+  const tx = readChain(f.sealDirectory).authority_intents[0].transaction;
+  const before = tx.plan.map(item => hash(fs.readFileSync(path.join(f.sourceRoot, item.path_ref))));
+  fs.appendFileSync(manifest, '\n');
+  assert.throws(() => recoverCommanderAuthority(f), /manifest|rule/i);
+  assert.deepEqual(tx.plan.map(item => hash(fs.readFileSync(path.join(f.sourceRoot, item.path_ref)))), before);
+});
+check('control-only rejects source path substitution even with valid current bytes', () => {
+  const f = fixture({ controlOnly: true }), source = f.observation.sources.current_view;
+  fs.copyFileSync(path.join(f.sourceRoot, source.path_ref), path.join(f.sourceRoot, '.control/alias.md'));
+  source.path_ref = '.control/alias.md';
+  assert.throws(() => recoverCommanderAuthority(f), /sealed source changed/);
+  assert.equal(readChain(f.sealDirectory).authority_intents.length, 0);
+});
 function preserved(f) { for (const [file, digest] of f.historyBytes) assert.equal(hash(fs.readFileSync(path.join(f.sealDirectory, file))), digest, 'old history changed'); assert.match(fs.readFileSync(path.join(f.sourceRoot, 'product.txt'), 'utf8'), /accepted uncommitted result/); assert.equal(fs.readFileSync(path.join(f.sourceRoot, 'result.txt'), 'utf8'), 'accepted untracked result\n'); }
 for (const variant of ['blocked', 'non-material', 'before-observation', 'before-confirmation', 'null-prepared-at', 'empty-prepared-at']) check(`plan and commit reject invalid authority baseline ${variant}`, () => {
   const f = fixture({ external: true });

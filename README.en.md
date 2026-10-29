@@ -36,6 +36,12 @@ Readable, editable rules and tools for stating goals, verifying work, and resumi
 > [!TIP]
 > **Maintenance status: active.** New workflows, troubleshooting notes, and local tools are added after verification. See the [changelog](CHANGELOG.md) and commit history for the actual record.
 
+### Next update preview: less repetitive work for the AI
+
+We plan to package selected deterministic, verifiable workflow steps as scripts that the AI can call on demand through the existing natural-language interface. Understanding, reasoning, decisions, and required human confirmation remain outside those fixed steps. The goal is to reduce repetitive operations, waiting, and token use; benefits must be measured, and equivalent results across models are not guaranteed.
+
+Windows is the primary validation environment. Local script execution on iOS is not currently promised, and iOS support must not be confused with macOS support. Existing text-based procedures remain available when a new entry point has not passed compatibility checks; users are not required to install a new runtime or switch to a command line. This is a preview, not the rollout of this refactor. A separate tag will preserve the pre-refactor version, which remains subject to its original environment requirements and does not imply existing iOS support.
+
 ## Start here
 
 | If you want to... | Open... |
@@ -170,4 +176,4 @@ Released under the [MIT License](LICENSE).
 
 This project acknowledges the [LINUX DO](https://linux.do/) community and supports sincere, friendly knowledge sharing and exchange.
 
-<!-- README-SOURCE-SHA256: a8d0d3877724f7ab76e6ff96a31ffcda0a28b03687caf638b96b6e76f147997d -->
+<!-- README-SOURCE-SHA256: 8fcc7a69dc6712e7515e919b638c16974ada5353733481779115d1072496516f -->

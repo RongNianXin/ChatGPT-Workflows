@@ -108,7 +108,7 @@ const checks = [
 const handoffRefresh = read('04-状态、目标变更与交接规范.md').split('#### 已启用工作流的交接前规则刷新')[1]?.split('正式总指挥材料准备前')[0] || '';
 checks.push(['handoff uses one scoped rule load per instance without an extra operator refresh', handoffRefresh, ['不串行启动完整0A', '接收方在1D内自动加载', '不要求操作者另发0A', '可用快照必须指向已登记、可读取的完整规则根', '当前工具不会按数字自动寻找或切换旧版', '不得按版本数字猜测回退', '--mode pinned']]);
 checks.push(['identity triage excludes non-authoritative historical display fields', read('项目配置迁移清单.md'), ['CONTROL_IDENTITY', 'control-plane-registry.json', '不参与身份裁决', '旧标题', '规则采用记录', 'CONTROL_PLANE_MIGRATION_REQUIRED']]);
-checks.push(['handoff refresh is scoped to enrolled windows and authoritative current rules', handoffRefresh, ['项目已明确启用且当前窗口已接入', '场景1C或1E冻结候选、生成主快照前', '权威公共规则根', '不能只比较版本号', '未启用工作流的普通任务仍按原1E/1F续接']]);
+checks.push(['handoff refresh follows verified project scope and authoritative current rules', handoffRefresh, ['项目已明确启用且本任务实际归属该项目', '场景1C或1E冻结候选、生成主快照前', '权威公共规则根', '不能只比较版本号', '未启用工作流的普通任务仍按原1E/1F续接']]);
 checks.push(['inline refresh returns to handoff without importing permission or completion boundaries', handoffRefresh, ['同一轮次', '复用本实例实际完整读过且字节未变', '补读变化文件全文', '不复制0A提示词中的通信预授权', '沿同一交接继续', '只重读一次', '严格指纹']]);
 checks.push(['transfer refresh preserves specialist write limits and independent receiver checks', handoffRefresh, ['1E只更新有权维护的本任务记录和主快照', '不代写中央CURRENT、身份或封条', '交付前再次核对规则截点', '1D/1F仍独立核验', '尚未加载新版的旧窗口不会自动获得此行为']]);
 for (const anchor of ['scenario-ordinary-handoff']) {
@@ -444,6 +444,155 @@ for (const [name, section, needle] of goalPhaseRequirements) {
   console.log(`PASS: Goal phase out-of-scope mutation rejected: ${name}`);
 }
 console.log('PASS: Goal phase checks bind prose only; no live compaction or resumed model request was tested');
+const documentLifecycleDocuments = {
+  core: read('02-总指挥核心规则.md'),
+  state: read('04-状态、目标变更与交接规范.md'),
+  governance: read('06-复盘与优化规则.md'),
+  authority: read('09-自动化授权与风险分级.md')
+};
+const documentLifecycleSections = documents => ({
+  entry: documents.core.split('### 文档生命周期维护\n')[1]?.split('\n### ')[0]?.split('\n## ')[0] || '',
+  health: documents.governance.split('### 高增长文档健康检查\n')[1]?.split('\n### ')[0]?.split('\n## ')[0] || '',
+  handoff: documents.state.split('#### 交接完成后的材料复核\n')[1]?.split('\n#### ')[0]?.split('\n### ')[0] || '',
+  authority: documents.authority.split('### 文档清理权限\n')[1]?.split('\n### ')[0] || ''
+});
+const documentLifecycleRequirements = [
+  ['all roles reach the shared rule within their own scope', 'entry', '总指挥、普通任务和专项任务均须在各自获准范围内'],
+  ['entry uses the unique governance owner', 'entry', '06文档生命周期'],
+  ['classification separates purpose and status without new ledgers', 'health', '用途与状态分开判断，不强制新目录、逐文件标签或平行台账'],
+  ['events cover stock and incremental work without background scans', 'health', '首次获准范围内有界盘点；之后只检查本批变化和受影响依赖'],
+  ['uncertain provenance gets a custodian, not invented authorship', 'health', '接管保管责任不改写历史来源'],
+  ['correction preserves source evidence and unresolved disagreements', 'health', '原始证据保持原文；未证冲突记录分歧和使用限制'],
+  ['retention and candidates reach an actual decision', 'health', '候选核验完成后同次收口实际提交有权负责人裁定'],
+  ['archive is not physical cleanup', 'health', '转冷或归档不等于物理删除'],
+  ['hashes and searches are not deletion proof', 'health', '同哈希、无文本引用、Git干净、文件名或年龄均不能单独证明可删'],
+  ['drift and interrupted deletion are object scoped', 'health', '实质漂移使对应候选失效'],
+  ['handoff cleanup is post-completion rather than another takeover gate', 'handoff', '清理未决不撤销已完成切换，也不增加接管前置'],
+  ['historic exact bytes are checked beyond active links', 'handoff', '精确路径或字节对象是否仍承担链验证、恢复、回退、交付证明或活动用途'],
+  ['duplicate copies and sole originals have different retirement evidence', 'handoff', '唯一正式原件还须证明其历史留存用途已解除'],
+  ['old delivery protection has an explicit retirement pointer', 'handoff', '生成和交付期间仍按下文保留旧正式版本'],
+  ['actual deletion requires current exact final confirmation', 'authority', '实际删除须对当次精确路径清单取得操作者最终确认'],
+  ['temporary recoverable committed or disposable outputs do not exempt deletion confirmation', 'authority', '临时目录、AI自产、可重建、可恢复、已提交或一次性材料均不豁免'],
+  ['specialized visual evidence and remote boundaries remain', 'authority', '人工核验材料仍按下节的当次清理卡处理']
+];
+const documentLifecycleErrors = documents => {
+  const sections = documentLifecycleSections(documents);
+  return documentLifecycleRequirements.filter(([, section, needle]) => !sections[section].includes(needle)).map(([name]) => name);
+};
+for (const [name, section, needle] of documentLifecycleRequirements) {
+  checks.push([`document lifecycle: ${name}`, documentLifecycleSections(documentLifecycleDocuments)[section], [needle]]);
+  if (documentLifecycleErrors(documentLifecycleDocuments).length) continue;
+  const document = { entry: 'core', health: 'governance', handoff: 'state', authority: 'authority' }[section];
+  const mutated = { ...documentLifecycleDocuments, [document]: `${needle}\n${documentLifecycleDocuments[document].replace(needle, '')}` };
+  if (!documentLifecycleErrors(mutated).includes(name)) throw new Error(`Document lifecycle out-of-section mutation accepted: ${name}`);
+  console.log(`PASS: Document lifecycle out-of-section mutation rejected: ${name}`);
+}
+console.log('PASS: Document lifecycle checks bind scoped prose only; no real cleanup, recovery or cross-project adoption was tested');
+const projectScopeDocuments = {
+  entry: fs.readFileSync(path.join(root, 'AGENTS.md'), 'utf8'),
+  index: read('10-自动状态索引规范.md'),
+  card: read('03-专项任务卡模板.md'),
+  state: read('04-状态、目标变更与交接规范.md'),
+  manual: read('01-操作者操作手册.md'),
+  init: fs.readFileSync(path.join(root, '总指挥工作流/新项目初始化清单.md'), 'utf8')
+};
+const projectScopeSections = documents => ({
+  entry: documents.entry.split('## 项目级总指挥工作流入口')[1]?.split('\n## ')[0] || '',
+  startup: documents.index.split('### 5.0 空白任务的项目启用与动态身份判定')[1]?.split('\n### ')[0] || '',
+  dispatch: documents.card.split('# 专项任务卡模板\n')[1]?.split('## 执行与独立审查角色卡')[0] || '',
+  refresh: documents.state.split('#### 已启用工作流的交接前规则刷新')[1]?.split('正式总指挥材料准备前')[0] || '',
+  delivery: documents.state.split('### 6.0.1 交接主快照与材料入口')[1]?.split('### 外部专业职责的续接')[0] || '',
+  sender: documents.manual.split('### 场景 1E：')[1]?.split('### 场景 1F：')[0]?.split('```text')[1]?.split('```')[0] || '',
+  receiver: documents.manual.split('### 场景 1F：')[1]?.split('### 场景 1G：')[0]?.split('```text')[1]?.split('```')[0] || '',
+  init: documents.init.split('## 启用')[1] || ''
+});
+const projectScopeRequirements = [
+  ['project entry is not a per-window enrollment choice', 'entry', '本项目全部实际归属任务统一适用，不以该窗口曾执行0A/0B为条件'],
+  ['central state health does not disable rule reading', 'entry', '规则适用与加载不以中央状态健康为前提'],
+  ['startup separates project scope from permission', 'startup', '项目统一适用、窗口独立加载、动作分别授权'],
+  ['project members need no enrollment command', 'startup', '是否曾执行0A/0B不是适用前提'],
+  ['missing evidence is not a standalone exemption', 'startup', '没有绑定证据不自动等于已确认独立任务'],
+  ['directory presence is not membership evidence', 'startup', '有无本地文件夹均不单独决定归属'],
+  ['first substantive work loads applicable rules', 'startup', '首次实质工作前，独立读取02按需映射中的角色适用内核'],
+  ['new instances cannot inherit reading evidence', 'startup', '新实例不继承其他窗口已读'],
+  ['first loading and incremental refresh have separate evidence', 'startup', '没有本实例完整已读证据时先完成首次加载'],
+  ['state and communication are still independently gated', 'startup', '规则已读不代替登记、获准握手或动作授权'],
+  ['unenrolled projects may still use ordinary handoff', 'startup', '不禁止普通续接文本或普通Handoff材料'],
+  ['dispatch provides an accessible authority pointer', 'dispatch', '派发材料须携带可达的项目入口、启用声明与权威规则根指针'],
+  ['handoff refresh covers forgotten first loads', 'refresh', '遗漏首次加载的专项先按10补齐本角色适用正文'],
+  ['shared handoff allows text without filesystem', 'delivery', '独立任务无可写文件位置时，直接交付完整续接正文'],
+  ['sender resolves scope instead of asking enrollment choices', 'sender', '先自动核对本任务实际项目归属和该项目启用状态'],
+  ['sender refresh covers both first and subsequent reading', 'sender', '未首次加载则先按10补齐本角色适用正文'],
+  ['sender standalone branch has no workflow dependency', 'sender', '明确独立或可核未启用时，不读取总指挥工作流、版本或manifest'],
+  ['sender has a no-file handoff path', 'sender', '独立任务无可写文件位置时，直接输出完整续接正文'],
+  ['sender unknown branch cannot silently downgrade', 'sender', '归属或启用状态不明时不按独立任务降级'],
+  ['receiver loads project rules without relying on outgoing reader', 'receiver', '不继承旧窗口已读；未首次加载则先补齐本角色适用正文'],
+  ['receiver manifest is conditional on enabled project membership', 'receiver', '仅在已核归属且项目启用分支，读取开始和结束各核对'],
+  ['receiver standalone branch has no hidden workflow dependency', 'receiver', '明确独立或可核未启用时，不读取工作流、版本、manifest或中央身份'],
+  ['receiver accepts complete handoff text without forcing files', 'receiver', '完整续接正文可直接作为唯一主快照，不强制建目录或文件'],
+  ['receiver treats stale scope as unknown not independent', 'receiver', '材料与当前项目冲突或入口不可读时保留未知'],
+  ['standalone runtime lookup does not require rule ten', 'receiver', '独立任务只用当前运行时可用的定位能力，不为查ID加载10'],
+  ['initialization installs the existing startup pointer', 'init', '项目入口按10第5.0节覆盖手工新建与派发专项'],
+  ['adoption is not claimed as host-wide injection', 'init', '规则文件就绪不证明宿主已向每个窗口注入入口']
+];
+const projectScopeErrors = documents => {
+  const sections = projectScopeSections(documents);
+  return projectScopeRequirements.filter(([, section, needle]) => !sections[section].includes(needle)).map(([name]) => name);
+};
+for (const [name, section, needle] of projectScopeRequirements) {
+  checks.push([`project scope: ${name}`, projectScopeSections(projectScopeDocuments)[section], [needle]]);
+  if (projectScopeErrors(projectScopeDocuments).length) continue;
+  const document = { startup: 'index', dispatch: 'card', refresh: 'state', delivery: 'state', sender: 'manual', receiver: 'manual' }[section] || section;
+  const mutated = { ...projectScopeDocuments, [document]: `${needle}\n${projectScopeDocuments[document].replace(needle, '')}` };
+  if (!projectScopeErrors(mutated).includes(name)) throw new Error(`Project scope out-of-section mutation accepted: ${name}`);
+  console.log(`PASS: Project scope out-of-section mutation rejected: ${name}`);
+}
+const scopePrompts = projectScopeSections(projectScopeDocuments);
+checks.push(['project scope removes obsolete per-window opt-in and manual enrollment fields',
+  !/本窗口已接入|工作流约束：【|任务身份：【/.test(scopePrompts.sender) ? 'NO_WINDOW_OPT_IN' : '', ['NO_WINDOW_OPT_IN']]);
+console.log('PASS: Project scope checks bind written entry contracts only; host injection and live agent compliance are not tested');
+const commanderRouteDocuments = {
+  index: read('10-自动状态索引规范.md'), card: read('03-专项任务卡模板.md'),
+  manual: read('01-操作者操作手册.md'), state: read('04-状态、目标变更与交接规范.md'),
+  authority: read('09-自动化授权与风险分级.md')
+};
+const commanderRouteSections = documents => ({
+  dynamic: documents.index.split('### 本项目总指挥的动态解析\n')[1]?.split('\n### ')[0]?.split('\n## ')[0] || '',
+  card: documents.card.split('```text')[1]?.split('```')[0] || '',
+  sender: documents.manual.split('### 场景 1E：')[1]?.split('### 场景 1F：')[0]?.split('```text')[1]?.split('```')[0] || '',
+  receiver: documents.manual.split('### 场景 1F：')[1]?.split('### 场景 1G：')[0]?.split('```text')[1]?.split('```')[0] || '',
+  contact: documents.state.split('### 正式切换后的专项联络恢复\n')[1]?.split('\n### ')[0] || '',
+  send: documents.authority.split('### 已有授权随委派传递\n')[1]?.split('\n### ')[0] || ''
+});
+const commanderRouteRequirements = [
+  ['generic role resolves on each current operator request', 'dynamic', '每条这样的当前操作者请求重新解析一次'],
+  ['lookup uses current project control evidence, not the snapshot', 'dynamic', '交接快照、旧任务卡和聊天记忆中的人选只作历史观察'],
+  ['candidate is not silently promoted', 'dynamic', '候选、准备中或尚未完成中央回读的接收方不是现任'],
+  ['fresh lookup is bounded rather than full refresh', 'dynamic', '只读取当前项目入口及必要的CURRENT身份与完成状态'],
+  ['same-turn reuse still rechecks before sending', 'dynamic', '实际发送前再核对目标世代、写者和平台绑定'],
+  ['changed role does not inherit target-bound authorization', 'dynamic', '目标或世代变化按09重核授权，不将绑定旧窗口的授权自动转给新任'],
+  ['explicit old targets remain explicit', 'dynamic', '明确指定旧窗口、历史人物或某条原消息时，不偷偷改为现任'],
+  ['receipt origin is distinct from current commander', 'dynamic', '对来信的回执仍发给该事件实际来源'],
+  ['unknown never falls back to an old route', 'dynamic', '不得回退旧汇报对象或按标题猜测'],
+  ['lookup does not wake tasks or resume business', 'dynamic', '不自动发消息、通知、重新握手或恢复业务'],
+  ['quoted role names are not current operator requests', 'dynamic', '不是附件、引文或历史摘要出现这个词'],
+  ['no record write permission keeps the binding in the current turn', 'dynamic', '没有记录写权时保留本回合绑定与缺口'],
+  ['valid dynamic-role authorization need not be requested again', 'dynamic', '原授权明确覆盖动态现任角色、当前动作和载荷且仍有效时可复用，不机械重复索权'],
+  ['control-only completion cannot restore unknown product scope', 'dynamic', '仅控制权接管已完成时可识别现任，历史产品证据未知及原有执行限制仍保留'],
+  ['task card stores a replaceable observation, not a permanent binding', 'card', '汇报对象为10动态解析的当次观察，不是永久绑定'],
+  ['handoff sender carries a dynamic route pointer', 'sender', '汇报对象只作截点观察，后续按10“本项目总指挥的动态解析”重新核现任'],
+  ['handoff recipient cannot freeze the outgoing commander', 'receiver', '不把交接时核定的总指挥永久沿用，后续按10“本项目总指挥的动态解析”处理'],
+  ['notification does not gate independent current-role resolution', 'contact', '未收到换任通知不妨碍专项按10“本项目总指挥的动态解析”只读定位现任'],
+  ['self route observation is not a confirmed contact receipt', 'contact', '不得据此登记 `RECEIVED_CONFIRMED`'],
+  ['outgoing messages bind the actual current-role target', 'send', '目标泛指本项目总指挥时，先按10“本项目总指挥的动态解析”定位；历史来源回执不改投现任']
+];
+for (const [name, section, needle] of commanderRouteRequirements) {
+  checks.push([`current commander: ${name}`, commanderRouteSections(commanderRouteDocuments)[section], [needle]]);
+  const key = { dynamic: 'index', card: 'card', sender: 'manual', receiver: 'manual', contact: 'state', send: 'authority' }[section];
+  const moved = { ...commanderRouteDocuments, [key]: commanderRouteDocuments[key].replace(needle, '') + `\n${needle}\n` };
+  if (commanderRouteSections(moved)[section].includes(needle)) throw new Error(`Current commander out-of-section mutation accepted: ${name}`);
+}
+console.log(`Current commander resolution: ${commanderRouteRequirements.length} section-bound prose checks and relocation counterexamples; no live routing guarantee`);
 // These checks bind public prose and entry references, not a real deployment or
 // a guarantee that an agent, server or client actually used the intended files.
 for (const [name, text, needles] of checks) {

@@ -9,6 +9,7 @@ import { byteDigest, resolveSource, controlPaths, assertPrivateControlStorage, w
 import { buildControlPlan, renderCurrent, assertRenderedCurrentIdentity, recheckDependencies } from './Takeover-Handoff.mjs';
 import { verifyRuleManifest, verifyWorkspaceBaseline, readGitWorkspaceBaseline, readLiveRemoteBaseline, verifyHandoffInventory } from './Prepare-Handoff.mjs';
 import { captureTransactionWorkspace, verifyTransactionWorkspace } from './HandoffTransactionWorkspace.mjs';
+import { isControlOnly, authorityRenderVersion, authorityRestrictions, authorityRequiredFiles, controlOnlyContinuityErrors, HISTORICAL_WORKSPACE_RESTRICTION } from './HandoffSeal.mjs';
 
 const assert = (condition, message) => { if (!condition) throw new Error(message); };
 const equal = (a, b) => canonicalJson(a) === canonicalJson(b);
@@ -71,7 +72,12 @@ export function planAuthorityRecovery(options) {
   const freshErrors = validateFreshAuthorityAttempt(history, { confirmation: options.confirmation, observation });
   assert(!freshErrors.length, freshErrors.join('; '));
   assert(!history.pending_authority_recoveries.length, 'authority recovery pending; continue that exact event');
-  assert(observation.generation === previous.generation + 1 && Date.parse(observation.fact_cutoff) >= Date.parse(previous.fact_cutoff), 'observation generation or fact cutoff mismatch');
+  assert(observation.generation === previous.generation + (isControlOnly(options.confirmation) ? 0 : 1) && Date.parse(observation.fact_cutoff) >= Date.parse(previous.fact_cutoff), 'observation generation or fact cutoff mismatch');
+  if (isControlOnly(options.confirmation)) {
+    const errors = controlOnlyContinuityErrors(previous, observation);
+    assert(!errors.length, errors.join('; '));
+    for (const file of observation.workspace.required_untracked) assert(byteDigest(fs.readFileSync(resolveSource({ root_ref: 'source_root', path_ref: file.path_ref }, options))) === file.sha256, 'control-only required current bytes mismatch');
+  } else assert(!previous.restrictions?.includes(HISTORICAL_WORKSPACE_RESTRICTION), 'historical workspace limitation requires control-only handling');
   assert(Object.keys(observation.sources).sort().join(',') === Object.keys(previous.sources).sort().join(','), 'recovery cannot add or drop source evidence');
   for (const [name, source] of Object.entries(previous.sources)) {
     const observed = observation.sources[name];
@@ -88,12 +94,18 @@ export function planAuthorityRecovery(options) {
   assert(manifest.rule_version === observation.rule_baseline.rule_version && byteDigest(fs.readFileSync(manifestPath)) === observation.rule_baseline.manifest_sha256, 'RULE_REBASE_PENDING: observation must use verified current rules');
   const workspaceErrors = verifyWorkspaceBaseline(options.sourceRoot, observation.workspace, observation.sources, { externalControlPlaneRoot: options.externalControlPlaneRoot, ruleBaseline: observation.rule_baseline, workflowRepositoryRoot: path.resolve(workflowRoot, '../..') });
   assert(!workspaceErrors.length, workspaceErrors.join('; '));
-  verifyHandoffInventory(observation, options);
+  // The unchanged inventory certifies historical material, not the receiver's
+  // independently refreshed rule and remote observations.
+  verifyHandoffInventory(isControlOnly(options.confirmation) ? previous : observation, options);
   let remote;
   try { remote = readLiveRemoteBaseline(options.sourceRoot, observation.remote.default_ref); }
   catch (error) { assert(!options.remoteRequired && observation.remote.status === 'UNKNOWN' && observation.restrictions.includes('REMOTE_UNOBSERVED'), `REMOTE_RECHECK_REQUIRED: ${error.message}`); }
   if (remote) assert(observation.remote.status === 'PASS' && remote.head === observation.remote.head, 'remote observation changed; collect a fresh baseline');
-  const plan = buildControlPlan(observation, options, 6), workspace_projection = captureTransactionWorkspace(observation, plan, options);
+  const plan = buildControlPlan(observation, options, authorityRenderVersion(options.confirmation)), workspace_projection = captureTransactionWorkspace(observation, plan, options);
+  if (isControlOnly(options.confirmation)) for (const item of plan.filter(item => item.root_ref !== 'source_root')) {
+    const relative = path.relative(fs.realpathSync(options.sourceRoot), resolveSource(item, options)).replaceAll('\\', '/');
+    assert(!observation.workspace.required_untracked.some(file => file.path_ref === relative), 'control-only external control alias in required files needs explicit source-root binding');
+  }
   const transaction = { observation, recipient: structuredClone(options.recipient), confirmation: structuredClone(options.confirmation), plan, workspace_projection, prior_journal: priorJournal(controlPaths(observation, options), history, options) };
   return { previous, transaction };
 }
@@ -110,7 +122,7 @@ function validateFrozen(intent, options, history) {
   assertStorage(tx.observation, options);
   for (const item of tx.plan) {
     const before = Buffer.from(item.before, 'base64'), after = Buffer.from(item.after, 'base64');
-    assert(after.equals(renderCurrent(before, tx.observation, tx.recipient, 6, intent.event_id)), 'immutable authority render mismatch');
+    assert(after.equals(renderCurrent(before, tx.observation, tx.recipient, authorityRenderVersion(tx.confirmation), intent.event_id)), 'immutable authority render mismatch');
     assertRenderedCurrentIdentity(after, tx.recipient, tx.observation.generation + 1, item.names.includes('status_index'));
   }
   const source = tx.plan.find(item => item.names.includes('status_index'));
@@ -141,6 +153,11 @@ function readOrRestoreJournal(intent, options, paths) {
 function completionDraft(intent, workspace) {
   const tx = intent.transaction, draft = structuredClone(tx.observation);
   Object.assign(draft, { schema_version: 5, generation: tx.observation.generation + 1, writer_id: tx.recipient.writerId, old_writer_status: tx.confirmation.old_writer_status, event_id: intent.event_id, fact_cutoff: intent.prepared_at, sealed_at: intent.prepared_at, switch_status: 'COMPLETED', handoff_phase: 'AUTHORITY_RECOVERY_COMPLETED', candidate_verification_status: draft.remote.status === 'PASS' ? 'PASS' : 'PASS_WITH_RESTRICTIONS', control_handoff_confidence: 'HIGH', communications: { status: 'NONE' }, runtime_acceptance_status: 'NOT_RUN', professional_acceptance_status: 'NOT_RUN', transition: null, migration: null, authority_recovery: { intent_digest: intent.recovery_digest, previous_seal_digest: intent.previous_seal_digest, prepared_at: intent.prepared_at }, workspace, seal_digest: '' });
+  if (isControlOnly(tx.confirmation)) {
+    draft.restrictions = authorityRestrictions(tx);
+    draft.candidate_verification_status = 'PASS_WITH_RESTRICTIONS';
+    draft.workspace.required_untracked = authorityRequiredFiles(tx);
+  }
   for (const item of tx.plan) for (const name of item.names) { draft.sources[name].digest = item.after_sha256; draft.sources[name].fact_cutoff = intent.prepared_at; }
   return draft;
 }
@@ -156,6 +173,9 @@ function readCompletedJournal(file, expected, anchor, options) {
   const actual = JSON.parse(fs.readFileSync(file, 'utf8'));
   assert(equal(actual, expected) && actual.status === 'COMPLETED', 'authority completed journal readback mismatch');
   verifyAuthorityJournalCompletion(actual, anchor, options);
+}
+function completionScope(intent) {
+  return isControlOnly(intent.transaction.confirmation) ? { protocol: 'CONTROL_ONLY_V1', historical_workspace: 'NOT_CERTIFIED', business_resume_allowed: false } : { protocol: 'AUTHORITY_RECOVERY_V1', historical_transition: 'NOT_CERTIFIED' };
 }
 function forward(intent, options, paths) {
   const history = historyFor(options); validateFrozen(intent, options, history);
@@ -180,7 +200,7 @@ function forward(intent, options, paths) {
     readCompletedJournal(paths.journal, journal, latest, options);
     const live = verifyChain(options.sealDirectory, options);
     assert(live.status === 'PASS', `journal completion readback failed: ${live.errors.join('; ')}`);
-    return { status: 'COMPLETED', control_status: live.control_status, protocol: 'AUTHORITY_RECOVERY_V1', action: 'JOURNAL_REPAIRED_ONLY', generation: latest.generation, writer_id: latest.writer_id, historical_transition: 'NOT_CERTIFIED', old_authorization_inherited: false, restrictions: latest.restrictions };
+    return { status: 'COMPLETED', control_status: live.control_status, ...completionScope(intent), action: 'JOURNAL_REPAIRED_ONLY', generation: latest.generation, writer_id: latest.writer_id, old_authorization_inherited: false, restrictions: latest.restrictions };
   }
   assert(committed || latest.seal_digest === intent.previous_seal_digest, 'authority predecessor changed');
   const tx = intent.transaction, journal = readOrRestoreJournal(intent, options, paths);
@@ -204,7 +224,7 @@ function forward(intent, options, paths) {
   journal.completion_source = { root_ref: 'source_root', path_ref: path.relative(fs.realpathSync(options.sourceRoot), path.join(fs.realpathSync(options.sealDirectory), `handoff-state.${seal.seal_sequence}.${seal.seal_digest}.json`)).replaceAll('\\', '/') };
   if (journal.status !== 'COMPLETED') { journal.status = 'COMPLETED'; journal.completed_at = new Date().toISOString(); writeJournal(paths.journal, journal); }
   readCompletedJournal(paths.journal, journal, seal, options);
-  return { status: 'COMPLETED', protocol: 'AUTHORITY_RECOVERY_V1', generation: seal.generation, writer_id: seal.writer_id, historical_transition: 'NOT_CERTIFIED', old_authorization_inherited: false, restrictions: seal.restrictions };
+  return { status: 'COMPLETED', ...completionScope(intent), generation: seal.generation, writer_id: seal.writer_id, old_authorization_inherited: false, restrictions: seal.restrictions };
 }
 function selectedIntent(history, options) {
   const matches = history.authority_intents.filter(intent => intent.event_id === options.eventId);
@@ -253,7 +273,7 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.a
     assert(['inspect', 'commit', 'recover', 'rollback'].includes(mode) && configPath, 'usage: node Recover-CommanderAuthority.mjs inspect|commit|recover|rollback <receiver-config.json>');
     const options = JSON.parse(fs.readFileSync(configPath, 'utf8')), base = path.dirname(path.resolve(configPath));
     for (const name of ['sourceRoot', 'externalControlPlaneRoot', 'sealDirectory', 'workflowRoot', 'manifestPath']) if (options[name]) options[name] = path.resolve(base, options[name]);
-    if (mode === 'inspect') { const plan = planAuthorityRecovery(options); console.log(JSON.stringify({ status: 'RECOVERY_PLAN_READY', generation: plan.transaction.observation.generation + 1, historical_transition: 'NOT_CERTIFIED', writes: 0 })); }
+    if (mode === 'inspect') { const plan = planAuthorityRecovery(options); console.log(JSON.stringify({ status: 'RECOVERY_PLAN_READY', generation: plan.transaction.observation.generation + 1, ...completionScope({ transaction: plan.transaction }), writes: 0 })); }
     else console.log(JSON.stringify((mode === 'rollback' ? rollbackCommanderAuthority : recoverCommanderAuthority)(options), null, 2));
   } catch (error) { console.error(error.message); process.exitCode = 1; }
 }

@@ -181,7 +181,7 @@ export function validateSeal(seal, { checkDigest = true, requireExtensions = fal
   for (const key of Object.keys(seal)) if (!TOP_LEVEL_KEYS.has(key)) fail(errors, `unknown top-level field: ${key}`);
   if (![1, 2, 3, 4, 5].includes(seal.schema_version)) fail(errors, 'schema_version must be 1, 2, 3, 4, or 5');
   if (seal.schema_version < 4 && Object.hasOwn(seal, 'restrictions')) fail(errors, 'legacy seal cannot contain v4 restrictions');
-  if (seal.schema_version >= 4 && (!Array.isArray(seal.restrictions) || seal.restrictions.some(value => value !== 'REMOTE_UNOBSERVED') || new Set(seal.restrictions).size !== seal.restrictions.length || (seal.remote?.status === 'UNKNOWN') !== seal.restrictions.includes('REMOTE_UNOBSERVED'))) fail(errors, 'invalid v4 dependency restrictions');
+  if (seal.schema_version >= 4 && (!Array.isArray(seal.restrictions) || seal.restrictions.some(value => !['REMOTE_UNOBSERVED', HISTORICAL_WORKSPACE_RESTRICTION].includes(value)) || new Set(seal.restrictions).size !== seal.restrictions.length || (seal.remote?.status === 'UNKNOWN') !== seal.restrictions.includes('REMOTE_UNOBSERVED'))) fail(errors, 'invalid v4 dependency restrictions');
   const authorityRecovery = seal.schema_version === 5 && seal.handoff_phase === 'AUTHORITY_RECOVERY_COMPLETED';
   if (seal.schema_version === 5 && !authorityRecovery) fail(errors, 'schema 5 is reserved for explicit authority recovery');
   if (authorityRecovery) {
@@ -285,16 +285,47 @@ function sealFiles(dir) {
   return fs.readdirSync(dir).filter(name => /^handoff-state\.\d+\.[0-9a-f]{64}\.json$/.test(name)).sort((a, b) => Number(a.split('.')[1]) - Number(b.split('.')[1]));
 }
 const AUTHORITY_PHASE = 'AUTHORITY_RECOVERY_COMPLETED';
+export const HISTORICAL_WORKSPACE_RESTRICTION = 'HISTORICAL_WORKSPACE_PRESERVATION_UNVERIFIED';
+export const isControlOnly = confirmation => confirmation?.protocol_version === 2 && confirmation.scope === 'CONTROL_ONLY_TAKEOVER';
+export const authorityRenderVersion = confirmation => isControlOnly(confirmation) ? 7 : 6;
+export const authorityRestrictions = transaction => [...new Set([...transaction.observation.restrictions, ...(isControlOnly(transaction.confirmation) ? [HISTORICAL_WORKSPACE_RESTRICTION] : [])])];
+export function authorityRequiredFiles(transaction) {
+  return transaction.observation.workspace.required_untracked.map(file => {
+    const change = isControlOnly(transaction.confirmation) && transaction.plan.find(item => item.root_ref === 'source_root' && item.path_ref === file.path_ref);
+    return change ? { ...file, sha256: change.after_sha256 } : file;
+  });
+}
+export function controlOnlyContinuityErrors(previous, observation) {
+  const errors = [];
+  if (previous?.handoff_phase !== 'MATERIAL_PREPARED' || previous.workspace?.inflight_scope || observation.workspace?.inflight_scope || observation.workspace?.worktree_fingerprint?.algorithm !== 'git-diff-binary+untracked-content-sha256-v1') errors.push('control-only requires settled material and a full strict current workspace, without exclusions');
+  if (canonicalJson(Object.keys(previous?.sources ?? {}).sort()) !== canonicalJson(Object.keys(observation.sources ?? {}).sort())) errors.push('control-only source set changed');
+  for (const [name, source] of Object.entries(previous?.sources ?? {})) {
+    const observed = observation.sources?.[name];
+    for (const field of ['path_ref', 'root_ref', 'owner', 'digest']) if (source[field] !== observed?.[field]) errors.push(`control-only sealed source changed: ${name}.${field}`);
+  }
+  for (const field of ['objective', 'prohibitions', 'invalidation_conditions']) if (canonicalJson(previous?.[field]) !== canonicalJson(observation[field])) errors.push(`control-only cannot replace historical ${field}`);
+  for (const field of ['root_ref', 'branch']) if (previous?.workspace?.[field] !== observation.workspace?.[field]) errors.push(`control-only workspace ${field} changed`);
+  if (previous?.remote?.default_ref !== observation.remote?.default_ref) errors.push('control-only remote target changed');
+  const refs = value => value?.workspace?.required_untracked?.map(item => item.path_ref).sort();
+  if (canonicalJson(refs(previous)) !== canonicalJson(refs(observation))) errors.push('control-only required evidence scope changed');
+  return errors;
+}
+function preservationRestrictionErrors(seal, previous) {
+  if (!previous?.restrictions?.includes(HISTORICAL_WORKSPACE_RESTRICTION)) return [];
+  return !seal.restrictions?.includes(HISTORICAL_WORKSPACE_RESTRICTION) || seal.runtime_acceptance_status !== 'NOT_RUN' || seal.professional_acceptance_status !== 'NOT_RUN'
+    ? ['historical workspace restriction cannot be cleared or converted to business acceptance by an ordinary seal'] : [];
+}
 const authorityHash = record => digest(canonicalJson(Object.fromEntries(Object.entries(record).filter(([key]) => key !== 'recovery_digest'))));
 const controlNames = ['status_index', 'central_work_items', 'current_view', 'central_entry'];
 
 // Like the direct entry, these are evidence bindings, not authentication of a human.
 export function validateAuthorityConfirmation(value, observation, recipient, previous) {
-  const keys = ['protocol_version', 'origin', 'evidence_ref', 'confirmed_at', 'project_key', 'previous_seal_digest', 'observed_generation', 'observed_writer_id', 'observed_platform_id', 'old_writer_status', 'recipient_writer_id', 'recipient_platform_id', 'scope', 'transfer_confirmed', 'unique_writer_confirmed', 'unproved_transition'];
+  const controlOnly = isControlOnly(value);
+  const keys = ['protocol_version', 'origin', 'evidence_ref', 'confirmed_at', 'project_key', 'previous_seal_digest', 'observed_generation', 'observed_writer_id', 'observed_platform_id', 'old_writer_status', 'recipient_writer_id', 'recipient_platform_id', 'scope', 'transfer_confirmed', 'unique_writer_confirmed', controlOnly ? 'historical_workspace' : 'unproved_transition'];
   if (!exactKeys(value, keys) || keys.some(key => !Object.hasOwn(value, key))) return ['authority recovery confirmation fields required'];
   const errors = [];
-  if (value.protocol_version !== 1 || value.origin !== 'CURRENT_OPERATOR_MESSAGE' || !value.evidence_ref?.trim() || !iso(value.confirmed_at) || value.scope !== 'AUTHORITY_RECOVERY_ONLY' || value.transfer_confirmed !== true || value.unique_writer_confirmed !== true || value.unproved_transition !== 'ACKNOWLEDGED_NOT_CERTIFIED') errors.push('current direct operator recovery authorization required');
-  if (!previous || previous.schema_version < 3 || value.previous_seal_digest !== previous.seal_digest || observation?.generation !== previous.generation + 1 || observation.writer_id === previous.writer_id || value.observed_generation !== observation.generation || value.observed_writer_id !== observation.writer_id) errors.push('authority recovery requires exactly one observed unsealed generation');
+  if ((!controlOnly && (value.protocol_version !== 1 || value.scope !== 'AUTHORITY_RECOVERY_ONLY' || value.unproved_transition !== 'ACKNOWLEDGED_NOT_CERTIFIED')) || (controlOnly && value.historical_workspace !== 'ACKNOWLEDGED_NOT_CERTIFIED') || value.origin !== 'CURRENT_OPERATOR_MESSAGE' || !value.evidence_ref?.trim() || !iso(value.confirmed_at) || value.transfer_confirmed !== true || value.unique_writer_confirmed !== true) errors.push('current direct operator recovery authorization required');
+  if (!previous || previous.schema_version < 3 || value.previous_seal_digest !== previous.seal_digest || observation?.generation !== previous.generation + (controlOnly ? 0 : 1) || (controlOnly ? observation.writer_id !== previous.writer_id : observation.writer_id === previous.writer_id) || value.observed_generation !== observation.generation || value.observed_writer_id !== observation.writer_id) errors.push(controlOnly ? 'control-only requires the unchanged sealed current generation and writer' : 'authority recovery requires exactly one observed unsealed generation');
   if (!['STOPPED_DISPATCH', 'ARCHIVED'].includes(value.old_writer_status)) errors.push('observed predecessor must remain stopped');
   if (!recipient || !/^[A-Za-z0-9._-]+$/.test(recipient.writerId || '') || [previous?.writer_id, observation?.writer_id].includes(recipient.writerId) || !/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(recipient.platformTaskId || '') || !/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(value.observed_platform_id || '') || recipient.platformTaskId === value.observed_platform_id || typeof recipient.projectKey !== 'string' || !recipient.projectKey.trim() || value.project_key !== recipient.projectKey || value.recipient_writer_id !== recipient.writerId || value.recipient_platform_id !== recipient.platformTaskId) errors.push('authority recipient, platform or project mismatch');
   return errors;
@@ -355,15 +386,18 @@ export function readAuthorityIntent(file) {
 }
 function authorityLinkErrors(seal, previous, intent) {
   if (!previous || !intent) return ['authority recovery requires its immutable intent and strict predecessor'];
-  const tx = intent.transaction, o = tx.observation, errors = [];
-  if (intent.previous_seal_digest !== previous.seal_digest || intent.previous_sequence !== previous.seal_sequence || intent.previous_generation !== previous.generation || intent.previous_writer_id !== previous.writer_id || o.generation !== previous.generation + 1 || seal.generation !== o.generation + 1 || seal.writer_id !== tx.recipient.writerId || seal.event_id !== intent.event_id || seal.old_writer_status !== tx.confirmation.old_writer_status || seal.authority_recovery?.previous_seal_digest !== previous.seal_digest || seal.authority_recovery?.prepared_at !== intent.prepared_at || Date.parse(seal.sealed_at) < Date.parse(intent.prepared_at) || Date.parse(o.fact_cutoff) < Date.parse(previous.fact_cutoff)) errors.push('authority recovery three-anchor or time mismatch');
+  const tx = intent.transaction, o = tx.observation, errors = [], controlOnly = isControlOnly(tx.confirmation);
+  if (controlOnly) errors.push(...controlOnlyContinuityErrors(previous, o));
+  if (intent.previous_seal_digest !== previous.seal_digest || intent.previous_sequence !== previous.seal_sequence || intent.previous_generation !== previous.generation || intent.previous_writer_id !== previous.writer_id || o.generation !== previous.generation + (controlOnly ? 0 : 1) || seal.generation !== o.generation + 1 || seal.writer_id !== tx.recipient.writerId || seal.event_id !== intent.event_id || seal.old_writer_status !== tx.confirmation.old_writer_status || seal.authority_recovery?.previous_seal_digest !== previous.seal_digest || seal.authority_recovery?.prepared_at !== intent.prepared_at || Date.parse(seal.sealed_at) < Date.parse(intent.prepared_at) || Date.parse(o.fact_cutoff) < Date.parse(previous.fact_cutoff)) errors.push('authority recovery three-anchor or time mismatch');
   if (Object.keys(previous.sources).sort().join(',') !== Object.keys(o.sources).sort().join(',') || Object.keys(o.sources).sort().join(',') !== Object.keys(seal.sources).sort().join(',')) errors.push('authority recovery cannot change the source set');
   for (const [name, source] of Object.entries(o.sources)) {
     const historical = previous.sources[name], target = seal.sources[name], change = tx.plan.find(item => item.names.includes(name));
     if (!historical || !target || historical.path_ref !== source.path_ref || (historical.root_ref || 'source_root') !== (source.root_ref || 'source_root') || target.path_ref !== source.path_ref || target.root_ref !== source.root_ref || target.owner !== source.owner || target.digest !== (change ? change.after_sha256 : source.digest)) errors.push(`authority recovery source binding mismatch: ${name}`);
   }
-  for (const key of ['objective', 'prohibitions', 'rule_baseline', 'invalidation_conditions', 'remote', 'restrictions']) if (canonicalJson(seal[key]) !== canonicalJson(o[key])) errors.push(`authority recovery changed frozen ${key}`);
-  for (const key of ['root_ref', 'head', 'tree', 'branch', 'required_untracked', 'inflight_scope']) if (canonicalJson(seal.workspace?.[key]) !== canonicalJson(o.workspace?.[key])) errors.push(`authority recovery changed protected workspace ${key}`);
+  for (const key of ['objective', 'prohibitions', 'rule_baseline', 'invalidation_conditions', 'remote']) if (canonicalJson(seal[key]) !== canonicalJson(o[key])) errors.push(`authority recovery changed frozen ${key}`);
+  if (canonicalJson(seal.restrictions) !== canonicalJson(authorityRestrictions(tx))) errors.push('authority recovery changed frozen restrictions');
+  for (const key of ['root_ref', 'head', 'tree', 'branch', 'inflight_scope']) if (canonicalJson(seal.workspace?.[key]) !== canonicalJson(o.workspace?.[key])) errors.push(`authority recovery changed protected workspace ${key}`);
+  if (canonicalJson(seal.workspace?.required_untracked) !== canonicalJson(authorityRequiredFiles(tx))) errors.push('authority recovery changed protected workspace required_untracked');
   if (seal.communications?.status !== 'NONE' || seal.runtime_acceptance_status !== 'NOT_RUN' || seal.professional_acceptance_status !== 'NOT_RUN') errors.push('authority recovery cannot inherit business acceptance or communication authority');
   return errors;
 }
@@ -433,6 +467,7 @@ export function readChain(dir, { ignoreOwnLock = false } = {}) {
     if (previous && seal.generation === previous.generation && seal.writer_id !== previous.writer_id) fail(errors, `writer change without generation transition at sequence ${seal.seal_sequence}`);
     if (seal.handoff_phase === AUTHORITY_PHASE && seal.schema_version === 5) authorityLinkErrors(seal, previous, authorityIntents.get(seal.authority_recovery?.intent_digest)).forEach(error => fail(errors, error));
     else if (previous && seal.generation > previous.generation && (seal.generation !== previous.generation + 1 || seal.writer_id === previous.writer_id || !['STOPPED_DISPATCH', 'ARCHIVED'].includes(seal.old_writer_status))) fail(errors, `unsafe generation transition at sequence ${seal.seal_sequence}`);
+    preservationRestrictionErrors(seal, previous).forEach(error => fail(errors, error));
     if (seal.schema_version >= 3 && seenEventIds.has(seal.event_id)) fail(errors, `duplicate event_id at sequence ${seal.seal_sequence}: ${seal.event_id}`);
     if (seal.schema_version >= 3 && previous && Date.parse(seal.fact_cutoff) < Date.parse(previous.fact_cutoff)) fail(errors, `fact_cutoff rollback at sequence ${seal.seal_sequence}`);
     if (seal.schema_version >= 3 && previous && Date.parse(seal.sealed_at) < Date.parse(previous.sealed_at)) fail(errors, `sealed_at rollback at sequence ${seal.seal_sequence}`);
@@ -670,6 +705,7 @@ export function prepareAuthorityRecovery(dir, transaction, options) {
     errors.push(...validateFreshAuthorityAttempt(history, transaction));
     const observation = transaction.observation;
     errors.push(...validateAuthorityConfirmation(transaction.confirmation, observation, transaction.recipient, previous));
+    if (isControlOnly(transaction.confirmation)) errors.push(...controlOnlyContinuityErrors(previous, observation));
     errors.push(...verifySourceFiles(observation, options.sourceRoot, options.externalControlPlaneRoot));
     const identity = observeControlIdentity(observation, options);
     if (identity.status !== 'PASS' || identity.identity?.platform_task_id !== transaction.confirmation.observed_platform_id) errors.push('observed authority identity is not live-valid');
@@ -735,6 +771,8 @@ function planSealAppendFromState(dir, draft, { expectedPreviousDigest, sourceRoo
   if (current.pending_authority_recoveries?.length && !authorityTicket) throw new Error('AUTHORITY_RECOVERY_PENDING: ordinary writes cannot consume a recovery intent');
   if (current.pending_intents.length && !transitionTicket) throw new Error('an unconsumed transition intent must be consumed or explicitly recovered before appending');
   const seal = structuredClone(draft);
+  const limitationErrors = preservationRestrictionErrors(seal, previous);
+  if (limitationErrors.length) throw new Error(limitationErrors.join('; '));
   let authority = null;
   if (authorityTicket) {
     if (path.dirname(fs.realpathSync(authorityTicket)) !== fs.realpathSync(dir) || transitionTicket) throw new Error('authority ticket must be in the existing chain, without a normal transition ticket');

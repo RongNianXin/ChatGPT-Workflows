@@ -49,7 +49,7 @@
 ,
     {"if":{"properties":{"schema_version":{"enum":[4,5]}}},"then":{"required":["restrictions"],"properties":{"sources":{"required":["central_work_items","current_view","status_index"],"additionalProperties":{"$ref":"#/$defs/sourceV3"}},"source_digest_status":{"const":"PASS"},"remote":{"properties":{"status":{"enum":["PASS","UNKNOWN","FAIL","NOT_APPLICABLE"]}}}}}},
     {"if":{"properties":{"schema_version":{"const":3}}},"then":{"not":{"required":["restrictions"]}}},
-    {"if":{"properties":{"schema_version":{"enum":[4,5]},"remote":{"properties":{"status":{"const":"UNKNOWN"}}}}},"then":{"properties":{"restrictions":{"contains":{"const":"REMOTE_UNOBSERVED"}}}},"else":{"properties":{"restrictions":{"maxItems":0}}}},
+    {"if":{"properties":{"schema_version":{"enum":[4,5]},"remote":{"properties":{"status":{"const":"UNKNOWN"}}}}},"then":{"properties":{"restrictions":{"contains":{"const":"REMOTE_UNOBSERVED"}}}},"else":{"properties":{"restrictions":{"not":{"contains":{"const":"REMOTE_UNOBSERVED"}}}}}},
     {"if":{"properties":{"schema_version":{"enum":[4,5]},"switch_status":{"enum":["READY","COMPLETED"]}}},"then":{"properties":{"remote":{"properties":{"status":{"enum":["PASS","UNKNOWN"]}}}}}}
     ,{"if":{"properties":{"schema_version":{"enum":[4,5]},"control_handoff_confidence":{"const":"HIGH"}}},"then":{"properties":{"remote":{"properties":{"status":{"enum":["PASS","UNKNOWN"]}}}}}}
     ,{"if":{"properties":{"schema_version":{"const":5}}},"then":{"required":["authority_recovery"],"properties":{"handoff_phase":{"const":"AUTHORITY_RECOVERY_COMPLETED"},"switch_status":{"const":"COMPLETED"},"transition":{"type":"null"},"migration":{"type":"null"},"previous_seal_digest":{"type":"string","pattern":"^[0-9a-f]{64}$"},"communications":{"properties":{"status":{"const":"NONE"}}},"runtime_acceptance_status":{"const":"NOT_RUN"},"professional_acceptance_status":{"const":"NOT_RUN"}}},"else":{"not":{"anyOf":[{"required":["authority_recovery"]},{"properties":{"handoff_phase":{"const":"AUTHORITY_RECOVERY_COMPLETED"}}}]}}}
@@ -80,7 +80,7 @@
     "runtime_acceptance_status": { "enum": ["PASS", "FAIL", "NOT_RUN", "UNKNOWN", "NOT_APPLICABLE"] },
     "professional_acceptance_status": { "enum": ["PASS", "FAIL", "NOT_RUN", "UNKNOWN", "NOT_APPLICABLE"] },
     "transition": { "anyOf": [{ "type": "null" }, { "$ref": "#/$defs/transition" }] },
-    "restrictions": {"type":"array","uniqueItems":true,"items":{"const":"REMOTE_UNOBSERVED"}},
+    "restrictions": {"type":"array","uniqueItems":true,"items":{"enum":["REMOTE_UNOBSERVED","HISTORICAL_WORKSPACE_PRESERVATION_UNVERIFIED"]}},
     "authority_recovery": { "$ref": "#/$defs/transition" },
     "migration": { "anyOf": [{ "type": "null" }, { "$ref": "#/$defs/migration" }] },
     "invalidation_conditions": { "type": "array", "minItems": 1, "items": { "type": "string" } },

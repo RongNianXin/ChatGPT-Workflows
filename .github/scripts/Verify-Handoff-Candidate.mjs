@@ -54,6 +54,10 @@ export function verifyHandoffCandidate({ sealDirectory, sourceRoot, externalCont
     result.actions.push('已完成接管的封条只能按历史/当前状态核验，不能重复作为候选输入');
     return result;
   }
+  if (chain.latest.restrictions?.includes('HISTORICAL_WORKSPACE_PRESERVATION_UNVERIFIED')) {
+    result.errors.push('CONTROL_ONLY_REQUIRED: historical preservation remains uncertified; ordinary takeover cannot erase this restriction');
+    return result;
+  }
   try {
     result.inventory = verifyHandoffInventory(chain.latest, { sourceRoot, externalControlPlaneRoot });
     if (result.inventory.status === 'NOT_DECLARED') result.actions.push('旧材料缺少完整结构化事实声明；保留兼容读取，由合法来源在冻结前核账，接收方仍独立核对业务断点，不把摘要通过当成事实完整');
