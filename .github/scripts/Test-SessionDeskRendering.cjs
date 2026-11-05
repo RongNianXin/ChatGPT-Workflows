@@ -1,10 +1,15 @@
 // Exercise the real list renderer with synthetic tasks, without a service or user data.
+module.exports = (async () => {
+// Preserve an explicitly supplied installed dependency across synthetic isolation.
+process.env.SYNTHETIC_BROWSER_PLAYWRIGHT_ENTRY ||= require.resolve('playwright');
+const { enterSyntheticSuite } = await import('./SyntheticTestRuntime.mjs');
+await enterSyntheticSuite(require('node:url').pathToFileURL(__filename).href, { timeoutMs: 120000 });
 const fs = require('node:fs');
 const path = require('node:path');
 const assert = require('node:assert/strict');
-const { chromium } = require('playwright');
+const { chromium } = require(process.env.SYNTHETIC_BROWSER_PLAYWRIGHT_ENTRY);
+const { finishCleanup } = require('./SessionDeskTestLifecycle.cjs');
 
-(async () => {
   for (const relative of ['../check-codex-session.ps1', 'Start-SessionDesk.ps1', 'Read-DeskMetadata.ps1', 'Invoke-IsolatedAnalyzer.ps1']) {
     const bytes = fs.readFileSync(path.join(__dirname, '../../实用小工具/Codex会话交接评估/windows-local', relative));
     assert.ok(bytes.subarray(0, 3).equals(Buffer.from([0xef, 0xbb, 0xbf])), `${relative}: PowerShell 5.1 UTF-8 BOM`);
@@ -15,6 +20,7 @@ const { chromium } = require('playwright');
   const startup = script.indexOf("render();api('/api/tasks')");
   assert.ok(startup > 0, 'locate startup without running service requests');
   const browser = await chromium.launch({ channel: 'msedge', headless: true });
+  let primaryError;
   try {
     const page = await browser.newPage();
     await page.setContent(html.replace(/<script>[\s\S]*?<\/script>/g, ''));
@@ -78,7 +84,10 @@ const { chromium } = require('playwright');
       await page.locator('#search').fill('');
     }
     console.log('SessionDesk rendering regression: PASS (both languages; new, unknown, mixed and legacy results; fixed 3/8 markers)');
+  } catch (error) {
+    primaryError = error;
+    console.error(error);
   } finally {
-    await browser.close();
+    await finishCleanup(primaryError, [() => browser.close()]);
   }
 })().catch(error => { console.error(error); process.exitCode = 1; });

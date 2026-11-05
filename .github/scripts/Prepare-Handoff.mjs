@@ -3,21 +3,27 @@ import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { spawnSync } from 'node:child_process';
-import { SCOPED_WORKSPACE_ALGORITHM, readScopedWorkspaceBaseline, validateScopedWorkspaceSources } from './HandoffWorkspaceScope.mjs';
+import { SCOPED_WORKSPACE_ALGORITHM, FULL_WORKSPACE_ALGORITHM, LEGACY_WORKSPACE_ALGORITHM, readWorkspaceFile, readScopedWorkspaceBaseline, validateScopedWorkspaceSources } from './HandoffWorkspaceScope.mjs';
 import { fileURLToPath } from 'node:url';
-import { appendSeal, planSealAppend, validateControlPlaneRegistry, validateSealDraftForAppend, verifyChain, verifyControlIdentity } from './HandoffSeal.mjs';
+import { appendSeal, inspectHistoricalRestrictedRecovery, planSealAppend, validateControlPlaneRegistry, validateSealDraftForAppend, verifyChain, verifyControlIdentity, HISTORICAL_UNVERIFIED, HISTORICAL_WORKSPACE_RESTRICTION, HISTORICAL_SOURCE_RESTRICTION, normalizeCurrentMigrationDraft } from './HandoffSeal.mjs';
 import { assertPrivateControlStorage } from './HandoffControl.mjs';
+import { readAuthenticatedGitHubRef, verifiedGitHubHead } from './Query-HandoffAuthenticatedRef.mjs';
+import { verifyReceiverReadiness } from './Receiver-Readiness.mjs';
 
 export const REQUIRED_RULES = [
   '.github/scripts/HandoffControl.mjs',
   '.github/scripts/HandoffTransactionWorkspace.mjs',
   '.github/scripts/Takeover-Handoff.mjs',
   '.github/scripts/Recover-CommanderAuthority.mjs',
+  '.github/scripts/Receiver-State-Adoption.mjs',
+  '.github/scripts/Receiver-Readiness.mjs',
   '.github/scripts/HandoffWorkspaceScope.mjs',
   '.github/scripts/HandoffSeal.mjs',
   '.github/scripts/Prepare-Handoff.mjs',
+  '.github/scripts/Query-HandoffAuthenticatedRef.mjs',
   '.github/scripts/Mark-Handoff-Delivered.mjs',
   '总指挥工作流/第二代总指挥的工作模式/templates/HANDOFF_STATE.schema.json',
+  '总指挥工作流/第二代总指挥的工作模式/01-操作者操作手册.md',
   '总指挥工作流/第二代总指挥的工作模式/02-总指挥核心规则.md',
   '总指挥工作流/第二代总指挥的工作模式/04-状态、目标变更与交接规范.md',
   '总指挥工作流/第二代总指挥的工作模式/07-总指挥交接记录模板.md',
@@ -25,7 +31,7 @@ export const REQUIRED_RULES = [
   '总指挥工作流/第二代总指挥的工作模式/10-自动状态索引规范.md',
   '总指挥工作流/第二代总指挥的工作模式/总指挥轻量交接启动配置.md'
 ];
-const CONFIG_KEYS = new Set(['seal_directory', 'source_root', 'external_control_plane_root', 'draft_path', 'snapshot_template_path', 'final_output_path', 'receipt_output_path', 'rule_manifest_path', 'live_rule_manifest_path', 'expected_previous_digest', 'transition_ticket', 'project_key', 'preflight_only']);
+const CONFIG_KEYS = new Set(['seal_directory', 'legacy_seal_directory', 'source_root', 'external_control_plane_root', 'draft_path', 'snapshot_template_path', 'final_output_path', 'receipt_output_path', 'rule_manifest_path', 'live_rule_manifest_path', 'expected_previous_digest', 'transition_ticket', 'project_key', 'preflight_only']);
 const sha256 = value => crypto.createHash('sha256').update(value).digest('hex');
 const resolveFrom = (base, value) => path.resolve(base, value);
 const isInside = (root, candidate) => {
@@ -45,9 +51,10 @@ const physicalTarget = target => {
 };
 const verificationCommandPattern = /node\s+"[^"]*HandoffSeal\.mjs"\s+verify\s+"[^"]+"\s+"[^"]+"(?:\s+"--external-control-plane-root=[^"]+")?(?:\s+--summary)?/;
 
-const RULE_CRITICAL_PATHS = new Set(['.github/scripts/HandoffControl.mjs', '.github/scripts/Takeover-Handoff.mjs', '01-操作者操作手册.md', '02-总指挥核心规则.md', '04-状态、目标变更与交接规范.md', '07-总指挥交接记录模板.md', '09-自动化授权与风险分级.md', '10-自动状态索引规范.md', '总指挥轻量交接启动配置.md', 'templates/HANDOFF_STATE.schema.json', '.github/scripts/HandoffSeal.mjs', '.github/scripts/Prepare-Handoff.mjs', '.github/scripts/Verify-Handoff-Candidate.mjs', '.github/scripts/HandoffWorkspaceScope.mjs', '.github/scripts/Rebase-Handoff-Draft.mjs', '.github/scripts/Mark-Handoff-Delivered.mjs']);
+const RULE_CRITICAL_PATHS = new Set(['.github/scripts/Query-HandoffAuthenticatedRef.mjs', '.github/scripts/HandoffControl.mjs', '.github/scripts/Takeover-Handoff.mjs', '01-操作者操作手册.md', '02-总指挥核心规则.md', '04-状态、目标变更与交接规范.md', '07-总指挥交接记录模板.md', '09-自动化授权与风险分级.md', '10-自动状态索引规范.md', '总指挥轻量交接启动配置.md', 'templates/HANDOFF_STATE.schema.json', '.github/scripts/HandoffSeal.mjs', '.github/scripts/Prepare-Handoff.mjs', '.github/scripts/Verify-Handoff-Candidate.mjs', '.github/scripts/HandoffWorkspaceScope.mjs', '.github/scripts/Rebase-Handoff-Draft.mjs', '.github/scripts/Mark-Handoff-Delivered.mjs']);
 RULE_CRITICAL_PATHS.add('.github/scripts/HandoffTransactionWorkspace.mjs');
 RULE_CRITICAL_PATHS.add('.github/scripts/Recover-CommanderAuthority.mjs');
+RULE_CRITICAL_PATHS.add('.github/scripts/Receiver-State-Adoption.mjs');
 const RULE_CRITICAL_NAMES = new Set([...RULE_CRITICAL_PATHS].map(value => path.posix.basename(value)));
 function ruleEpoch(value) {
   if (typeof value !== 'string') return null;
@@ -179,17 +186,21 @@ export function verifyRuleManifest(ruleRoot, manifestPath) {
   return manifest;
 }
 
-function readGitWorkspaceBaseline(sourceRoot, requiredRefs = [], inflightScope = null) {
-  if (inflightScope !== null) return readScopedWorkspaceBaseline(sourceRoot, requiredRefs, inflightScope);
-  const run = args => spawnSync('git', ['-C', sourceRoot, ...args], { encoding: 'utf8' });
+function collectFullWorkspaceBaseline(sourceRoot, requiredRefs, algorithm) {
+  sourceRoot = fs.realpathSync(sourceRoot);
+  const env = { ...process.env, GIT_OPTIONAL_LOCKS: '0' };
+  const run = args => spawnSync('git', ['-C', sourceRoot, ...args], { encoding: 'utf8', env, windowsHide: true, timeout: 30000 });
   const head = run(['rev-parse', 'HEAD']);
-  if (head.status !== 0) return null;
+  if (head.status !== 0) throw new Error('cannot read live Git HEAD');
   const branch = run(['symbolic-ref', '--short', '-q', 'HEAD']);
   const tree = run(['rev-parse', 'HEAD^{tree}']);
   const status = run(['status', '--porcelain=v1', '-z']);
-  const diff = spawnSync('git', ['-C', sourceRoot, 'diff', '--binary', 'HEAD', '--'], { encoding: 'buffer', maxBuffer: 64 * 1024 * 1024 });
-  const untracked = spawnSync('git', ['-C', sourceRoot, 'ls-files', '-z', '--others', '--exclude-standard'], { encoding: 'buffer', maxBuffer: 16 * 1024 * 1024 });
-  if ([head, tree, status, diff, untracked].some(result => result.status !== 0)) throw new Error('cannot read live Git workspace baseline');
+  const bytes = args => spawnSync('git', ['-C', sourceRoot, ...args], { encoding: 'buffer', maxBuffer: 64 * 1024 * 1024, env, windowsHide: true, timeout: 30000 });
+  const diff = bytes(['diff', '--binary', 'HEAD', '--']);
+  const untracked = bytes(['ls-files', '-z', '--others', '--exclude-standard']);
+  const index = algorithm === FULL_WORKSPACE_ALGORITHM ? bytes(['ls-files', '--stage', '-z']) : null;
+  if ([head, tree, status, diff, untracked, ...(index ? [index] : [])].some(result => result.status !== 0)
+    || ![0, 1].includes(branch.status)) throw new Error('cannot read live Git workspace baseline');
   const tokens = status.stdout.split('\0').filter(Boolean);
   const entries = [];
   for (let index = 0; index < tokens.length; index += 1) {
@@ -204,25 +215,60 @@ function readGitWorkspaceBaseline(sourceRoot, requiredRefs = [], inflightScope =
   const refs = new Set(untracked.stdout.toString('utf8').split('\0').filter(Boolean).map(value => value.replaceAll('\\', '/')));
   for (const ref of requiredRefs) refs.add(ref.replaceAll('\\', '/'));
   const untrackedFiles = [...refs].sort().map(ref => {
-    const absolute = path.resolve(sourceRoot, ref);
-    if (!isInside(sourceRoot, absolute) || !fs.existsSync(absolute) || !fs.statSync(absolute).isFile()) throw new Error(`cannot fingerprint untracked path: ${ref}`);
-    return { path_ref: ref, sha256: sha256(fs.readFileSync(absolute)) };
+    return { path_ref: ref, sha256: sha256(readWorkspaceFile(sourceRoot, ref)) };
   });
   const untrackedDigest = sha256(Buffer.from(JSON.stringify(untrackedFiles), 'utf8'));
-  return { head: head.stdout.trim(), branch: branch.stdout.trim() || 'HEAD', tree: tree.stdout.trim(), staged_count: staged, tracked_modified_count: trackedModified, untracked_count: untrackedCount, worktree_fingerprint: { algorithm: 'git-diff-binary+untracked-content-sha256-v1', tracked_diff_sha256: sha256(diff.stdout), untracked_digest: untrackedDigest } };
+  return { head: head.stdout.trim(), branch: branch.stdout.trim() || 'HEAD', tree: tree.stdout.trim(), staged_count: staged, tracked_modified_count: trackedModified, untracked_count: untrackedCount, worktree_fingerprint: { algorithm, tracked_diff_sha256: sha256(diff.stdout), untracked_digest: untrackedDigest, ...(index ? { index_sha256: sha256(index.stdout) } : {}) } };
+}
+
+function readGitWorkspaceBaseline(sourceRoot, requiredRefs = [], inflightScope = null, { algorithm = inflightScope ? SCOPED_WORKSPACE_ALGORITHM : FULL_WORKSPACE_ALGORITHM } = {}) {
+  if (inflightScope !== null) {
+    if (algorithm !== SCOPED_WORKSPACE_ALGORITHM) throw new Error('workspace scope and algorithm must match');
+    return readScopedWorkspaceBaseline(sourceRoot, requiredRefs, inflightScope);
+  }
+  if (![LEGACY_WORKSPACE_ALGORITHM, FULL_WORKSPACE_ALGORITHM].includes(algorithm)) throw new Error('unknown workspace fingerprint algorithm');
+  const first = collectFullWorkspaceBaseline(sourceRoot, requiredRefs, algorithm);
+  // Historical V1 keeps its exact digest definition. New observations bind the
+  // index separately and reject changes between two complete reads.
+  if (algorithm === LEGACY_WORKSPACE_ALGORITHM) return first;
+  const second = collectFullWorkspaceBaseline(sourceRoot, requiredRefs, algorithm);
+  if (JSON.stringify(first) !== JSON.stringify(second)) throw new Error('workspace changed during full observation');
+  return second;
 }
 
 // A handoff draft may have been assembled before a local push completed.  The
 // draft's remote block is therefore only a claim until the final preflight
 // queries the configured remote again.  This probe deliberately avoids fetch:
 // it reads the remote advertisement without changing the repository.
-export function readLiveRemoteBaseline(sourceRoot, defaultRef) {
-  const head = spawnSync('git', ['-C', sourceRoot, 'rev-parse', 'HEAD'], { encoding: 'utf8' });
-  // Synthetic contract fixtures may not have a commit or a remote.  A real
-  // formal handoff always has a Git HEAD; callers treat null as a test-only
-  // unavailable probe and keep the existing workspace gate in force.
-  if (head.status !== 0) return null;
-  const remotes = spawnSync('git', ['-C', sourceRoot, 'remote'], { encoding: 'utf8' });
+export function readLiveRemoteBaseline(sourceRoot, defaultRef, {
+  run = spawnSync, now = () => performance.now(), timeoutMs = 10000, authenticatedFallback = true, resolveCommand
+} = {}) {
+  if (!Number.isInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > 30000) throw new Error('invalid remote observation time limit');
+  if (typeof authenticatedFallback !== 'boolean') throw new Error('invalid authenticated transport policy');
+  const validHead = value => typeof value === 'string' && /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/i.test(value);
+  const deadline = now() + timeoutMs;
+  const env = { ...process.env, GIT_TERMINAL_PROMPT: '0', GCM_INTERACTIVE: 'Never', GIT_OPTIONAL_LOCKS: '0' };
+  for (const key of Object.keys(env)) if (/^(?:GIT_ASKPASS|SSH_ASKPASS|GIT_SSH|GIT_SSH_COMMAND|GIT_CONFIG_COUNT|GIT_CONFIG_(?:KEY|VALUE)_\d+)$/i.test(key)) delete env[key];
+  env.GIT_SSH_COMMAND = 'ssh -oBatchMode=yes -oStrictHostKeyChecking=yes -oConnectTimeout=3';
+  env.GIT_SSH_VARIANT = 'ssh';
+  const fail = (code, message) => Object.assign(new Error(message), { code });
+  const probe = (exe, args, { timeoutCap = 5000, optional = false, environment = env } = {}) => {
+    const remaining = Math.floor(deadline - now());
+    if (remaining <= 0) throw fail('REMOTE_PROBE_TIMEOUT', 'remote observation time limit exceeded');
+    const result = run(exe, args, { encoding: 'utf8', env: environment, shell: false, windowsHide: true,
+      stdio: ['ignore', 'pipe', 'pipe'], timeout: Math.min(remaining, timeoutCap), killSignal: 'SIGKILL', maxBuffer: 1024 * 1024 });
+    if (now() > deadline) throw fail('REMOTE_PROBE_TIMEOUT', 'remote observation time limit exceeded');
+    if (optional && result.error?.code === 'ENOENT' && !result.signal) return { status: 1, stdout: '' };
+    if (result.error || result.signal || result.status === null) throw fail(
+      result.error?.code === 'ETIMEDOUT' ? 'REMOTE_PROBE_TIMEOUT' : 'REMOTE_PROBE_ABORTED',
+      'remote observation aborted; no readiness evidence was produced');
+    return result;
+  };
+  const git = args => probe('git', ['-C', sourceRoot, '-c', 'credential.helper=', '-c', 'core.askPass=',
+    '-c', 'credential.interactive=never', '-c', 'protocol.ext.allow=never', ...args]);
+  const head = git(['rev-parse', 'HEAD']);
+  if (head.status !== 0) throw fail('REMOTE_PROBE_UNAVAILABLE', 'cannot read Git HEAD before remote observation');
+  const remotes = git(['remote']);
   if (remotes.status !== 0) throw new Error('cannot enumerate Git remotes for live handoff verification');
   const names = remotes.stdout.split(/\r?\n/).map(value => value.trim()).filter(Boolean);
   let remoteName;
@@ -237,28 +283,52 @@ export function readLiveRemoteBaseline(sourceRoot, defaultRef) {
     ref = branch.startsWith('refs/') ? branch : `refs/heads/${branch}`;
   }
   if (!remoteName || !names.includes(remoteName)) throw new Error(`remote target is not configured locally: ${defaultRef}`);
-  const result = spawnSync('git', ['-C', sourceRoot, 'ls-remote', '--exit-code', remoteName, ref], { encoding: 'utf8' });
-  let advertised = result.status === 0 ? result.stdout.trim().split(/\s+/)[0] : '';
-  // Some locked-down environments allow api.github.com but reset the Git
-  // smart-HTTP request to github.com. For a public GitHub remote, use the
-  // read-only REST ref endpoint as a transport fallback; do not change the
-  // repository or silently fall back for non-GitHub remotes.
-  if (!/^[0-9a-f]{40,64}$/i.test(advertised)) {
-    const remoteUrl = spawnSync('git', ['-C', sourceRoot, 'remote', 'get-url', remoteName], { encoding: 'utf8' });
+  if (!ref.startsWith('refs/') || /[\x00-\x20\x7f~^:?*\[\\]/.test(ref) || ref.includes('..') || ref.includes('@{') ||
+      ref.split('/').some(part => !part || part.startsWith('.') || part.endsWith('.') || part.endsWith('.lock'))) {
+    throw new Error('invalid remote reference');
+  }
+  let result;
+  let transportTimedOut = false;
+  try { result = git(['ls-remote', '--exit-code', remoteName, ref]); }
+  catch (error) {
+    if (error.code !== 'REMOTE_PROBE_TIMEOUT') throw error;
+    transportTimedOut = true;
+  }
+  const matched = result?.status === 0 ? result.stdout.trim().split(/\r?\n/).map(line => line.split(/\s+/)).filter(item => item[1] === ref) : [];
+  let advertised = matched.length === 1 ? matched[0][0] : '';
+  // The strict authenticated fallback shares this deadline and never follows redirects.
+  if (!validHead(advertised)) {
+    const remoteUrl = git(['remote', 'get-url', remoteName]);
     const match = remoteUrl.status === 0
-      ? remoteUrl.stdout.trim().match(/^https?:\/\/github\.com\/([^/]+)\/([^/]+?)(?:\.git)?\/?$/i)
+      ? remoteUrl.stdout.trim().match(/^https:\/\/github\.com\/([A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?)\/([A-Za-z0-9_.-]+?)(?:\.git)?\/?$/i)
       : null;
     const branchMatch = ref.match(/^refs\/heads\/(.+)$/);
-    if (match && branchMatch) {
+    if (match && !['.', '..'].includes(match[2]) && branchMatch) {
       const apiUrl = `https://api.github.com/repos/${match[1]}/${match[2]}/git/ref/heads/${encodeURIComponent(branchMatch[1])}`;
-      const api = spawnSync(process.platform === 'win32' ? 'curl.exe' : 'curl', ['-fsSL', '--max-time', '20', apiUrl], { encoding: 'utf8' });
-      if (api.status === 0) {
-        try { advertised = JSON.parse(api.stdout)?.object?.sha || ''; } catch { advertised = ''; }
+      const verifiedHead = response => verifiedGitHubHead(response, `${match[1]}/${match[2]}`, ref);
+      const anonymousBudget = Math.max(1, Math.min(5000,
+        Math.floor((deadline - now()) / (authenticatedFallback ? 2 : 1))));
+      try {
+        const api = probe(process.platform === 'win32' ? 'curl.exe' : 'curl', ['--disable', '-fsS', '--proto', '=https',
+          '--max-time', String(anonymousBudget / 1000), apiUrl], { timeoutCap: anonymousBudget });
+        if (api.status === 28) transportTimedOut = true;
+        advertised = verifiedHead(api);
+      } catch (error) {
+        if (error.code !== 'REMOTE_PROBE_TIMEOUT') throw error;
+        transportTimedOut = true;
+      }
+      if (authenticatedFallback && !advertised && deadline > now()) {
+        advertised = readAuthenticatedGitHubRef(apiUrl, {
+          run, now, timeoutMs: Math.floor(deadline - now()), environment: env,
+          ...(resolveCommand ? { resolveCommand } : {})
+        });
       }
     }
   }
-  if (!/^[0-9a-f]{40,64}$/i.test(advertised)) throw new Error(`cannot read live remote baseline for ${defaultRef}: ${String(result.stderr || '').trim() || 'ls-remote and GitHub API fallback failed'}`);
-  if (!/^[0-9a-f]{40,64}$/i.test(advertised)) throw new Error(`live remote returned an invalid head for ${defaultRef}`);
+  if (!validHead(advertised)) {
+    if (transportTimedOut) throw fail('REMOTE_PROBE_TIMEOUT', 'remote transport timed out and bounded fallback did not verify a head');
+    throw new Error(`cannot read live remote baseline for ${defaultRef}: advertisement and permitted fallback unavailable`);
+  }
   return { head: advertised.toLowerCase(), observed_at: new Date().toISOString(), remote_name: remoteName, ref };
 }
 
@@ -267,21 +337,52 @@ export { readGitWorkspaceBaseline };
 export function verifyWorkspaceBaseline(sourceRoot, workspace, sources = {}, context = {}) {
   const algorithm = workspace?.worktree_fingerprint?.algorithm;
   if (workspace && Object.hasOwn(workspace, 'inflight_scope') && !workspace.inflight_scope) return ['explicit workspace scope cannot be null or empty'];
-  if (algorithm && !['git-diff-binary+untracked-content-sha256-v1', SCOPED_WORKSPACE_ALGORITHM].includes(algorithm)) return ['unknown workspace fingerprint algorithm'];
+  if (algorithm && ![LEGACY_WORKSPACE_ALGORITHM, FULL_WORKSPACE_ALGORITHM, SCOPED_WORKSPACE_ALGORITHM].includes(algorithm)) return ['unknown workspace fingerprint algorithm'];
   if ((algorithm === SCOPED_WORKSPACE_ALGORITHM) !== Boolean(workspace?.inflight_scope)) return ['workspace scope and algorithm must match'];
   const scopeErrors = validateScopedWorkspaceSources(workspace, sources, { ...context, sourceRoot });
   if (scopeErrors.length) return scopeErrors;
+  const requiredErrors = [];
+  for (const item of workspace?.required_untracked ?? []) {
+    const ref = item?.path_ref;
+    if (typeof ref !== 'string' || !ref) {
+      requiredErrors.push('workspace required file has an invalid path_ref');
+      continue;
+    }
+    const absolute = path.resolve(sourceRoot, ref);
+    if (!isInside(sourceRoot, absolute) || (fs.existsSync(absolute) && !isInside(fs.realpathSync(sourceRoot), fs.realpathSync(absolute)))) {
+      requiredErrors.push(`workspace required file escapes source_root: ${ref}`);
+      continue;
+    }
+    if (!fs.existsSync(absolute)) {
+      requiredErrors.push(`workspace required file missing: ${ref}`);
+      continue;
+    }
+    if (!fs.statSync(absolute).isFile()) {
+      requiredErrors.push(`workspace required file is not a file: ${ref}`);
+      continue;
+    }
+    if (typeof item.sha256 !== 'string' || !/^[0-9a-f]{64}$/i.test(item.sha256)) {
+      requiredErrors.push(`workspace required file has an invalid sha256: ${ref}`);
+      continue;
+    }
+    if (typeof item.sha256 === 'string' && /^[0-9a-f]{64}$/i.test(item.sha256)) {
+      const actual = sha256(fs.readFileSync(absolute));
+      if (actual.toLowerCase() !== item.sha256.toLowerCase()) {
+        requiredErrors.push(`workspace required file drift: ${ref}`);
+      }
+    }
+  }
+  if (requiredErrors.length) return requiredErrors;
   let live;
-  try { live = readGitWorkspaceBaseline(sourceRoot, workspace?.required_untracked?.map(item => item.path_ref) ?? [], workspace?.inflight_scope ?? null); }
+  try { live = readGitWorkspaceBaseline(sourceRoot, workspace?.required_untracked?.map(item => item.path_ref) ?? [], workspace?.inflight_scope ?? null, { algorithm }); }
   catch (error) { return [`workspace verification failed: ${error.message}`]; }
-  if (!live) return [];
   if (!workspace) return ['workspace baseline is missing'];
   if (!/^[0-9a-f]{40,64}$/i.test(workspace.head || '') || !workspace.worktree_fingerprint) return ['workspace baseline fingerprint is missing or invalid'];
   const errors = [];
   for (const key of ['head', 'tree', 'branch', 'staged_count', 'tracked_modified_count', 'untracked_count']) {
     if (String(live[key]) !== String(workspace[key])) errors.push(`workspace baseline drift: ${key} expected ${workspace[key]}, found ${live[key]}`);
   }
-  for (const key of ['algorithm', 'tracked_diff_sha256', 'untracked_digest', ...(algorithm === SCOPED_WORKSPACE_ALGORITHM ? ['index_sha256'] : [])]) {
+  for (const key of ['algorithm', 'tracked_diff_sha256', 'untracked_digest', ...([FULL_WORKSPACE_ALGORITHM, SCOPED_WORKSPACE_ALGORITHM].includes(algorithm) ? ['index_sha256'] : [])]) {
     if (String(live.worktree_fingerprint[key]) !== String(workspace.worktree_fingerprint[key])) errors.push(`workspace baseline drift: worktree_fingerprint.${key}`);
   }
   return errors;
@@ -320,14 +421,97 @@ function resolveSource(source, sourceRoot, externalControlPlaneRoot, label) {
   return resolved;
 }
 
+function linkedArtifactTemp(finalPath, stat) {
+  if (stat.nlink === 1) return null;
+  if (stat.nlink !== 2) throw new Error('artifact must be an independent ordinary file');
+  const dir = path.dirname(finalPath), prefix = `.${path.basename(finalPath)}.`;
+  const matches = [];
+  for (const name of fs.readdirSync(dir).filter(name => name.startsWith(prefix) && /^[0-9a-f]{20}\.tmp$/.test(name.slice(prefix.length)))) {
+    const file = path.join(dir, name);
+    let other;
+    try { other = fs.lstatSync(file); } catch (error) { if (error.code === 'ENOENT') continue; throw error; }
+    if (other.isFile() && !other.isSymbolicLink() && other.dev === stat.dev && other.ino === stat.ino && other.nlink === 2) matches.push(file);
+  }
+  // Both links are confined to this output pair. Preserve the companion:
+  // its name and bytes do not prove that this process created it.
+  if (matches.length !== 1) throw new Error('artifact has an unbound hard link; preserve it');
+  return matches[0];
+}
+function existingArtifact(finalPath) {
+  let before;
+  try { before = fs.lstatSync(finalPath); } catch (error) { if (error.code === 'ENOENT') return null; throw error; }
+  if (!before.isFile() || before.isSymbolicLink()) throw new Error('artifact must be an independent ordinary file');
+  const companion = linkedArtifactTemp(finalPath, before);
+  const physical = fs.realpathSync(finalPath);
+  const fd = fs.openSync(finalPath, fs.constants.O_RDONLY | (fs.constants.O_NOFOLLOW || 0));
+  try {
+    const opened = fs.fstatSync(fd);
+    if (opened.dev !== before.dev || opened.ino !== before.ino || opened.nlink !== before.nlink) throw new Error('artifact identity changed before read');
+    const bytes = fs.readFileSync(fd), after = fs.fstatSync(fd), named = fs.lstatSync(finalPath);
+    if (after.size !== opened.size || after.mtimeMs !== opened.mtimeMs || after.ctimeMs !== opened.ctimeMs
+      || after.nlink !== opened.nlink || named.dev !== opened.dev || named.ino !== opened.ino || named.nlink !== opened.nlink || named.isSymbolicLink()
+      || linkedArtifactTemp(finalPath, named) !== companion
+      || fs.realpathSync(finalPath) !== physical) throw new Error('artifact changed during read');
+    return bytes;
+  } finally { fs.closeSync(fd); }
+}
+function requireExactArtifact(finalPath, bytes) {
+  const actual = existingArtifact(finalPath);
+  if (!actual || !actual.equals(bytes)) throw new Error('existing artifact conflicts with the exact prepared bytes; preserve it');
+}
+function pendingArtifactTemps(paths, pending = []) {
+  const result = new Map(pending.map(item => [item.path, item]));
+  for (const file of paths) {
+    if (!fs.existsSync(file)) continue;
+    const companion = linkedArtifactTemp(file, fs.lstatSync(file));
+    if (companion && !result.has(companion)) result.set(companion, { path: companion, reason: 'linked temporary file preserved; deletion ownership is not established' });
+  }
+  return [...result.values()];
+}
+function assertOwnedArtifactTemp(temp) {
+  const stat = fs.lstatSync(temp.path);
+  if (!stat.isFile() || stat.isSymbolicLink() || stat.dev !== temp.dev || stat.ino !== temp.ino) throw new Error('temporary artifact path was replaced; preserve it');
+}
+function cleanupArtifactTemp(temp, primaryError = null) {
+  try {
+    try { assertOwnedArtifactTemp(temp); } catch (error) { if (error.code === 'ENOENT') return []; throw error; }
+    fs.unlinkSync(temp.path);
+    return [];
+  } catch (error) {
+    const diagnostic = `temporary cleanup blocked: ${error.message}`;
+    if (primaryError) primaryError.message += `; ${diagnostic}`;
+    return [{ path: temp.path, reason: diagnostic }];
+  }
+}
+function createArtifactTemp(finalPath, bytes) {
+  fs.mkdirSync(path.dirname(finalPath), { recursive: true });
+  const tempPath = path.join(path.dirname(finalPath), `.${path.basename(finalPath)}.${crypto.randomBytes(10).toString('hex')}.tmp`);
+  const fd = fs.openSync(tempPath, 'wx'), stat = fs.fstatSync(fd);
+  const temp = { path: tempPath, dev: stat.dev, ino: stat.ino };
+  try { fs.writeFileSync(fd, bytes); fs.fsyncSync(fd); }
+  catch (error) { cleanupArtifactTemp(temp, error); throw error; }
+  finally { fs.closeSync(fd); }
+  return temp;
+}
+function publishArtifact(temp, finalPath, bytes) {
+  assertOwnedArtifactTemp(temp);
+  requireExactArtifact(temp.path, bytes);
+  try { fs.linkSync(temp.path, finalPath); }
+  catch (error) {
+    if (error.code !== 'EEXIST') throw error;
+    requireExactArtifact(finalPath, bytes);
+  }
+}
 function atomicWriteExclusive(finalPath, bytes) {
   fs.mkdirSync(path.dirname(finalPath), { recursive: true });
-  if (fs.existsSync(finalPath)) throw new Error(`refusing to overwrite existing output: ${finalPath}`);
-  const tempPath = path.join(path.dirname(finalPath), `.${path.basename(finalPath)}.${process.pid}.tmp`);
-  const fd = fs.openSync(tempPath, 'wx');
-  try { fs.writeFileSync(fd, bytes); fs.fsyncSync(fd); } finally { fs.closeSync(fd); }
-  fs.linkSync(tempPath, finalPath);
-  fs.unlinkSync(tempPath);
+  const existing = existingArtifact(finalPath);
+  if (existing) { requireExactArtifact(finalPath, bytes); return []; }
+  const temp = createArtifactTemp(finalPath, bytes);
+  try { publishArtifact(temp, finalPath, bytes); }
+  catch (error) { cleanupArtifactTemp(temp, error); throw error; }
+  const pending = cleanupArtifactTemp(temp);
+  requireExactArtifact(finalPath, bytes);
+  return pending;
 }
 
 // Hashes bind bytes, not their meaning. Check explicitly declared source facts
@@ -364,6 +548,50 @@ export function verifyHandoffInventory(draft, { sourceRoot, externalControlPlane
   const complete = ['generation', 'commander_generation'].some(field => Object.hasOwn(record, field)) && ['writer_id', 'rule_baseline', 'objective'].every(field => Object.hasOwn(record, field)) && ['platform_task_id', 'window_task_id'].some(field => Object.hasOwn(record, field));
   if (record.record_type === 'handoff_inventory' && !complete) throw new Error('INPUT_REQUIRED: handoff_inventory requires source generation, writer_id, source platform task ID, rule_baseline and objective; fill from current facts, not the old filename');
   return { status: complete ? 'PASS' : 'NOT_DECLARED', checked_fields: checked, business_freshness: 'REQUIRES_SOURCE_READBACK' };
+}
+
+export function handoffReceptionRoute(seal) {
+  const restrictions = seal.restrictions === undefined ? [] : seal.restrictions;
+  const allowed = new Set(['REMOTE_UNOBSERVED', HISTORICAL_WORKSPACE_RESTRICTION, HISTORICAL_SOURCE_RESTRICTION]);
+  if (!Array.isArray(restrictions) || restrictions.some(item => !allowed.has(item))) throw new Error('INPUT_REQUIRED: unsupported handoff restrictions');
+  const controlOnly = restrictions.some(item => [HISTORICAL_WORKSPACE_RESTRICTION, HISTORICAL_SOURCE_RESTRICTION].includes(item));
+  return {
+    protocol: controlOnly ? 'CONTROL_ONLY_V1' : 'DIRECT_OPERATOR_V1',
+    entry: `.github/scripts/${controlOnly ? 'Recover-CommanderAuthority' : 'Takeover-Handoff'}.mjs`,
+    confirmation_scope: controlOnly ? 'CONTROL_ONLY_TAKEOVER' : 'HANDOFF_PREPARE_COMMIT_ONLY',
+    current_operator_message_required: true,
+    inherited_restrictions: [...restrictions]
+  };
+}
+
+function canonicalTakeoverPrompt(ruleRoot) {
+  const manual = fs.readFileSync(path.join(ruleRoot, '01-操作者操作手册.md'), 'utf8');
+  const section = manual.split('<a id="scenario-commander-takeover"></a>')[1]?.split('<a id="scenario-ordinary-handoff"></a>')[0];
+  const prompts = [...(section ?? '').matchAll(/```text\r?\n([\s\S]*?)\r?\n```/g)];
+  if (prompts.length !== 1 || !['保留历史保全未认证限制', '仅移交中央控制权', '不恢复业务、自动化或远端权限'].every(text => prompts[0][1].includes(text))) {
+    throw new Error('INPUT_REQUIRED: canonical 1D prompt must contain the conditional control-only confirmation');
+  }
+  return prompts[0][1];
+}
+
+function withReceptionInstructions(body, seal, prompt) {
+  const route = handoffReceptionRoute(seal);
+  const marker = '<!-- HANDOFF_RECEPTION:';
+  if (body.includes(marker)) throw new Error('INPUT_REQUIRED: snapshot template must not supply generated reception instructions');
+  const conflictingEntry = route.protocol === 'CONTROL_ONLY_V1'
+    ? /\b(?:Verify-Handoff-Candidate|Takeover-Handoff)\.mjs\b|\bDIRECT_OPERATOR_V1\b/i
+    : /\bRecover-CommanderAuthority\.mjs\b|\bCONTROL_ONLY_V1\b/i;
+  if (conflictingEntry.test(body)) {
+    throw new Error('INPUT_REQUIRED: snapshot template directs reception to a conflicting entry; remove that instruction and use the generated reception route');
+  }
+  const instructions = [
+    '## 本次接管路径与一次确认', '',
+    `接管协议：${route.protocol}；接收方入口：\`${route.entry}\`。`,
+    '路线来自本次封条限制，只说明应使用的入口，不代表核验或授权已经通过。接收方仍须核当前来源、身份、规则、工作区及操作者实际消息；来源冲突或其他分支不能靠仅控制权路线跳过。', '',
+    '操作者实际停旧后，将本正式附件和下面整段1D指令一次发送给指定接收窗口；不必填写工具字段。以下正文取自当前已核验手册，附件内的副本本身不是授权。', '',
+    '```text', prompt, '```', ''
+  ].join('\n');
+  return `${body.trimEnd()}\n\n${marker}BEGIN -->\n${instructions}<!-- HANDOFF_RECEPTION:END -->\n`;
 }
 
 function hydrateSnapshotTemplate(template, { draft, sourceRoot, externalControlPlaneRoot, ruleRoot, ruleManifest, ruleManifestDigest, sealDirectory, receiptPath }) {
@@ -405,7 +633,7 @@ function hydrateSnapshotTemplate(template, { draft, sourceRoot, externalControlP
   }
   const baseline = [
     '## 轻量加载基线', '',
-    `完整读取“总指挥轻量交接启动配置.md”（版本${ruleManifest.rule_version}），自行建立加载记录。以下路径均相对规则根；指纹一致时候选不全文读取02/04/07/09/10，冲突或下一动作依赖才展开受影响正文。`, '',
+    `完整读取“总指挥轻量交接启动配置.md”（版本${ruleManifest.rule_version}）；接收方加载记录由1D接收方状态采用自动建立。以下路径均相对规则根；指纹一致时候选不全文读取02/04/07/09/10，冲突或下一动作依赖才展开受影响正文。`, '',
     '| 文件 | SHA-256 |', '|---|---|',
     ...rows.map(([name, digest]) => `| ${name} | ${digest} |`), '',
     `规则总清单：规则刷新manifest.json，SHA-256=${ruleManifestDigest}。必要未跟踪保留文件：${draft.workspace?.required_untracked?.map(item => item.path_ref).join('、') || '无'}；已跟踪但未提交的代码、配置和测试见机器记录保留清单，工作区聚合指纹见封条。`, ''
@@ -456,18 +684,32 @@ export function prepareFormalHandoff(configPath) {
   const finalPath = resolveFrom(configDir, config.final_output_path);
   const receiptPath = resolveFrom(configDir, config.receipt_output_path);
   const manifestPath = resolveFrom(configDir, config.rule_manifest_path);
+  const draft = readJson(draftPath);
+  const isCurrentMigration = draft?.handoff_phase === 'CURRENT_MIGRATION';
+  let legacySealDirectory = null;
+  if (isCurrentMigration) {
+    if (typeof config.legacy_seal_directory !== 'string' || !config.legacy_seal_directory) throw new Error('CURRENT_MIGRATION requires legacy_seal_directory');
+    legacySealDirectory = fs.realpathSync(resolveFrom(configDir, config.legacy_seal_directory));
+    if (!isInside(sourceRoot, legacySealDirectory)) throw new Error('legacy seal directory must stay inside the source repository');
+  }
   if (!/^[a-z0-9][a-z0-9._-]*-commander-handoff-\d{8}-final-\d+\.md$/i.test(path.basename(finalPath))) throw new Error('formal output filename must include project slug, date, final, and an incrementing number');
   if (finalPath === receiptPath) throw new Error('formal output and receipt must use different paths');
   const physicalFinalPath = physicalTarget(finalPath);
   const physicalReceiptPath = physicalTarget(receiptPath);
   if (isInside(workflowRoot, physicalFinalPath) || isInside(workflowRoot, physicalReceiptPath) || isInside(sourceRoot, physicalFinalPath) || isInside(sourceRoot, physicalReceiptPath) || (externalControlPlaneRoot && (isInside(externalControlPlaneRoot, physicalFinalPath) || isInside(externalControlPlaneRoot, physicalReceiptPath)))) throw new Error('formal output and receipt must be stored outside the workflow, source, and external control-plane repositories');
-  if (fs.existsSync(finalPath) || fs.existsSync(receiptPath)) throw new Error('formal output or receipt already exists');
+  const existingFinal = existingArtifact(finalPath), existingReceipt = existingArtifact(receiptPath);
 
   const physicalSealDirectory = physicalTarget(sealDirectory);
   if (!isInside(sourceRoot, physicalSealDirectory)) throw new Error('seal directory must stay inside the source repository');
+  const targetComparable = fs.existsSync(sealDirectory) ? fs.realpathSync(sealDirectory) : physicalSealDirectory;
+  if (isCurrentMigration) {
+    if (isInside(legacySealDirectory, targetComparable) || isInside(targetComparable, legacySealDirectory)) throw new Error('CURRENT_MIGRATION requires separate, non-nested legacy and target seal directories');
+    if (fs.existsSync(targetComparable) && fs.readdirSync(targetComparable).length) throw new Error('CURRENT_MIGRATION target seal directory must be empty');
+  }
   if (!preflightOnly) fs.mkdirSync(sealDirectory, { recursive: true });
   const realSealDirectory = preflightOnly ? physicalSealDirectory : fs.realpathSync(sealDirectory);
   if (!isInside(sourceRoot, realSealDirectory)) throw new Error('seal directory must stay inside the source repository');
+  let historicalMigration = null;
   const sealRelative = path.relative(sourceRoot, realSealDirectory).replaceAll('\\', '/');
   const ignored = spawnSync('git', ['-C', sourceRoot, 'check-ignore', '-q', '--', sealRelative]);
   if (ignored.status !== 0) throw new Error('seal directory must be excluded by the source repository .gitignore');
@@ -477,20 +719,32 @@ export function prepareFormalHandoff(configPath) {
   const liveManifestPath = config.live_rule_manifest_path ? resolveFrom(configDir, config.live_rule_manifest_path) : null;
   const liveRuleManifest = liveManifestPath ? verifyRuleManifest(ruleRoot, liveManifestPath) : null;
   const liveRuleManifestDigest = liveManifestPath ? sha256(fs.readFileSync(liveManifestPath)) : ruleManifestDigest;
-  const draft = readJson(draftPath);
   if (draft.rule_baseline?.manifest_sha256?.toLowerCase() !== ruleManifestDigest.toLowerCase() || draft.rule_baseline?.rule_version !== ruleManifest.rule_version) throw new Error('RULE_REBASE_REQUIRED: candidate rule baseline is stale; rerun 1C/1D from the same breakpoint and current stable manifest');
   if (liveRuleManifest) {
     const drift = classifyRuleDrift({ pinned: { rule_version: ruleManifest.rule_version, manifest_sha256: ruleManifestDigest }, live: { rule_version: liveRuleManifest.rule_version, manifest_sha256: liveRuleManifestDigest } });
     const declared = draft.rule_baseline?.compatibility ?? 'SAME';
     if (drift.status !== declared && !(drift.status === 'SAME' && declared === 'NEWER_COMPATIBLE')) throw new Error(`RULE_REBASE_REQUIRED: live rule epoch is ${drift.status}; candidate declared ${declared}`);
   }
+  if (isCurrentMigration) {
+    historicalMigration = inspectHistoricalRestrictedRecovery(legacySealDirectory);
+    if (historicalMigration.status !== HISTORICAL_UNVERIFIED || historicalMigration.historical_chain_status !== 'PASS') throw new Error(`historical restricted chain is not migratable: ${historicalMigration.errors.join('; ') || historicalMigration.historical_chain_status}`);
+  }
   const existingSealState = verifyChain(realSealDirectory, { sourceRoot, externalControlPlaneRoot, verifyLatestSources: false });
   const hasLegacySealRecords = existingSealState.records.some(record => record.schema_version < 3);
   if (draft.handoff_phase === 'CURRENT_MIGRATION' && hasLegacySealRecords) {
     throw new Error('LEGACY_MIGRATION_REQUIRES_EMPTY_V3_DIRECTORY: keep the v1/v2 seal directory read-only and configure a separate empty directory for the first v3 migration seal');
   }
-  const allowedPreflightPhase = preflightOnly && draft.handoff_phase === 'CURRENT_MIGRATION';
-  if (![3, 4].includes(draft.schema_version) || (!allowedPreflightPhase && draft.handoff_phase !== 'MATERIAL_PREPARED') || (!allowedPreflightPhase && !['READY', 'READY_WITH_RESTRICTIONS'].includes(draft.switch_status))) throw new Error('formal handoff requires a schema v3/v4 MATERIAL_PREPARED draft in READY or READY_WITH_RESTRICTIONS');
+  const allowedPreflightPhase = preflightOnly && isCurrentMigration;
+  const allowedFormalMigration = !preflightOnly && isCurrentMigration;
+  if (![3, 4].includes(draft.schema_version) || (!allowedPreflightPhase && !allowedFormalMigration && draft.handoff_phase !== 'MATERIAL_PREPARED') || (!allowedPreflightPhase && !allowedFormalMigration && !['READY', 'READY_WITH_RESTRICTIONS'].includes(draft.switch_status))) throw new Error('formal handoff requires a schema v3/v4 MATERIAL_PREPARED draft in READY or READY_WITH_RESTRICTIONS, or a separately bound CURRENT_MIGRATION');
+  if (isCurrentMigration) {
+    if (config.expected_previous_digest !== undefined && config.expected_previous_digest !== null) throw new Error('CURRENT_MIGRATION must start with no expected predecessor digest');
+    if (draft.workspace?.inflight_scope || draft.workspace?.worktree_fingerprint?.algorithm !== FULL_WORKSPACE_ALGORITHM) throw new Error('CURRENT_MIGRATION requires a full strict V2 workspace without an in-flight scope');
+    const migration = draft.migration;
+    const historicalLatest = historicalMigration.latest;
+    if (!migration || migration.legacy_latest_seal_digest !== historicalLatest.seal_digest || migration.legacy_generation !== historicalLatest.generation || migration.legacy_writer_id !== historicalLatest.writer_id || migration.basis !== 'CURRENT_ONLY_NO_RETROACTIVE_TRANSITION' || typeof migration.migrated_at !== 'string' || Date.parse(migration.migrated_at) < Date.parse(historicalLatest.sealed_at)) throw new Error('CURRENT_MIGRATION draft does not bind the inspected historical seal');
+    Object.assign(draft, normalizeCurrentMigrationDraft(draft));
+  }
   const sourceRefs = Object.values(draft.sources ?? {}).filter(item => item.root_ref !== 'external_control_plane').map(item => item.path_ref);
   // required_untracked is a protection summary, not a formal source inventory.
   const inventory = unicodeInventory(sourceRoot, sourceRefs);
@@ -525,12 +779,14 @@ export function prepareFormalHandoff(configPath) {
     if (Date.parse(source.fact_cutoff) > Date.parse(draft.fact_cutoff)) sourceDigestErrors.push(`${name}: source fact_cutoff is after draft fact_cutoff`);
   }
   if (sourceDigestErrors.length) throw new Error(`preflight source verification failed: ${sourceDigestErrors.join('; ')}`);
+  if (draft.handoff_phase === 'MATERIAL_PREPARED') verifyReceiverReadiness(draft, { sourceRoot, externalControlPlaneRoot, sealDirectory });
   const inventoryVerification = verifyHandoffInventory(draft, { sourceRoot, externalControlPlaneRoot });
   // Sources are verified before parsing their inventory or rendering links.
   // A malformed delivery template must not advance the immutable seal chain.
   let rendered = hydrateSnapshotTemplate(fs.readFileSync(templatePath, 'utf8'), {
     draft, sourceRoot, externalControlPlaneRoot, ruleRoot, ruleManifest, ruleManifestDigest, sealDirectory, receiptPath
   });
+  const takeoverPrompt = canonicalTakeoverPrompt(ruleRoot);
   const snapshotId = path.basename(finalPath, '.md');
   const templateTokens = ['{{SNAPSHOT_ID}}', '{{SEAL_DIGEST}}', '{{FACT_CUTOFF}}', '{{EVENT_ID}}'];
   for (const token of templateTokens) if (!rendered.includes(token)) throw new Error(`snapshot template is missing placeholder: ${token}`);
@@ -550,7 +806,7 @@ export function prepareFormalHandoff(configPath) {
     } catch (error) {
       // Only failed observation may be downgraded. An observed HEAD conflict
       // remains a drift error even for a restricted candidate.
-      if (draft.switch_status !== 'READY_WITH_RESTRICTIONS') throw error;
+      if (draft.switch_status !== 'READY_WITH_RESTRICTIONS' || ['REMOTE_PROBE_TIMEOUT', 'REMOTE_PROBE_ABORTED'].includes(error.code)) throw error;
       draft.remote = { status: 'UNKNOWN', default_ref: draft.remote.default_ref, head: null, observed_at: null };
       draft.control_handoff_confidence = 'MEDIUM';
       draft.candidate_verification_status = 'PASS_WITH_RESTRICTIONS';
@@ -585,67 +841,27 @@ export function prepareFormalHandoff(configPath) {
     transitionTicket: config.transition_ticket ? resolveFrom(configDir, config.transition_ticket) : undefined
   };
   const appendPlan = planSealAppend(realSealDirectory, draft, { ...appendOptions, allowReuse: true });
-  if (preflightOnly) return {
-    status: draft.switch_status === 'READY_WITH_RESTRICTIONS' ? 'READY_WITH_RESTRICTIONS' : 'READY',
-    mode: 'PREFLIGHT_ONLY',
-    append_action: appendPlan.action,
-    project_key: config.project_key,
-    source_root: sourceRoot,
-    external_control_plane_root: externalControlPlaneRoot,
-    source_count: Object.keys(draft.sources ?? {}).length,
-    inventory_verification: inventoryVerification,
-    workspace_protection: {
-      staged_count: draft.workspace?.staged_count ?? null,
-      tracked_modified_count: draft.workspace?.tracked_modified_count ?? null,
-      untracked_count: draft.workspace?.untracked_count ?? null,
-      required_untracked_count: draft.workspace?.required_untracked?.length ?? 0,
-      required_untracked_is_inventory: false
-    },
-    legacy_migration: draft.handoff_phase === 'CURRENT_MIGRATION' ? 'BOUND_TO_LEGACY_SUMMARY' : 'NONE'
-  };
-
-  // If a previous attempt appended the immutable seal but failed while writing
-  // the external artifact, reuse that exact seal. This makes preparation
-  // retryable without advancing the chain or inventing a second event.
-  const currentPlan = planSealAppend(realSealDirectory, draft, { ...appendOptions, allowReuse: true });
-  const seal = currentPlan.action === 'REUSE' ? currentPlan.seal : appendSeal(realSealDirectory, draft, appendOptions);
-  const verified = verifyChain(realSealDirectory, { sourceRoot, externalControlPlaneRoot });
-  if (verified.status !== 'PASS' || !verified.handoff_ready || verified.latest?.seal_digest !== seal.seal_digest || verified.latest_source_status !== 'PASS') throw new Error(`new seal did not pass live verification: ${verified.errors.join('; ')}`);
-
-  const replacements = {
-    '{{SNAPSHOT_ID}}': snapshotId,
-    '{{SEAL_DIGEST}}': seal.seal_digest,
-    '{{FACT_CUTOFF}}': seal.fact_cutoff,
-    '{{EVENT_ID}}': seal.event_id
-  };
-  replacements['{{VERIFICATION_COMMAND}}'] = verificationCommand;
-  for (const [token, value] of Object.entries(replacements)) {
-    if (token === '{{VERIFICATION_COMMAND}}' && !rendered.includes(token)) continue;
-    if (!rendered.includes(token)) throw new Error(`snapshot template is missing placeholder: ${token}`);
-    rendered = rendered.replaceAll(token, value);
-  }
-  rendered = rendered.replace(verificationCommandPattern, verificationCommand);
-  const renderedVerificationCommand = rendered.match(verificationCommandPattern)?.[0];
-  if (renderedVerificationCommand !== verificationCommand) {
-    throw new Error('snapshot verification command does not match the live seal directory and source root');
-  }
-  const finalBytes = Buffer.from(rendered, 'utf8');
-  const tempSnapshot = path.join(path.dirname(finalPath), `.${path.basename(finalPath)}.${process.pid}.tmp`);
-  fs.mkdirSync(path.dirname(finalPath), { recursive: true });
-  const tempFd = fs.openSync(tempSnapshot, 'wx');
-  try { fs.writeFileSync(tempFd, finalBytes); fs.fsyncSync(tempFd); } finally { fs.closeSync(tempFd); }
-  try {
-    if (sha256(fs.readFileSync(manifestPath)) !== ruleManifestDigest) throw new Error('RULE_SOURCE_DRIFTED: rule manifest changed while preparing the attachment; mark candidate RULE_REBASE_PENDING and rerun from the same breakpoint');
-    verifyRuleManifest(ruleRoot, manifestPath);
-    const finalVerification = verifyChain(realSealDirectory, { sourceRoot, externalControlPlaneRoot });
-    if (finalVerification.status !== 'PASS' || !finalVerification.handoff_ready || finalVerification.latest?.seal_digest !== seal.seal_digest || finalVerification.latest_source_status !== 'PASS') throw new Error(`facts drifted while rendering the attachment: ${finalVerification.errors.join('; ')}`);
-    const finalWorkspaceErrors = verifyWorkspaceBaseline(sourceRoot, seal.workspace, seal.sources, { externalControlPlaneRoot, ruleBaseline: seal.rule_baseline, workflowRepositoryRoot: workflowRoot });
-    assertPrivateControlStorage(seal, { sourceRoot, externalControlPlaneRoot });
-    if (finalWorkspaceErrors.length) throw new Error(`workspace drifted while rendering the attachment: ${finalWorkspaceErrors.join('; ')}`);
-    if (seal.remote?.status === 'PASS') {
-      const finalLiveRemote = readLiveRemoteBaseline(sourceRoot, seal.remote.default_ref);
-      if (finalLiveRemote && finalLiveRemote.head !== String(seal.remote.head || '').toLowerCase()) throw new Error(`remote baseline drifted while rendering the attachment: expected ${seal.remote.head}, found ${finalLiveRemote.head}`);
+  if ((existingFinal || existingReceipt) && appendPlan.action !== 'REUSE') throw new Error('existing artifacts require the exact already-sealed event');
+  const renderArtifacts = seal => {
+    let body = rendered;
+    const replacements = {
+      '{{SNAPSHOT_ID}}': snapshotId,
+      '{{SEAL_DIGEST}}': seal.seal_digest,
+      '{{FACT_CUTOFF}}': seal.fact_cutoff,
+      '{{EVENT_ID}}': seal.event_id,
+      '{{VERIFICATION_COMMAND}}': verificationCommand
+    };
+    for (const [token, value] of Object.entries(replacements)) {
+      if (token === '{{VERIFICATION_COMMAND}}' && !body.includes(token)) continue;
+      if (!body.includes(token)) throw new Error(`snapshot template is missing placeholder: ${token}`);
+      body = body.replaceAll(token, value);
     }
+    body = body.replace(verificationCommandPattern, verificationCommand);
+    if (body.match(verificationCommandPattern)?.[0] !== verificationCommand) {
+      throw new Error('snapshot verification command does not match the live seal directory and source root');
+    }
+    body = withReceptionInstructions(body, seal, takeoverPrompt);
+    const finalBytes = Buffer.from(body, 'utf8');
     const receipt = {
       schema_version: 1,
       artifact_status: 'GENERATED_NOT_DELIVERED',
@@ -661,6 +877,7 @@ export function prepareFormalHandoff(configPath) {
       live_rule_manifest_sha256: liveRuleManifestDigest,
       unicode_inventory: inventory,
       inventory_verification: inventoryVerification,
+      reception_route: handoffReceptionRoute(seal),
       verification: {
         tool: 'HandoffSeal.mjs',
         command: verificationCommand,
@@ -669,14 +886,68 @@ export function prepareFormalHandoff(configPath) {
         expected: { status: 'PASS', latest_source_status: 'PASS', handoff_ready: true }
       }
     };
+    return { finalBytes, receipt, receiptBytes: Buffer.from(`${JSON.stringify(receipt, null, 2)}\n`, 'utf8') };
+  };
+  const preview = renderArtifacts(appendPlan.seal);
+  if (existingReceipt) requireExactArtifact(receiptPath, preview.receiptBytes);
+  if (existingFinal) requireExactArtifact(finalPath, preview.finalBytes);
+  if (preflightOnly) return {
+    status: draft.switch_status === 'READY_WITH_RESTRICTIONS' ? 'READY_WITH_RESTRICTIONS' : 'READY',
+    mode: 'PREFLIGHT_ONLY',
+    append_action: appendPlan.action,
+    project_key: config.project_key,
+    source_root: sourceRoot,
+    external_control_plane_root: externalControlPlaneRoot,
+    source_count: Object.keys(draft.sources ?? {}).length,
+    inventory_verification: inventoryVerification,
+    reception_route: preview.receipt.reception_route,
+    workspace_protection: {
+      staged_count: draft.workspace?.staged_count ?? null,
+      tracked_modified_count: draft.workspace?.tracked_modified_count ?? null,
+      untracked_count: draft.workspace?.untracked_count ?? null,
+      required_untracked_count: draft.workspace?.required_untracked?.length ?? 0,
+      required_untracked_is_inventory: false
+    },
+    legacy_migration: draft.handoff_phase === 'CURRENT_MIGRATION' ? 'BOUND_TO_LEGACY_SUMMARY' : 'NONE',
+    cleanup_pending: pendingArtifactTemps([receiptPath, finalPath])
+  };
+
+  // If a previous attempt appended the immutable seal but failed while writing
+  // the external artifact, reuse that exact seal. This makes preparation
+  // retryable without advancing the chain or inventing a second event.
+  const currentPlan = planSealAppend(realSealDirectory, draft, { ...appendOptions, allowReuse: true });
+  const seal = currentPlan.action === 'REUSE' ? currentPlan.seal : appendSeal(realSealDirectory, draft, appendOptions);
+  const verified = verifyChain(realSealDirectory, { sourceRoot, externalControlPlaneRoot });
+  if (verified.status !== 'PASS' || !verified.handoff_ready || verified.latest?.seal_digest !== seal.seal_digest || verified.latest_source_status !== 'PASS') throw new Error(`new seal did not pass live verification: ${verified.errors.join('; ')}`);
+
+  const { finalBytes, receipt, receiptBytes } = renderArtifacts(seal);
+  const tempSnapshot = createArtifactTemp(finalPath, finalBytes);
+  try {
+    if (sha256(fs.readFileSync(manifestPath)) !== ruleManifestDigest) throw new Error('RULE_SOURCE_DRIFTED: rule manifest changed while preparing the attachment; mark candidate RULE_REBASE_PENDING and rerun from the same breakpoint');
+    verifyRuleManifest(ruleRoot, manifestPath);
+    const finalVerification = verifyChain(realSealDirectory, { sourceRoot, externalControlPlaneRoot });
+    if (finalVerification.status !== 'PASS' || !finalVerification.handoff_ready || finalVerification.latest?.seal_digest !== seal.seal_digest || finalVerification.latest_source_status !== 'PASS') throw new Error(`facts drifted while rendering the attachment: ${finalVerification.errors.join('; ')}`);
+    const finalWorkspaceErrors = verifyWorkspaceBaseline(sourceRoot, seal.workspace, seal.sources, { externalControlPlaneRoot, ruleBaseline: seal.rule_baseline, workflowRepositoryRoot: workflowRoot });
+    assertPrivateControlStorage(seal, { sourceRoot, externalControlPlaneRoot });
+    if (finalWorkspaceErrors.length) throw new Error(`workspace drifted while rendering the attachment: ${finalWorkspaceErrors.join('; ')}`);
+    if (seal.remote?.status === 'PASS') {
+      const finalLiveRemote = readLiveRemoteBaseline(sourceRoot, seal.remote.default_ref);
+      if (finalLiveRemote && finalLiveRemote.head !== String(seal.remote.head || '').toLowerCase()) throw new Error(`remote baseline drifted while rendering the attachment: expected ${seal.remote.head}, found ${finalLiveRemote.head}`);
+    }
     if (physicalTarget(finalPath) !== physicalFinalPath || physicalTarget(receiptPath) !== physicalReceiptPath) throw new Error('output path resolution drifted while preparing the attachment');
-    atomicWriteExclusive(receiptPath, Buffer.from(`${JSON.stringify(receipt, null, 2)}\n`, 'utf8'));
+    // Compare both remnants before filling either half of an interrupted pair.
+    if (existingArtifact(receiptPath)) requireExactArtifact(receiptPath, receiptBytes);
+    if (existingArtifact(finalPath)) requireExactArtifact(finalPath, finalBytes);
+    const receiptCleanup = atomicWriteExclusive(receiptPath, receiptBytes);
     if (physicalTarget(finalPath) !== physicalFinalPath) throw new Error('formal output path resolution drifted before finalization');
-    fs.linkSync(tempSnapshot, finalPath);
-    fs.unlinkSync(tempSnapshot);
-    return { final_path: finalPath, receipt_path: receiptPath, receipt, chain_status: finalVerification.status };
+    publishArtifact(tempSnapshot, finalPath, finalBytes);
+    const snapshotCleanup = cleanupArtifactTemp(tempSnapshot);
+    requireExactArtifact(receiptPath, receiptBytes);
+    requireExactArtifact(finalPath, finalBytes);
+    return { final_path: finalPath, receipt_path: receiptPath, receipt, chain_status: finalVerification.status,
+      cleanup_pending: pendingArtifactTemps([receiptPath, finalPath], [...receiptCleanup, ...snapshotCleanup]) };
   } catch (error) {
-    if (fs.existsSync(tempSnapshot)) fs.unlinkSync(tempSnapshot);
+    cleanupArtifactTemp(tempSnapshot, error);
     throw error;
   }
 }

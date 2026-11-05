@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { byteDigest as hash, resolveSource } from './HandoffControl.mjs';
-import { collectScopedWorkspaceBaseline } from './HandoffWorkspaceScope.mjs';
+import { FULL_WORKSPACE_ALGORITHM, collectScopedWorkspaceBaseline } from './HandoffWorkspaceScope.mjs';
 import { validateWorkspaceAmendment } from './HandoffWorkspaceAmendment.mjs';
 
 const assert = (condition, message) => { if (!condition) throw new Error(`workspace changed during transaction: ${message}`); };
@@ -76,6 +76,7 @@ function validateBefore(evidence, previous, plan, options) {
     assert(digest(evidence.worktree) === fp.tracked_diff_sha256 && digest(evidence.strictUntracked) === fp.untracked_digest && digest(evidence.protectedIndex) === fp.index_sha256, 'before evidence does not match sealed scoped workspace');
   } else {
     assert(hash(Buffer.from(evidence.diff, 'base64')) === fp.tracked_diff_sha256 && digest(evidence.untracked) === fp.untracked_digest, 'before evidence does not match sealed workspace');
+    if (fp.algorithm === FULL_WORKSPACE_ALGORITHM) assert(hash(Buffer.from(evidence.index, 'base64')) === fp.index_sha256, 'before index does not match sealed workspace');
   }
   protectedEvidence(evidence); // Reject ambiguous projections before mutation.
 }

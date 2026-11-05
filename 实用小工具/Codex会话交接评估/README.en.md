@@ -4,6 +4,8 @@
 
 Save frequently used task IDs and query local Codex turns, file size, compaction and handoff guidance with one click. **Recommended download: Windows desk 0.2.0-dev.10.** No commands are required for everyday use. Source sessions are read-only; data is not uploaded.
 
+The tool cannot obtain the host Codex window's current task ID automatically. It never guesses from the most recently modified file, window title, or last index entry. Provide the exact UUID first; `CODEX_HOME` is preferred for both the CLI and the Windows desk, and the CLI also accepts explicit `-CodexHome`.
+
 The repository source includes score-bar recovery, history compatibility and Chinese text encoding fixes; the published dev.10 ZIP is unchanged. Reload the page for the renderer fix; restart only this tool to adopt backend/analyzer edits. Codex need not be restarted.
 
 ## Download and start
@@ -53,6 +55,8 @@ Traditional thresholds are heuristics, not calibrated against end-to-end cost or
 
 Cards show the latest logged request input directly below the score, without repeating the scoring method; the detailed report retains all scoring evidence. Restored, source-changed or failed-refresh results visibly say “Previous query input”; the tooltip preserves the original observation and query times.
 
+When one task has session segments across providers or model routes, querying no longer fails solely because `model_provider` differs. The report warns about the provider change and starts a new token-trend baseline at the boundary. Conflicting task identity, source or project binding still blocks aggregation so unrelated files are never joined silently.
+
 Native per-request input is independent: a valid nonnegative safe integer (including zero) can be shown without a window or cumulative counter. It is not cumulative input or the length of a user message. Capacity, utilization and growth are validated separately. `input_tokens` already includes `cached_input_tokens`; do not add them again. Use `model_context_window` from the same event, not the largest routing-group window; missing cumulative `total_tokens` does not establish a continuous observation. Growth averages five intervals from final observations in six completed turns sharing the same session, model, declared provider, window and compaction segment. Missing/invalid usage remains unknown; valid zero remains zero. Compaction, identity/window changes, counter rollback or missing new usage resets the baseline; repeated snapshots add no samples. Negative growth is retained; insufficient samples leave growth unknown. There is no arbitrary observation target or forecast of turns to reach it. Declared provider does not prove the actual gateway upstream.
 
 Handoff decisions need two further checks: whether the current work unit is complete, evidence is sufficient and recovery is possible; and whether future savings exceed preparation, rule reloads, cache rebuilding and expected rework. A terminal log turn cannot prove business completion. The tool cannot reliably infer these conditions and reports them as unknown. If capacity permits, complete the current unit and hand off at a safe breakpoint. Otherwise preserve evidence and a recoverable checkpoint first, without interrupting in-flight work or insisting on completing the entire task at any risk. A score of eight or more is a red traditional-heuristic signal, not an immediate window-switch command.
@@ -79,4 +83,4 @@ Results are engineering guidance, not official thresholds or live status. Segmen
 
 Detailed reports and history can contain complete user input and local paths. They remain in `.local` and must not be published without review. ZIP files exclude private state. The service listens only on loopback and validates a random connection token. Exit does not stop other programs or Codex tasks. Preserve the analyzer’s integrity warnings; missing Token counts must not be treated as zero.
 
-<!-- README-SOURCE-SHA256: 96ec6e12fde73376dcf84e7854a47956daa388799cccccc6194a4c40bae6c518 -->
+<!-- README-SOURCE-SHA256: d0051f55bb42d8a467826a25d08c456345b591ec220ffe027f3567fbeab84076 -->

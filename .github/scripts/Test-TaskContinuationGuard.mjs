@@ -138,6 +138,18 @@ test('早先PASS不能代签后续活动或其他钩子要求的继续工作', (
   handleHook(g.directory,event(g)); atomic(path.join(g.workspace,'result.json'),value('ACTIONABLE_FAIL','other-hook-work'));
   assert.equal(handleHook(g.directory,event(g,'t2',true)).decision,'block');
 });
+test('同一回合验收通过后发生工具活动，不能复用旧Stop结果', () => {
+  const f=fixture('pass-then-same-stop'); prepare(f.contractFile,f.directory); atomic(path.join(f.workspace,'result.json'),value('PASS'));
+  assert.deepEqual(handleHook(f.directory,event(f)), {});
+  assert.equal(json(path.join(f.directory,'state.json')).checkCount, 1);
+  const pre={...event(f),hook_event_name:'PreToolUse',tool_use_id:'same-turn-tool',tool_name:'exec_command'};
+  handleHook(f.directory,pre);
+  handleHook(f.directory,{...pre,hook_event_name:'PostToolUse',tool_response:'Process exited with code 0'});
+  atomic(path.join(f.workspace,'result.json'),value('ACTIONABLE_FAIL','changed-after-pass'));
+  const result=handleHook(f.directory,event(f));
+  assert.equal(result.decision,'block');
+  assert.equal(json(path.join(f.directory,'state.json')).checkCount, 2);
+});
 test('固定真正的检查入口；拒绝任务内控制文件；检查脚本变化不能通过', () => {
   const f=fixture('no-entry-pin'); const c=json(f.contractFile); c.checker.pins=c.checker.pins.slice(0,1); atomic(f.contractFile,c);
   assert.throws(()=>prepare(f.contractFile,f.directory),/脚本入口未固定/);

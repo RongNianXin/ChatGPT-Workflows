@@ -422,7 +422,7 @@
       const identity = artifactIdentityFor(card.__pipelineEntry);
       if (!identity || !card.querySelector(".comparison-card-output img")) return;
       const comparisonKey = diagnosticMode ? nullableText(card.__pipelineEntry && card.__pipelineEntry.comparisonKey) : null;
-      const key = [identity.stage, identity.role, identity.kind, identity.sha256, comparisonKey || ""].join("|");
+      const key = JSON.stringify([identity.stage, identity.role, identity.kind, identity.sha256, comparisonKey || ""]);
       if (!groups.has(key)) groups.set(key, []);
       groups.get(key).push({ card, index });
     });

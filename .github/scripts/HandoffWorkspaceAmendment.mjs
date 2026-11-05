@@ -4,6 +4,7 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { byteDigest as hash } from './HandoffControl.mjs';
 import { readGitWorkspaceBaseline } from './Prepare-Handoff.mjs';
+import { FULL_WORKSPACE_ALGORITHM, LEGACY_WORKSPACE_ALGORITHM, validWorkspaceFingerprint } from './HandoffWorkspaceScope.mjs';
 
 const assert = (ok, message) => { if (!ok) throw new Error(`WORKSPACE_AMENDMENT: ${message}`); };
 const digest = value => hash(Buffer.from(JSON.stringify(value)));
@@ -25,7 +26,8 @@ function safe(root, ref) {
 function observe(previous, options, removed) {
   const root = options.sourceRoot;
   const required = previous.workspace.required_untracked.filter(f => !removed.has(f.path_ref));
-  const workspace = { ...previous.workspace, ...readGitWorkspaceBaseline(root, required.map(f => f.path_ref)), required_untracked: required };
+  const algorithm = previous.workspace.worktree_fingerprint.algorithm;
+  const workspace = { ...previous.workspace, ...readGitWorkspaceBaseline(root, required.map(f => f.path_ref), null, { algorithm }), required_untracked: required };
   const names = git(root, ['diff', '--name-only', '-z', 'HEAD', '--']).toString('utf8').split('\0').filter(Boolean);
   const patches = names.map(ref => ({ path_ref: ref, bytes: git(root, ['diff', '--binary', 'HEAD', '--', `:(literal)${ref}`]).toString('base64') }));
   const diff = git(root, ['diff', '--binary', 'HEAD', '--']);
@@ -49,7 +51,8 @@ export function validateWorkspaceAmendment(previous, options, live = true) {
   if (!a) return previous;
   assert(a.version === 1 && a.origin === 'CURRENT_OPERATOR_MESSAGE' && a.scope === 'HANDOFF_WORKSPACE_REPAIR_ONLY' && typeof a.evidence_ref === 'string' && a.evidence_ref.trim(), 'explicit versioned operator repair grant required');
   assert(a.previous_seal_digest === previous.seal_digest && a.recipient_writer_id === options.recipient?.writerId && a.recipient_platform_id === options.recipient?.platformTaskId && a.recipient_writer_id !== previous.writer_id, 'predecessor or receiving identity mismatch');
-  assert(previous.workspace.worktree_fingerprint.algorithm === 'git-diff-binary+untracked-content-sha256-v1' && !previous.workspace.inflight_scope && previous.workspace.staged_count === 0, 'only an unstaged strict V1 baseline is supported');
+  assert([LEGACY_WORKSPACE_ALGORITHM, FULL_WORKSPACE_ALGORITHM].includes(previous.workspace.worktree_fingerprint.algorithm)
+    && !previous.workspace.inflight_scope && previous.workspace.staged_count === 0, 'only an unstaged full strict V1 or V2 baseline is supported');
   assert(Array.isArray(a.deletions) && a.deletions.length && Array.isArray(a.maintenance), 'exact deletion and maintenance lists required');
   const paths = [...a.deletions, ...a.maintenance.map(f => f.path_ref)];
   assert(new Set(paths).size === paths.length, 'duplicate or overlapping repair paths');
@@ -58,6 +61,15 @@ export function validateWorkspaceAmendment(previous, options, live = true) {
   assert(paths.every(ref => !sourcePaths.has(ref)), 'sealed source is not a repair target');
   const proof = a.evidence, before = previous.workspace, fp = before.worktree_fingerprint;
   assert(proof?.workspace && Array.isArray(proof.patches) && Array.isArray(proof.untracked), 'complete repair evidence required');
+  const observedFp = proof.workspace.worktree_fingerprint;
+  assert(validWorkspaceFingerprint(before) && validWorkspaceFingerprint(proof.workspace)
+    && observedFp.algorithm === fp.algorithm, 'repair workspace algorithm or fingerprint mismatch');
+  if (fp.algorithm === FULL_WORKSPACE_ALGORITHM) {
+    assert(typeof proof.index === 'string', 'index evidence required');
+    const indexBytes = Buffer.from(proof.index, 'base64');
+    assert(indexBytes.toString('base64') === proof.index, 'invalid index evidence encoding');
+    assert(hash(indexBytes) === fp.index_sha256 && observedFp.index_sha256 === fp.index_sha256, 'index changed outside repair');
+  }
   const removed = new Set(a.deletions), maintenance = new Map(a.maintenance.map(f => [f.path_ref, f]));
   assert(new Set(proof.patches.map(f => f.path_ref)).size === proof.patches.length && new Set(proof.untracked.map(f => f.path_ref)).size === proof.untracked.length, 'duplicate evidence paths');
   assert(hash(Buffer.concat(proof.patches.map(f => Buffer.from(f.bytes, 'base64')))) === proof.workspace.worktree_fingerprint.tracked_diff_sha256 && digest(proof.untracked) === proof.workspace.worktree_fingerprint.untracked_digest, 'live evidence fingerprint mismatch');

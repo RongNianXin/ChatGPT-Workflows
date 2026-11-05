@@ -13,13 +13,51 @@ const pathKey = input => process.platform === 'win32' ? input.toLowerCase() : in
 const samePath = (a, b) => pathKey(canonical(a)) === pathKey(canonical(b));
 const digest = input => crypto.createHash('sha256').update(input).digest('hex');
 
-function git(cwd, args, allowed = [0]) {
-  const result = spawnSync('git', ['--no-optional-locks', '-c', 'core.fsmonitor=false', '-c', 'core.untrackedCache=false', ...args], {
+const redirectedEnvironment = new Set([
+  'GIT_DIR', 'GIT_WORK_TREE', 'GIT_COMMON_DIR', 'GIT_INDEX_FILE', 'GIT_OBJECT_DIRECTORY',
+  'GIT_ALTERNATE_OBJECT_DIRECTORIES', 'GIT_NAMESPACE', 'GIT_CONFIG', 'GIT_CONFIG_PARAMETERS',
+  'GIT_CEILING_DIRECTORIES', 'GIT_DISCOVERY_ACROSS_FILESYSTEM', 'GIT_SHALLOW_FILE',
+  'GIT_GRAFT_FILE', 'GIT_REPLACE_REF_BASE', 'GIT_QUARANTINE_PATH', 'GIT_ATTR_SOURCE',
+  'GIT_LITERAL_PATHSPECS', 'GIT_GLOB_PATHSPECS', 'GIT_NOGLOB_PATHSPECS', 'GIT_ICASE_PATHSPECS'
+]);
+
+function git(cwd, args, allowed = [0], input) {
+  const redirected = Object.keys(process.env).filter(name => {
+    const key = name.toUpperCase();
+    return redirectedEnvironment.has(key) || /^GIT_CONFIG_(?:COUNT|KEY_.*|VALUE_.*)$/u.test(key)
+      || key.startsWith('GIT_TRACE') || key.startsWith('GIT_REDIRECT_');
+  });
+  if (redirected.length) throw new Error(`GIT_ENVIRONMENT_OVERRIDE: ${redirected.join(', ')}`);
+  const result = spawnSync('git', ['--no-optional-locks', '--literal-pathspecs',
+    '-c', 'core.fsmonitor=false', '-c', 'core.untrackedCache=false', '-c', 'status.submoduleSummary=false', ...args], {
     cwd, encoding: 'utf8', timeout: 30000, maxBuffer: 16 * 1024 * 1024,
+    windowsHide: true, shell: false, input, stdio: [input === undefined ? 'ignore' : 'pipe', 'pipe', 'pipe'],
     env: { ...process.env, GIT_OPTIONAL_LOCKS: '0', GIT_NO_LAZY_FETCH: '1', GIT_TERMINAL_PROMPT: '0' }
   });
   if (result.error || !allowed.includes(result.status)) throw new Error(`git ${args[0]}: ${result.error?.message || result.stderr.trim() || `exit ${result.status}`}`);
   return result;
+}
+
+function readStatus(cwd) {
+  const config = git(cwd, ['config', '--includes', '--null', '--get-regexp', '^filter\\..*\\.(clean|process)$'], [0, 1]).stdout;
+  const executableFilters = new Set();
+  for (const entry of config.split('\0').filter(Boolean)) {
+    const separator = entry.indexOf('\n');
+    if (separator < 1) throw new Error('INVALID_FILTER_CONFIGURATION');
+    const name = /^filter\.(.+)\.(?:clean|process)$/u.exec(entry.slice(0, separator))?.[1];
+    if (!name) throw new Error('INVALID_FILTER_CONFIGURATION');
+    if (entry.slice(separator + 1).trim()) executableFilters.add(name);
+  }
+  if (executableFilters.size) {
+    const tracked = git(cwd, ['ls-files', '-z']).stdout;
+    const attributes = git(cwd, ['check-attr', '-z', '--stdin', 'filter'], [0], tracked).stdout.split('\0');
+    if (attributes.pop() !== '' || attributes.length % 3) throw new Error('INVALID_FILTER_ATTRIBUTES');
+    for (let index = 0; index < attributes.length; index += 3) {
+      if (attributes[index + 1] !== 'filter') throw new Error('INVALID_FILTER_ATTRIBUTES');
+      if (executableFilters.has(attributes[index + 2])) throw new Error('EXECUTABLE_GIT_FILTER_REQUIRES_SEPARATE_REVIEW');
+    }
+  }
+  return git(cwd, ['status', '--porcelain=v1', '-z', '--untracked-files=all', '--ignored=matching', '--ignore-submodules=all']).stdout;
 }
 
 function parseStatus(raw) {
@@ -55,7 +93,7 @@ export function inspect({ worktree, event, record }) {
     schema_version: 1, mode: 'READ_ONLY', event, worktree: path.resolve(worktree),
     observed: {}, declared: null, gaps: [], decision: 'REVIEW_REQUIRED',
     semantic_verification: 'NOT_PERFORMED', deletion_authorized: false,
-    limits: 'Only the explicit worktree and projection are read. Declarations do not verify ownership, processes, restoration, integration or deletion authority. No fetch, refs/config writes, GC, process control or removal.'
+    limits: 'Only the explicit worktree and projection are read. Declarations do not verify ownership, processes, restoration, integration or deletion authority. Executable Git filters and redirection/trace environment overrides are refused. Submodule contents are not inspected. Requires trusted Git and stable configuration; not an OS sandbox. No fetch, refs/config writes, GC, process control or removal.'
   };
   try {
     const actual = canonical(worktree);
@@ -69,14 +107,16 @@ export function inspect({ worktree, event, record }) {
     if (!entry) throw new Error('WORKTREE_NOT_REGISTERED');
     const head = git(actual, ['rev-parse', '--verify', 'HEAD']).stdout.trim();
     const branch = git(actual, ['symbolic-ref', '--quiet', '--short', 'HEAD'], [0, 1]);
-    const status = git(actual, ['status', '--porcelain=v1', '-z', '--untracked-files=all', '--ignored=matching']).stdout;
+    const gitlinks = git(actual, ['ls-files', '--stage', '-z']).stdout.split('\0').filter(entry => entry.startsWith('160000 ')).map(entry => entry.slice(entry.indexOf('\t') + 1));
+    if (gitlinks.length) result.gaps.push('SUBMODULE_CONTENT_NOT_OBSERVED');
+    const status = readStatus(actual);
     result.observed = { ...result.observed, head, branch: branch.status === 1 ? null : branch.stdout.trim(),
       detached: branch.status === 1, primary: entry === entries[0], locked: Object.hasOwn(entry, 'locked'),
-      status: parseStatus(status), status_fingerprint: digest(`${head}\0${status}`),
+      unobserved_gitlinks: gitlinks, status: parseStatus(status), status_fingerprint: digest(`${head}\0${status}`),
       containing_local_refs: git(actual, ['for-each-ref', '--contains', head, '--format=%(refname)', 'refs/heads/', 'refs/tags/']).stdout.trim().split('\n').filter(Boolean)
     };
     const headAfter = git(actual, ['rev-parse', '--verify', 'HEAD']).stdout.trim();
-    const statusAfter = git(actual, ['status', '--porcelain=v1', '-z', '--untracked-files=all', '--ignored=matching']).stdout;
+    const statusAfter = readStatus(actual);
     if (headAfter !== head || statusAfter !== status) result.gaps.push('OBSERVATION_CHANGED_RETRY_THIS_OBJECT');
     if (result.observed.primary) result.gaps.push('PRIMARY_WORKTREE_REQUIRES_SEPARATE_POLICY');
     if (result.observed.locked) result.gaps.push('LOCKED_WORKTREE');
@@ -125,7 +165,9 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
       if (!['--worktree', '--event', '--record'].includes(name) || !process.argv[i + 1] || process.argv[i + 1].startsWith('--') || Object.hasOwn(options, name.slice(2))) throw new Error('INPUT_REQUIRED: use --worktree <path> --event <create|sync|complete|cancel|fail|pause|handoff|audit> [--record <projection.json>]; unknown or duplicate options rejected');
       options[name.slice(2)] = process.argv[i + 1];
     }
-    console.log(JSON.stringify(inspect(options), null, 2));
+    const report = inspect(options);
+    console.log(JSON.stringify(report, null, 2));
+    if (report.decision === 'OBSERVATION_BLOCKED') process.exitCode = 1;
   } catch (error) {
     console.error(error.message);
     process.exitCode = 1;

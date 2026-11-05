@@ -4,6 +4,8 @@ param(
     [Alias('Id')]
     [string]$TaskId,
 
+    [string]$CodexHome,
+
     [switch]$ShowTurnPreview,
 
     [string]$ReportPath,
@@ -16,6 +18,7 @@ param(
 #   .\check-codex-session.ps1 -TaskId '任务 ID' -Language en-US
 #   .\check-codex-session.ps1 '任务 ID'
 #   .\check-codex-session.ps1 -TaskId '任务 ID' -ReportPath '报告路径.md'
+#   .\check-codex-session.ps1 -TaskId '任务 ID' -CodexHome '配置目录'
 #   .\check-codex-session.ps1                 # 根据提示输入任务 ID
 # -ShowTurnPreview 作为旧命令兼容参数保留；详细报告固定包含前三高消耗回合的完整用户输入。
 
@@ -172,6 +175,7 @@ $uiCatalog = @{
         WarningMetadataParse = '  - 有 {0} 个文件名候选的 session_meta 无法解析，已排除且未参与聚合。'
         WarningCandidateExcluded = '  - 有 {0} 个文件名候选的内部任务 ID 不匹配，已排除且未参与聚合。'
         WarningVersion = '  - 会话分段记录了不同 CLI 版本；已按各分段格式读取，版本差异需人工留意。'
+        WarningProvider = '  - 会话分段记录了不同模型提供商（{0}）；已继续读取，但 Token 趋势不会跨提供商连续计算。'
         WarningFormat = '  - 会话分段的编码或换行格式不一致；已逐段识别并聚合。'
         WarningLocation = '  - 同一任务同时存在活动目录和归档目录分段；已明确标记为混合存储状态。'
         WarningTime = '  - 多个分段的 session_meta 时间相同；已使用完整路径作为稳定次序。'
@@ -322,6 +326,7 @@ $uiCatalog = @{
         WarningMetadataParse = '  - session_meta could not be parsed for {0} filename candidate(s). They were excluded from aggregation.'
         WarningCandidateExcluded = '  - {0} filename candidate(s) had a different internal task ID and were excluded.'
         WarningVersion = '  - Session segments record different CLI versions. Each segment was parsed separately; review version differences if needed.'
+        WarningProvider = '  - Session segments record different model providers ({0}). They were read, but token trends are not continued across providers.'
         WarningFormat = '  - Session segments use different encodings or line endings. Each format was detected before aggregation.'
         WarningLocation = '  - The task has segments in both active and archived storage. The storage state is marked as mixed.'
         WarningTime = '  - Multiple segments have the same session_meta timestamp. Full paths were used as a stable secondary order.'
@@ -351,6 +356,31 @@ function Get-UiText {
     }
     return $template
 }
+
+function Resolve-CodexHome {
+    param(
+        [string]$RequestedPath
+    )
+
+    $candidate = if (-not [string]::IsNullOrWhiteSpace($RequestedPath)) {
+        $RequestedPath
+    }
+    elseif (-not [string]::IsNullOrWhiteSpace($env:CODEX_HOME)) {
+        $env:CODEX_HOME
+    }
+    else {
+        Join-Path $env:USERPROFILE '.codex'
+    }
+
+    try {
+        return [IO.Path]::GetFullPath($candidate)
+    }
+    catch {
+        throw "无法解析 Codex 配置目录：$candidate"
+    }
+}
+
+$script:CodexHome = Resolve-CodexHome -RequestedPath $CodexHome
 
 if ([string]::IsNullOrWhiteSpace($TaskId)) {
     $TaskId = Read-Host (Get-UiText 'PromptTaskId')
@@ -516,7 +546,7 @@ function Get-TaskNameFromLocalIndex {
     )
 
     $fallbackName = Get-UiText 'TaskNameNotIndexed'
-    $codexHome = Join-Path $env:USERPROFILE '.codex'
+    $codexHome = $script:CodexHome
     $indexPath = Join-Path $codexHome 'session_index.jsonl'
 
     if (-not (Test-Path -LiteralPath $indexPath -PathType Leaf)) {
@@ -1223,8 +1253,8 @@ function Get-SessionSegmentMetadata {
 }
 
 $roots = @(
-    (Join-Path $env:USERPROFILE '.codex\sessions'),
-    (Join-Path $env:USERPROFILE '.codex\archived_sessions')
+    (Join-Path $script:CodexHome 'sessions'),
+    (Join-Path $script:CodexHome 'archived_sessions')
 ) | Where-Object { Test-Path -LiteralPath $_ }
 
 if (-not $roots) {
@@ -1274,6 +1304,13 @@ $files = @(
 )
 $segmentCount = $files.Count
 
+$segmentVersionWarnings = if (@(
+    $files |
+        ForEach-Object { $_.CliVersion } |
+        Where-Object { -not [string]::IsNullOrWhiteSpace($_) } |
+        Sort-Object -Unique
+).Count -gt 1) { 1 } else { 0 }
+$segmentMetadataConflictFields = @()
 foreach ($field in @('Originator', 'Source', 'ModelProvider')) {
     $values = @(
         $files |
@@ -1282,16 +1319,14 @@ foreach ($field in @('Originator', 'Source', 'ModelProvider')) {
             Sort-Object -Unique
     )
     if ($values.Count -gt 1) {
-        throw (Get-UiText 'SegmentMetadataConflict' @($field))
+        if ($field -eq 'ModelProvider') {
+            $segmentMetadataConflictFields += ($values -join ', ')
+        }
+        else {
+            throw (Get-UiText 'SegmentMetadataConflict' @($field))
+        }
     }
 }
-
-$segmentVersionWarnings = if (@(
-    $files |
-        ForEach-Object { $_.CliVersion } |
-        Where-Object { -not [string]::IsNullOrWhiteSpace($_) } |
-        Sort-Object -Unique
-).Count -gt 1) { 1 } else { 0 }
 $segmentFormatWarnings = if (@(
     $files | ForEach-Object {
         '{0}|{1}|{2}' -f `
@@ -2463,6 +2498,7 @@ if (
     $segmentMetadataParseWarnings -gt 0 -or
     $excludedCandidateCount -gt 0 -or
     $segmentVersionWarnings -gt 0 -or
+    $segmentMetadataConflictFields.Count -gt 0 -or
     $segmentFormatWarnings -gt 0 -or
     $segmentLocationWarnings -gt 0 -or
     $segmentTimeWarnings -gt 0 -or
@@ -2499,6 +2535,9 @@ if (
     }
     if ($segmentVersionWarnings -gt 0) {
         Get-UiText 'WarningVersion'
+    }
+    if ($segmentMetadataConflictFields.Count -gt 0) {
+        Get-UiText 'WarningProvider' @(($segmentMetadataConflictFields | Select-Object -Unique) -join ', ')
     }
     if ($segmentFormatWarnings -gt 0) {
         Get-UiText 'WarningFormat'

@@ -5,6 +5,8 @@ import crypto from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 
 export const SCOPED_WORKSPACE_ALGORITHM = 'git-scoped-index-worktree-sha256-v2';
+export const FULL_WORKSPACE_ALGORITHM = 'git-diff-index-untracked-sha256-v2';
+export const LEGACY_WORKSPACE_ALGORITHM = 'git-diff-binary+untracked-content-sha256-v1';
 const hash = bytes => crypto.createHash('sha256').update(bytes).digest('hex');
 const exact = (object, keys) => object && typeof object === 'object' && !Array.isArray(object) && Object.keys(object).length === keys.length && keys.every(key => Object.hasOwn(object, key));
 const validRef = ref => typeof ref === 'string' && ref.length > 0 && !/[\\\0\r\n:]/.test(ref) && !ref.startsWith('/') && ref.split('/').every(part => part && part !== '.' && part !== '..' && !part.endsWith('.') && !part.endsWith(' '));
@@ -59,7 +61,11 @@ export function validateScopedWorkspaceSources(workspace, sources = {}, { source
 
 export function validWorkspaceFingerprint(workspace, sources = {}, context = {}) {
   const fingerprint = workspace?.worktree_fingerprint;
-  if (fingerprint?.algorithm === 'git-diff-binary+untracked-content-sha256-v1') return !Object.hasOwn(workspace, 'inflight_scope') && exact(fingerprint, ['algorithm', 'tracked_diff_sha256', 'untracked_digest']) && /^[0-9a-f]{64}$/.test(fingerprint.tracked_diff_sha256) && /^[0-9a-f]{64}$/.test(fingerprint.untracked_digest);
+  if ([LEGACY_WORKSPACE_ALGORITHM, FULL_WORKSPACE_ALGORITHM].includes(fingerprint?.algorithm)) {
+    const fields = ['algorithm', 'tracked_diff_sha256', 'untracked_digest', ...(fingerprint.algorithm === FULL_WORKSPACE_ALGORITHM ? ['index_sha256'] : [])];
+    return !Object.hasOwn(workspace, 'inflight_scope') && exact(fingerprint, fields)
+      && fields.filter(field => field !== 'algorithm').every(field => /^[0-9a-f]{64}$/.test(fingerprint[field]));
+  }
   return fingerprint?.algorithm === SCOPED_WORKSPACE_ALGORITHM && Boolean(workspace?.inflight_scope) && exact(fingerprint, ['algorithm', 'tracked_diff_sha256', 'untracked_digest', 'index_sha256']) && ['tracked_diff_sha256', 'untracked_digest', 'index_sha256'].every(field => /^[0-9a-f]{64}$/.test(fingerprint[field])) && validateScopedWorkspaceSources(workspace, sources, context).length === 0;
 }
 
@@ -93,6 +99,26 @@ function safePhysicalPath(root, ref, { directory = false } = {}) {
   return target;
 }
 
+export function readWorkspaceFile(sourceRoot, ref) {
+  const root = fs.realpathSync(sourceRoot);
+  const file = safePhysicalPath(root, ref);
+  const physical = fs.realpathSync(file);
+  const relative = path.relative(root, physical);
+  if (!relative || relative === '..' || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) throw new Error(`workspace path escapes root: ${ref}`);
+  const before = fs.lstatSync(file);
+  if (!before.isFile() || before.isSymbolicLink()) throw new Error(`workspace path is not an ordinary file: ${ref}`);
+  const fd = fs.openSync(physical, fs.constants.O_RDONLY | (fs.constants.O_NOFOLLOW || 0));
+  try {
+    const opened = fs.fstatSync(fd);
+    if (!opened.isFile() || opened.dev !== before.dev || opened.ino !== before.ino) throw new Error(`workspace file changed during open: ${ref}`);
+    const bytes = fs.readFileSync(fd);
+    const after = fs.fstatSync(fd);
+    if (after.size !== opened.size || after.mtimeMs !== opened.mtimeMs || after.ctimeMs !== opened.ctimeMs
+      || fs.realpathSync(safePhysicalPath(root, ref)) !== physical) throw new Error(`workspace file changed during read: ${ref}`);
+    return bytes;
+  } finally { fs.closeSync(fd); }
+}
+
 export function collectScopedWorkspaceBaseline(sourceRoot, requiredRefs, scope, includeEvidence = false) {
   const errors = validateInflightScope(scope, { requiredRefs });
   if (errors.length) throw new Error(errors.join('; '));
@@ -100,7 +126,7 @@ export function collectScopedWorkspaceBaseline(sourceRoot, requiredRefs, scope, 
   for (const item of scope.excluded_roots) safePhysicalPath(root, item.path_ref, { directory: true });
   const excluded = ref => !['agents.md', '.gitignore', '.gitattributes', '.gitmodules', 'ai状态索引.md', '当前进度视图.md', '中央工作项清单.md'].includes(key(path.posix.basename(ref))) && scope.excluded_roots.some(item => ref.startsWith(item.path_ref + '/'));
   const run = args => {
-    const result = spawnSync('git', ['-C', root, ...args], { encoding: 'buffer', maxBuffer: 64 * 1024 * 1024 });
+    const result = spawnSync('git', ['-C', root, ...args], { encoding: 'buffer', maxBuffer: 64 * 1024 * 1024, env: { ...process.env, GIT_OPTIONAL_LOCKS: '0' }, windowsHide: true });
     if (result.status !== 0) throw new Error(`cannot read scoped Git evidence: ${args[0]}`);
     return result.stdout;
   };

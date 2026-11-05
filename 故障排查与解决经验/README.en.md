@@ -2,8 +2,10 @@
 
 [简体中文](README.md) | **English**
 
-<!-- README-SOURCE-SHA256: 72999f558463f16a21263b4923eb2209ae9ba2235b2b11d5e8c4bc9ee5b0d645 -->
+<!-- README-SOURCE-SHA256: e4e9784a3899d38b176b81c44fe60db48c7eaec2aab229c5be51a862850ef12e -->
 This directory contains sanitized Codex and companion-tool incident records with explicit evidence boundaries. Start with the symptom table. You do not need to understand the directory layout or read every investigation.
+
+Latest index update: 2026-11-05. Release review retained the TRB-017 and TRB-018 source materials locally pending privacy review and removed public links to those unpublished materials.
 
 ## Find a case by symptom
 
@@ -21,6 +23,12 @@ This directory contains sanitized Codex and companion-tool incident records with
 | `TRB-010` | A multi-part request receives only a kickoff note or promised next action, then ends with a non-empty answer before the task is complete | **Unresolved**; partially mitigated: independent checks and bounded continuation tested for new CLI tasks; existing desktop conversations are not connected | [Task ended before closure](<05-任务没做完就结束/TRB-010-任务没做完就结束/SYS-TRB-010-任务没做完就结束.md>) |
 | `TRB-011` | Switching models rejects a historical tool name with an `input[N].name` character-pattern error | **Resolved for one case: bounded local repair verified and recovery confirmed by the operator; not a general fix** | [Invalid characters in historical tool names (Chinese)](<06-工具调用与上下文协议/TRB-011-切换模型后工具名称校验失败/ERR-TRB-011-历史工具名称包含非法字符.md>) |
 | `TRB-012` | Memory usage rises again while multiple tool services remain resident, possibly alongside a `configRequirements/read` timeout | **Partially resolved: page-file relocation verified; growth, root cause, and safe reclamation remain open** | [High memory and resident tool services (Chinese)](<07-资源与进程问题/TRB-012-高内存与工具服务常驻/SYS-TRB-012-高内存与工具服务常驻.md>) |
+| `TRB-013` | A browser, CLI, or connector reports an authenticated session, but target content is still not reliably readable | **Partially resolved: layered acceptance added; Feishu evidence remains missing** | [External access chain and session recovery](<08-外部工具与来源访问/TRB-013-外部访问链与会话恢复/SYS-TRB-013-外部工具访问链与会话恢复.md>) |
+| `TRB-014` | A handoff source changes after material preparation, or live source verification fails after takeover | **Partially resolved: formal entry and workflow split verified; host-level direct-edit interception is not implemented** | [Handoff candidate source drift](<09-交接与状态管理/TRB-014-交接候选来源漂移/SYS-TRB-014-交接候选来源漂移.en.md>) |
+| `TRB-015` | A Codex Desktop turn stops making progress after a tool completes; pausing and resuming sometimes helps | **Partially resolved: host-stall class confirmed; no general vendor fix confirmed** | [Desktop turn stall and pause/resume](<05-任务没做完就结束/TRB-015-Codex桌面回合卡住/SYS-TRB-015-Codex桌面回合卡住与暂停恢复.en.md>) |
+| `TRB-016` | Session handoff assessment fails because one task history contains multiple model-provider markers | **Resolved: segments are read with a warning and trend baselines reset at provider changes; identity/source conflicts still block** | [Cross-provider session query conflict](<02-登录、账号和模型问题/TRB-016-会话交接评估跨提供商冲突/SYS-TRB-016-会话交接评估跨提供商冲突.en.md>) |
+| `TRB-017` | A Codex remote WebSocket timeout causes the error page and normal page to flash while the AppX container restarts | **Partially resolved: recovery order verified; proxy node, resource contribution, and durable client fix remain unconfirmed** | Original record retained locally; a public entry awaits privacy review |
+| `TRB-018` | The user suspects “model degradation”; multiple Codex/ChatGPT tasks remain in “Thinking” for a long time while proxy, DNS, WebRTC, and third-party risk-score signals appear | Partially mitigated; DNS and long-term stability remain unverified, and model downgrade is unproven | Source materials retained locally; a public entry awaits privacy review |
 
 “Resolved” applies only to the platform, version, and evidence scope stated in the case. “Partially resolved” means that a verified recovery or workaround exists while the root cause, durable fix, or other environments remain open. “Unresolved” means that no verified solution is currently available; the record provides investigation progress, evidence, and stop conditions.
 
@@ -42,6 +50,12 @@ This directory contains sanitized Codex and companion-tool incident records with
 | `502` | [HTTP-502-TRB-007-upstream-gateway](<04-网络断开或服务报错/TRB-007-任务太长或网络报错/HTTP-502-TRB-007-服务中转出错.md>) |
 | `503` | [HTTP-503-TRB-007-service-unavailable](<04-网络断开或服务报错/TRB-007-任务太长或网络报错/HTTP-503-TRB-007-服务暂不可用.md>) |
 | `504` | [HTTP-504-TRB-007-gateway-timeout](<04-网络断开或服务报错/TRB-007-任务太长或网络报错/HTTP-504-TRB-007-服务等待超时或断开.md>) |
+
+## Model-degradation concerns, throttling, and stalls
+
+TRB-018 retains the Chinese search term “降智” and distinguishes ability concerns, request retries, compaction failures, and network-path issues. Its source materials still contain details of specific task runs and are excluded from this release. A public entry will follow privacy and evidence review.
+
+A network-test score does not measure model ability or account-ban probability. DNS paths, end-to-end first-visible output, long-term stability, node billing multipliers, and controlled ability comparisons remain open. Keep this case distinct from host stalls after tool completion (TRB-015) and desktop restart loops (TRB-017).
 
 ## Directory rules
 

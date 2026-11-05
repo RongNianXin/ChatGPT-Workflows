@@ -103,6 +103,65 @@ try {
     assert.deepEqual(snapshot(fixture), before); assert.equal(read().deletion_authorized, false);
   });
   check('CLI rejects bad/duplicate/missing parameters', () => { for (const args of [[], ['--force', 'yes'], ['--worktree', target, '--event', 'audit', '--event', 'sync'], ['--worktree', target, '--event', 'delete']]) { const r = spawnSync(process.execPath, [script, ...args], { encoding: 'utf8' }); assert.equal(r.status, 1); assert.match(r.stderr, /INPUT_REQUIRED/u); } });
+  check('Git environment overrides cannot write through the read-only CLI', () => {
+    for (const name of ['GIT_TRACE', 'gIt_TrAcE', 'GIT_TRACE2_EVENT', 'GIT_REDIRECT_STDOUT', 'GIT_INDEX_FILE', 'GIT_CONFIG_COUNT']) {
+      const marker = path.join(fixture, `environment-${name}.log`);
+      const value = name === 'GIT_CONFIG_COUNT' ? '0' : marker;
+      const r = spawnSync(process.execPath, [script, '--worktree', target, '--event', 'audit'], {
+        encoding: 'utf8', timeout: 10000, windowsHide: true, env: { ...process.env, [name]: value }
+      });
+      assert.equal(r.status, 1);
+      const report = JSON.parse(r.stdout);
+      assert.equal(report.decision, 'OBSERVATION_BLOCKED');
+      assert.ok(gap(report, 'GIT_OBSERVATION_UNAVAILABLE: GIT_ENVIRONMENT_OVERRIDE'));
+      assert.equal(fs.existsSync(marker), false);
+    }
+  });
+  const filterHelper = path.join(fixture, 'benign-filter.cjs');
+  fs.writeFileSync(filterHelper, "require('node:fs').writeFileSync(process.argv[2], 'executed'); process.stdin.pipe(process.stdout);\n");
+  const shellPath = value => `'${value.replaceAll('\\', '/').replaceAll("'", "'\\''")}'`;
+  check('only filters assigned to tracked paths block observation', () => {
+    const marker = path.join(fixture, 'filter-marker');
+    const command = `node ${shellPath(filterHelper)} ${shellPath(marker)}`;
+    git(['config', 'filter.lifecycle-audit.clean', command], target);
+    assert.notEqual(read().decision, 'OBSERVATION_BLOCKED', 'an unused driver must not block ordinary inspection');
+    fs.writeFileSync(path.join(target, '.gitattributes'), 'tracked.txt filter=lifecycle-audit\n');
+    fs.writeFileSync(path.join(target, 'tracked.txt'), 'changed!\n');
+    for (const driver of ['clean', 'process']) {
+      if (driver === 'process') {
+        git(['config', '--unset', 'filter.lifecycle-audit.clean'], target);
+        git(['config', 'filter.lifecycle-audit.process', command], target);
+      }
+      const report = read();
+      assert.equal(report.decision, 'OBSERVATION_BLOCKED');
+      assert.ok(gap(report, 'GIT_OBSERVATION_UNAVAILABLE: EXECUTABLE_GIT_FILTER'));
+      assert.equal(fs.existsSync(marker), false);
+    }
+    git(['config', '--unset-all', 'filter.lifecycle-audit.process'], target);
+    fs.unlinkSync(path.join(target, '.gitattributes'));
+    fs.writeFileSync(path.join(target, 'tracked.txt'), 'baseline\n');
+  });
+  check('submodule contents remain unobserved and cannot run a nested filter', () => {
+    const nested = path.join(target, 'nested');
+    fs.mkdirSync(nested);
+    git(['init', '-q'], nested);
+    git(['config', 'user.email', 'nested@example.invalid'], nested);
+    git(['config', 'user.name', 'Nested Fixture'], nested);
+    git(['config', 'core.autocrlf', 'false'], nested);
+    fs.writeFileSync(path.join(nested, '.gitattributes'), 'data.txt filter=lifecycle-audit\n');
+    fs.writeFileSync(path.join(nested, 'data.txt'), 'baseline\n');
+    git(['add', '.gitattributes', 'data.txt'], nested);
+    git(['commit', '-qm', 'nested baseline'], nested);
+    const marker = path.join(fixture, 'nested-filter-marker');
+    git(['config', 'filter.lifecycle-audit.clean', `node ${shellPath(filterHelper)} ${shellPath(marker)}`], nested);
+    fs.writeFileSync(path.join(nested, 'data.txt'), 'changed!\n');
+    git(['update-index', '--add', '--cacheinfo', `160000,${git(['rev-parse', 'HEAD'], nested).trim()},nested`], target);
+    const report = read();
+    assert.notEqual(report.decision, 'OBSERVATION_BLOCKED');
+    assert.ok(gap(report, 'SUBMODULE_CONTENT_NOT_OBSERVED'));
+    assert.deepEqual(report.observed.unobserved_gitlinks, ['nested']);
+    assert.equal(fs.existsSync(marker), false);
+  });
 } finally {
   // Use the same native canonical representation as creation, and retain the
   // original TEMP boundary even if the environment changes during the suite.

@@ -7,30 +7,23 @@ import { spawn, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import crypto from 'node:crypto';
 import { appendSeal, planSealAppend, prepareTransition, recoverTransition, sealDigest, validateSeal, verifyChain, verifyControlIdentity } from './HandoffSeal.mjs';
+import { enterSyntheticSuite } from './SyntheticTestRuntime.mjs';
+const synthetic = await enterSyntheticSuite(import.meta.url, { timeoutMs: 120000 });
 
-const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'handoff-seal-'));
+const temp = fs.mkdtempSync(path.join(synthetic.artifacts, 'handoff-seal-'));
 const sealDir = path.join(temp, 'seals');
 const sourceRoot = path.join(temp, 'sources');
 fs.mkdirSync(sealDir); fs.mkdirSync(sourceRoot);
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
-const runAppendWorker = (targetDir, sourceRootPath, sealDraft) => new Promise((resolve, reject) => {
-  const workerCode = `import { appendSeal } from './HandoffSeal.mjs';
-try {
-  appendSeal(process.env.HANDOFF_SEAL_DIR, JSON.parse(process.env.HANDOFF_DRAFT), { expectedPreviousDigest: null, sourceRoot: process.env.HANDOFF_SOURCE_ROOT });
-} catch (error) {
-  console.error(error.message);
-  process.exitCode = 1;
-}`;
-  const child = spawn(process.execPath, ['--input-type=module', '-e', workerCode], {
-    cwd: scriptDir,
-    env: { ...process.env, HANDOFF_SEAL_DIR: targetDir, HANDOFF_SOURCE_ROOT: sourceRootPath, HANDOFF_DRAFT: JSON.stringify(sealDraft) },
-    stdio: ['ignore', 'pipe', 'pipe']
+const runAppendWorker = async (targetDir, sourceRootPath, sealDraft) => {
+  const workerCode = "import { appendSeal } from './HandoffSeal.mjs'; try { appendSeal(process.env.HANDOFF_SEAL_DIR, JSON.parse(process.env.HANDOFF_DRAFT), { expectedPreviousDigest: null, sourceRoot: process.env.HANDOFF_SOURCE_ROOT }); } catch (error) { console.error(error.message); process.exitCode = 1; }";
+  const result = await synthetic.runNode(['--input-type=module', '-e', workerCode], {
+    cwd: scriptDir, timeoutMs: 30000,
+    envExtra: { HANDOFF_SEAL_DIR: targetDir, HANDOFF_SOURCE_ROOT: sourceRootPath, HANDOFF_DRAFT: JSON.stringify(sealDraft) }
   });
-  let stderr = '';
-  child.stderr.on('data', chunk => { stderr += chunk; });
-  child.on('error', reject);
-  child.on('close', status => resolve({ status, stderr }));
-});
+  if (result.error) throw new Error(result.error + '; evidence: ' + result.evidence);
+  return result;
+};
 const stamp = '2026-09-18T00:00:00.000Z';
 const source = (owner, revision = 'base') => { const relative = `state/${owner}.json`; const content = Buffer.from(`synthetic-${owner}-${revision}`); const absolute = path.join(sourceRoot, relative); fs.mkdirSync(path.dirname(absolute), { recursive: true }); fs.writeFileSync(absolute, content); return { owner, path_ref: relative, digest: crypto.createHash('sha256').update(content).digest('hex'), fact_cutoff: stamp }; };
 const externalRoot = path.join(temp, 'external-control-plane'); fs.mkdirSync(externalRoot, { recursive: true });
@@ -42,15 +35,25 @@ const draft = (generation = 1, writer_id = 'COMMANDER-GEN-1', revision = 'base')
   sources: { central_work_items: source('central', revision), current_view: source('view', revision), status_index: source('index', revision) }, source_digest_status: 'PASS', rule_baseline: { rule_version: '2026-09-28.4', manifest_sha256: 'e'.repeat(64) },
   objective: { summary: 'synthetic handoff', breakpoint: 'read-only verification' }, prohibitions: ['remote-write'],
   communications: { status: 'NONE' },
-  workspace: { root_ref: '<PROJECT_ROOT>', branch: 'main', head: 'b'.repeat(40), tree: 'c'.repeat(40), staged_count: 0, tracked_modified_count: 0, untracked_count: 0, required_untracked: [], worktree_fingerprint: { algorithm: 'git-diff-binary+untracked-content-sha256-v1', tracked_diff_sha256: 'f'.repeat(64), untracked_digest: 'a'.repeat(64) } },
+  workspace: { root_ref: '<PROJECT_ROOT>', branch: 'main', head: 'b'.repeat(40), tree: 'c'.repeat(40), staged_count: 0, tracked_modified_count: 0, untracked_count: 0, required_untracked: [], worktree_fingerprint: { algorithm: 'git-diff-index-untracked-sha256-v2', tracked_diff_sha256: 'f'.repeat(64), untracked_digest: 'a'.repeat(64), index_sha256: '9'.repeat(64) } },
   remote: { status: 'PASS', default_ref: 'refs/heads/main', head: 'd'.repeat(40), observed_at: stamp },
   control_handoff_confidence: 'HIGH', candidate_verification_status: 'PASS', switch_status: 'READY', handoff_phase: 'MATERIAL_PREPARED', runtime_acceptance_status: 'UNKNOWN', professional_acceptance_status: 'NOT_RUN', transition: null, migration: null,
   invalidation_conditions: ['source digest drift', 'post-seal writer event'], seal_digest: ''
 });
-let passed = 0;
+let passed = 0, suiteVerified = false;
 const check = (name, fn) => { fn(); passed++; console.log(`PASS: ${name}`); };
 try {
-  check('Windows-safe CLI entry reports usage on missing command', () => { const result = spawnSync(process.execPath, ['./HandoffSeal.mjs'], { cwd: path.dirname(fileURLToPath(import.meta.url)), encoding: 'utf8' }); assert.equal(result.status, 2); assert.match(result.stderr, /usage:/); });
+  check('historical V1 remains readable but cannot be newly appended', () => {
+    const old = draft();
+    old.workspace.worktree_fingerprint.algorithm = 'git-diff-binary+untracked-content-sha256-v1';
+    delete old.workspace.worktree_fingerprint.index_sha256;
+    assert.throws(() => appendSeal(path.join(temp, 'new-v1'), old, { sourceRoot }), /WORKSPACE_REBASE_REQUIRED/);
+    old.seal_sequence = 1; old.previous_seal_digest = null; old.seal_digest = sealDigest(old);
+    const historyDir = path.join(temp, 'history-v1'); fs.mkdirSync(historyDir);
+    fs.writeFileSync(path.join(historyDir, `handoff-state.1.${old.seal_digest}.json`), JSON.stringify(old));
+    assert.equal(verifyChain(historyDir, { sourceRoot }).status, 'PASS');
+  });
+  check('Windows-safe CLI entry reports usage on missing command', () => { const result = synthetic.runSync(process.execPath, ['./HandoffSeal.mjs'], { cwd: path.dirname(fileURLToPath(import.meta.url)), encoding: 'utf8' }); assert.equal(result.status, 2); assert.match(result.stderr, /usage:/); });
   const concurrentDir = path.join(temp, 'concurrent-seals'); fs.mkdirSync(concurrentDir);
   const concurrentResults = await Promise.all([runAppendWorker(concurrentDir, sourceRoot, draft()), runAppendWorker(concurrentDir, sourceRoot, draft())]);
   check('cross-process append permits one CAS winner', () => { assert.equal(concurrentResults.filter(result => result.status === 0).length, 1); assert.equal(concurrentResults.filter(result => result.status !== 0).length, 1); assert.equal(verifyChain(concurrentDir, { sourceRoot }).status, 'PASS'); });
@@ -133,7 +136,7 @@ try {
     assert.equal(verifyChain(driftDir, { sourceRoot, verifyLatestSources: false }).records.length, 0);
   });
   check('summary CLI verifies the same chain without rendering source bodies', () => {
-    const run = flags => spawnSync(process.execPath, [path.join(scriptDir, 'HandoffSeal.mjs'), 'verify', sealDir, sourceRoot, ...flags], { encoding: 'utf8' });
+    const run = flags => synthetic.runSync(process.execPath, [path.join(scriptDir, 'HandoffSeal.mjs'), 'verify', sealDir, sourceRoot, ...flags], { encoding: 'utf8' });
     const full = run([]), compact = run(['--summary']);
     assert.equal(compact.status, full.status); assert.equal(compact.status, 0);
     const result = JSON.parse(compact.stdout), original = JSON.parse(full.stdout);
@@ -156,7 +159,7 @@ try {
   check('external control-plane sources require an explicit root and verify live bytes', () => { const result = verifyChain(externalDir, { sourceRoot, externalControlPlaneRoot: externalRoot }); assert.equal(result.status, 'PASS'); assert.equal(result.latest.seal_digest, externalSeal.seal_digest); });
   check('missing external control-plane root is an input gap, not source corruption', () => { const result = verifyChain(externalDir, { sourceRoot }); assert.equal(result.status, 'BLOCKED'); assert.equal(result.latest_source_status, 'NOT_CHECKED'); assert.ok(result.errors.some(error => error.includes('INPUT_REQUIRED'))); });
   check('summary preserves all failure evidence and historical-only semantics', () => {
-    const run = flags => spawnSync(process.execPath, [path.join(scriptDir, 'HandoffSeal.mjs'), 'verify', externalDir, sourceRoot, ...flags], { encoding: 'utf8' });
+    const run = flags => synthetic.runSync(process.execPath, [path.join(scriptDir, 'HandoffSeal.mjs'), 'verify', externalDir, sourceRoot, ...flags], { encoding: 'utf8' });
     for (const flags of [[], ['--history-only']]) {
       const full = run(flags), compact = run([...flags, '--summary']);
       assert.equal(compact.status, full.status);
@@ -212,6 +215,12 @@ try {
   check('candidate readiness does not assert old writer stopped', () => assert.ok(!validateSeal(restrictedUnknownWriter).some(error => error.includes('old writer stopped'))));
   const restrictedUnknownRemote = draft(); restrictedUnknownRemote.seal_sequence = 1; restrictedUnknownRemote.previous_seal_digest = null; restrictedUnknownRemote.control_handoff_confidence = 'MEDIUM'; restrictedUnknownRemote.switch_status = 'READY_WITH_RESTRICTIONS'; restrictedUnknownRemote.remote = { status: 'UNKNOWN', default_ref: 'refs/heads/main', head: null, observed_at: null }; restrictedUnknownRemote.seal_digest = sealDigest(restrictedUnknownRemote);
   check('restricted candidate can proceed when remote is temporarily unobservable', () => assert.deepEqual(validateSeal(restrictedUnknownRemote), []));
+  for (const status of ['FAIL', 'NOT_APPLICABLE']) check(`restricted readiness rejects remote ${status} without breaking legacy UNKNOWN`, () => {
+    const invalid = structuredClone(restrictedUnknownRemote);
+    invalid.remote.status = status;
+    invalid.seal_digest = sealDigest(invalid);
+    assert.ok(validateSeal(invalid).some(error => /READY_WITH_RESTRICTIONS.*remote/.test(error)));
+  });
   const highRestrictedCandidate = draft(); highRestrictedCandidate.seal_sequence = 1; highRestrictedCandidate.previous_seal_digest = null; highRestrictedCandidate.control_handoff_confidence = 'HIGH'; highRestrictedCandidate.switch_status = 'READY_WITH_RESTRICTIONS'; highRestrictedCandidate.old_writer_status = 'IDLE'; highRestrictedCandidate.runtime_acceptance_status = 'UNKNOWN'; highRestrictedCandidate.professional_acceptance_status = 'FAIL'; highRestrictedCandidate.seal_digest = sealDigest(highRestrictedCandidate);
   check('control HIGH remains valid with candidate restrictions and non-control acceptance states', () => assert.deepEqual(validateSeal(highRestrictedCandidate), []));
   const oldWriterUnknown = draft(); oldWriterUnknown.old_writer_status = 'UNKNOWN'; oldWriterUnknown.seal_digest = sealDigest(oldWriterUnknown);
@@ -408,5 +417,9 @@ try {
   fs.unlinkSync(path.join(sealDir, tmpName));
   fs.writeFileSync(path.join(sealDir, '.handoff.lock'), 'active');
   check('stale lock is a recovery block, not auto-removed', () => assert.equal(verifyChain(sealDir).status, 'BLOCKED'));
-  console.log(`Handoff seal: PASS (${passed} cases)`);
-} finally { fs.rmSync(temp, { recursive: true, force: true }); }
+  suiteVerified = true;
+} finally {
+  if (suiteVerified) fs.rmSync(temp, { recursive: true, force: true });
+  else console.error('Failure evidence retained: ' + temp);
+}
+console.log('Handoff seal: PASS (' + passed + ' cases)');

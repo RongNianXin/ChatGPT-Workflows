@@ -8,6 +8,7 @@ const repositoryPrefixes = ['.github/', '引用的外部工具/'];
 const required = [
   ...Array.from({ length: 12 }, (_, index) => `${String(index).padStart(2, '0')}-`),
   '.github/scripts/HandoffSeal.mjs', '.github/scripts/Prepare-Handoff.mjs', '.github/scripts/HandoffWorkspaceScope.mjs', '.github/scripts/HandoffTransactionWorkspace.mjs',
+  '.github/scripts/Query-HandoffAuthenticatedRef.mjs', '.github/scripts/Receiver-Readiness.mjs',
   '.github/scripts/Inspect-WorkspaceTracking.mjs', '.github/scripts/Inspect-RuleRefresh.mjs',
   '.github/scripts/Mark-Handoff-Delivered.mjs', '.github/scripts/Inspect-QuotaProtection.mjs', '总指挥轻量交接启动配置.md',
   '规则刷新广播包.md', '规则刷新接收回执模板.md', 'templates/HANDOFF_STATE.schema.json',
@@ -17,6 +18,9 @@ const versionFiles = ['00-', '02-', '09-', '10-', '总指挥轻量交接启动�
 const digest = bytes => crypto.createHash('sha256').update(bytes).digest('hex');
 const implementationFile = name => name.endsWith('.mjs') || name.endsWith('.py');
 const fail = (code, message) => { throw Object.assign(new Error(message), { code }); };
+const snapshotDigest = (manifestHash, rules) => digest(JSON.stringify({ manifest_sha256: manifestHash,
+  rules: rules.map(({ path_ref, sha256 }) => ({ path_ref, sha256 }))
+    .sort((a, b) => a.path_ref < b.path_ref ? -1 : a.path_ref > b.path_ref ? 1 : 0) }));
 
 function resolveFile(base, relative) {
   if (typeof relative !== 'string' || !relative || relative.includes('\\') ||
@@ -82,7 +86,7 @@ export function captureRuleRefresh(ruleRoot = defaultRoot, { mode = 'local', exp
   });
   const rules = captures.map(({ path_ref, sha256, matches_manifest }) => ({ path_ref, sha256, matches_manifest }));
   const manifestHash = digest(manifestBytes);
-  const snapshotHash = digest(JSON.stringify({ manifest_sha256: manifestHash, rules: rules.map(({ path_ref, sha256 }) => ({ path_ref, sha256 })).sort((a, b) => a.path_ref < b.path_ref ? -1 : a.path_ref > b.path_ref ? 1 : 0) }));
+  const snapshotHash = snapshotDigest(manifestHash, rules);
   if (expected && snapshotHash !== expected.toLowerCase()) fail('SOURCE_CHANGED', 'Current saved snapshot differs from the text baseline');
   const synchronized = versionConsistent && rules.every(item => item.matches_manifest);
   if (mode === 'pinned' && !synchronized) fail('MANIFEST_MISMATCH', 'Pinned verification requires synchronized versions and manifest hashes');
@@ -97,6 +101,53 @@ export function captureRuleRefresh(ruleRoot = defaultRoot, { mode = 'local', exp
       implementation_on_demand: captures.filter(item => implementationFile(item.path_ref)).map(item => item.path_ref) },
     texts: Object.fromEntries(captures.map(item => [item.path_ref, item.bytes.toString('utf8')]))
   };
+}
+
+// Self-consistency is not authenticity: these reports cannot prove prior reading.
+export function compareRuleRefreshReports(previous, current) {
+  const hex = value => typeof value === 'string' && /^[a-f0-9]{64}$/i.test(value);
+  const validate = report => {
+    const invalid = () => fail('INVALID_COMPARISON_REPORT', 'Comparison requires structurally complete, self-consistent rule reports; recover the verified original report');
+    if (!report || typeof report !== 'object' || Array.isArray(report) || report.result !== 'PASS'
+      || !['local', 'pinned'].includes(report.mode) || report.text_reading !== 'NOT_ATTESTED'
+      || typeof report.declared_version !== 'string' || !report.declared_version.trim()
+      || typeof report.manifest_synchronized !== 'boolean' || !hex(report.manifest_sha256) || !hex(report.snapshot_sha256)
+      || !Array.isArray(report.rules) || !report.rules.length || report.rules.length > 4096) invalid();
+    const seen = new Set();
+    const rules = report.rules.map(entry => {
+      const ref = entry?.path_ref;
+      if (typeof ref !== 'string' || !ref || ref.includes('\\') || ref.includes(':') || ref.includes('\0')
+        || path.isAbsolute(ref) || ref.split('/').some(part => !part || part === '.' || part === '..')
+        || !hex(entry.sha256) || typeof entry.matches_manifest !== 'boolean') invalid();
+      const key = ref.normalize('NFC').toLowerCase();
+      if (seen.has(key)) invalid();
+      seen.add(key);
+      return { path_ref: ref, sha256: entry.sha256.toLowerCase() };
+    });
+    for (const name of required) {
+      if (rules.filter(entry => name.endsWith('-') ? entry.path_ref.startsWith(name) : entry.path_ref === name).length !== 1) invalid();
+    }
+    if (snapshotDigest(report.manifest_sha256.toLowerCase(), rules) !== report.snapshot_sha256.toLowerCase()) invalid();
+    return new Map(rules.map(entry => [entry.path_ref, entry.sha256]));
+  };
+  const prior = validate(previous);
+  const present = validate(current);
+  const added = [], removed = [], changed = [], unchanged = [];
+  for (const [ref, sha256] of present) {
+    if (!prior.has(ref)) added.push({ path_ref: ref, sha256 });
+    else if (prior.get(ref) !== sha256) changed.push({ path_ref: ref, before_sha256: prior.get(ref), after_sha256: sha256 });
+    else unchanged.push({ path_ref: ref, sha256 });
+  }
+  for (const [ref, sha256] of prior) if (!present.has(ref)) removed.push({ path_ref: ref, sha256 });
+  for (const entries of [added, removed, changed, unchanged]) entries.sort((a, b) => a.path_ref < b.path_ref ? -1 : a.path_ref > b.path_ref ? 1 : 0);
+  return { result: 'PASS', comparison_scope: 'REPORTED_FILE_BYTES_ONLY', provenance: 'NOT_ATTESTED',
+    text_reading: 'NOT_ATTESTED', authorization_verified: false,
+    baseline_snapshot_sha256: previous.snapshot_sha256.toLowerCase(), current_snapshot_sha256: current.snapshot_sha256.toLowerCase(),
+    added, removed, changed, unchanged,
+    manifest_changed: previous.manifest_sha256.toLowerCase() !== current.manifest_sha256.toLowerCase(),
+    reported_metadata_changes: { declared_version: previous.declared_version !== current.declared_version,
+      manifest_synchronized: previous.manifest_synchronized !== current.manifest_synchronized },
+    limits: 'Compares supplied report data only. Required entries and snapshot self-consistency cannot authenticate provenance, optional-entry completeness, version claims or prior reading. No reading plan is reduced; unchanged bytes do not authorize skipping rules or actions.' };
 }
 
 // Offsets count Unicode code points, so a segment never splits a surrogate pair.
@@ -183,14 +234,24 @@ function main(argv) {
   const options = {};
   for (let index = 0; index < argv.length; index += 2) {
     const flag = argv[index];
-    if (!['--rule-root', '--mode', '--expected', '--file', '--offset', '--length', '--activity-record', '--activity-json', '--activity-operation'].includes(flag) || !argv[index + 1] || options[flag] !== undefined) {
-      fail('INVALID_INPUT', 'Usage: node Inspect-RuleRefresh.mjs [--rule-root PATH] [--mode local|pinned] [--expected SHA256] [--file PATH_REF] [--offset N --length N] [--activity-record PATH | --activity-json JSON] [--activity-operation capture|read|deliver]');
+    if (!['--rule-root', '--mode', '--expected', '--file', '--offset', '--length', '--activity-record', '--activity-json', '--activity-operation', '--baseline-json'].includes(flag) || !argv[index + 1] || options[flag] !== undefined) {
+      fail('INVALID_INPUT', 'Usage: node Inspect-RuleRefresh.mjs [--rule-root PATH] [--mode local|pinned] [--expected SHA256] [--file PATH_REF] [--offset N --length N] [--activity-record PATH | --activity-json JSON] [--activity-operation capture|read|deliver] [--baseline-json REPORT_JSON]');
     }
     options[flag] = argv[index + 1];
   }
   if (options['--activity-record'] && options['--activity-json']) fail('INVALID_INPUT', 'Choose one activity carrier');
   if (options['--activity-operation'] && !options['--activity-record'] && !options['--activity-json']) fail('INVALID_INPUT', 'Activity operation requires an explicit activity carrier');
   const operation = options['--activity-operation'] || 'read';
+  let baseline;
+  if (options['--baseline-json'] !== undefined) {
+    if (operation !== 'read' || ['--file', '--offset', '--length'].some(flag => options[flag] !== undefined)) {
+      fail('INVALID_INPUT', 'Report comparison cannot be combined with text emission, capture or delivery');
+    }
+    if (options['--baseline-json'].length > 1024 * 1024) fail('INVALID_INPUT', 'Baseline report exceeds the comparison input limit');
+    try { baseline = JSON.parse(options['--baseline-json']); }
+    catch { fail('INVALID_COMPARISON_REPORT', 'Baseline must be a JSON rule report'); }
+    compareRuleRefreshReports(baseline, baseline);
+  }
   let activity;
   if (options['--activity-record']) activity = readActivityRecord(options['--activity-record']);
   else if (options['--activity-json']) {
@@ -232,7 +293,8 @@ function main(argv) {
     if (!Object.hasOwn(texts, options['--file'])) fail('INVALID_INPUT', 'Requested file is not a registered rule');
     console.log(JSON.stringify({ result: report.result, snapshot_sha256: report.snapshot_sha256, text_reading: 'NOT_ATTESTED', activity_guard: activityGuard }));
     process.stdout.write(texts[options['--file']]);
-  } else console.log(JSON.stringify({ ...report, activity_guard: activityGuard }, null, 2));
+  } else console.log(JSON.stringify({ ...report, activity_guard: activityGuard,
+    ...(baseline !== undefined ? { comparison: compareRuleRefreshReports(baseline, report) } : {}) }, null, 2));
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

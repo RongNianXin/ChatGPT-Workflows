@@ -6,6 +6,7 @@
 总指挥工作流/第二代总指挥的工作模式/docs/AUTOMATED_TESTING_LESSONS.md text eol=lf
 总指挥工作流/第二代总指挥的工作模式/docs/CROSS_SOFTWARE_COLLABORATION.md text eol=lf
 .github/scripts/HandoffSeal.mjs text eol=lf
+.github/scripts/Receiver-State-Adoption.mjs text eol=lf
 .github/scripts/HandoffControl.mjs text eol=lf
 .github/scripts/HandoffTransactionWorkspace.mjs text eol=lf
 .github/scripts/HandoffWorkspaceAmendment.mjs text eol=lf
@@ -13,6 +14,7 @@
 .github/scripts/Recover-CommanderAuthority.mjs text eol=lf
 .github/scripts/HandoffWorkspaceScope.mjs text eol=lf
 .github/scripts/Prepare-Handoff.mjs text eol=lf
+.github/scripts/Query-HandoffAuthenticatedRef.mjs text eol=lf
 .github/scripts/Inspect-WorkspaceTracking.mjs text eol=lf
 .github/scripts/Inspect-WorktreeLifecycle.mjs text eol=lf
 .github/scripts/Inspect-RuleRefresh.mjs text eol=lf
@@ -28,3 +30,5 @@
 总指挥工作流/第二代总指挥的工作模式/templates/OPERATOR_MANUAL_REFERENCES.json text eol=lf
 引用的外部工具/外部工具目录.md text eol=lf
 引用的外部工具/外部工具自动对接规范.md text eol=lf
+
+.github/scripts/Receiver-Readiness.mjs text eol=lf

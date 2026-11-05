@@ -3,12 +3,13 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { readChain, verifyChain, validateDirectConfirmation, prepareDirectTransition, appendSeal } from './HandoffSeal.mjs';
+import { readChain, verifyChain, verifyControlIdentity, validateDirectConfirmation, prepareDirectTransition, appendSeal, sealDigest, canonicalJson } from './HandoffSeal.mjs';
 import { verifyHandoffCandidate } from './Verify-Handoff-Candidate.mjs';
 import { byteDigest, resolveSource, controlPaths, withControlLock, withControlTransaction, assertControlReady, assertPrivateControlStorage, writeAtomic, writeJournal } from './HandoffControl.mjs';
 import { verifyRuleManifest, verifyWorkspaceBaseline, readGitWorkspaceBaseline, readLiveRemoteBaseline } from './Prepare-Handoff.mjs';
 import { captureTransactionWorkspace, verifyTransactionWorkspace } from './HandoffTransactionWorkspace.mjs';
 import { validateWorkspaceAmendment } from './HandoffWorkspaceAmendment.mjs';
+import { adoptReceiverState, deriveReceiverAdoption, readCommittedReceiverAdoption, preflightReceiverAdoption } from './Receiver-State-Adoption.mjs';
 
 const assert = (condition, message) => { if (!condition) throw new Error(message); };
 function privateControlStorage(previous, options) {
@@ -21,6 +22,49 @@ function confirmed(options, previous) {
   const index = fs.readFileSync(resolveSource(previous.sources.status_index, options), 'utf8');
   const current = index.split('<!-- CURRENT:BEGIN -->')[1]?.split('<!-- CURRENT:END -->')[0];
   assert(current?.match(/^项目键：([^\r\n]+)$/m)?.[1]?.trim() === options.recipient.projectKey, 'confirmation project does not match canonical CURRENT');
+}
+function attachReceiverAdoption(result, options) {
+  try {
+    options.fault?.('before-receiver-adoption');
+    const history = readChain(options.sealDirectory);
+    const latest = history.records.at(-1);
+    const attested = latest?.handoff_phase === 'CURRENT_ATTESTATION' && latest.event_id === `${options.eventId}:receiver-adoption`;
+    const completed = attested ? history.records.at(-2) : latest;
+    const adoption = options.adoption || deriveReceiverAdoption(options, completed);
+    const receiverOptions = { ...options, adoption };
+    let adopted;
+    try { adopted = attested ? readCommittedReceiverAdoption(receiverOptions) : adoptReceiverState(receiverOptions); }
+    catch (error) {
+      if (!attested || error.code !== 'ADOPTION_JOURNAL_PENDING') throw error;
+      adopted = adoptReceiverState(receiverOptions);
+    }
+    return { ...result, control_handoff: 'COMPLETED', receiver_adoption: adopted };
+  } catch (error) {
+    return {
+      ...result,
+      control_handoff: 'COMPLETED',
+      receiver_adoption: {
+        status: 'BLOCKED',
+        retryable: true,
+        error: error.message,
+        next: '保留已完成的中央控制权；修复接收方采用依赖后，用同一事件和配置重试采用，不重复提交控制权'
+      }
+    };
+  }
+}
+function assertCompletedReceiverIdentity(history, options) {
+  const latest = history.records.at(-1);
+  const completed = history.records.at(-2);
+  const previous = history.records.at(-3);
+  assert(latest?.handoff_phase === 'CURRENT_ATTESTATION' && completed && previous, 'completed receiver attestation history is incomplete');
+  confirmed(options, previous);
+  assert(completed.generation === previous.generation + 1 && completed.writer_id === options.recipient.writerId, 'completed takeover recipient mismatch');
+  const identity = verifyControlIdentity(latest, options);
+  assert(identity.status === 'PASS'
+    && identity.identity?.generation === latest.generation
+    && identity.identity?.writer_id === options.recipient.writerId
+    && identity.identity?.platform_task_id === options.recipient.platformTaskId,
+  `completed receiver identity mismatch: ${identity.errors.join('; ')}`);
 }
 function replaceCurrent(bytes, previous, recipient) {
   const text = bytes.toString('utf8'), start = text.indexOf('<!-- CURRENT:BEGIN -->') + '<!-- CURRENT:BEGIN -->'.length, end = text.indexOf('<!-- CURRENT:END -->');
@@ -83,7 +127,7 @@ export function assertRenderedCurrentIdentity(bytes, recipient, generation, requ
     for (const match of current.matchAll(pattern)) assert(match[1] === expected, 'rendered CURRENT contains a conflicting identity declaration');
   }
 }
-function renderCurrentV5(bytes, previous, recipient, eventId) {
+function renderCurrentV5(bytes, previous, recipient, eventId, automaticAdoption = false) {
   const text = bytes.toString('utf8'), begin = '<!-- CURRENT:BEGIN -->', end = '<!-- CURRENT:END -->';
   assert(text.split(begin).length === 2 && text.split(end).length === 2, 'canonical CURRENT boundaries required');
   const start = text.indexOf(begin) + begin.length, finish = text.indexOf(end);
@@ -108,7 +152,9 @@ function renderCurrentV5(bytes, previous, recipient, eventId) {
     `来源历史入口：[移交时的完整状态、队列与文件指针](#${anchor})；仅作来源事实，不继承已读、权限或调度`,
     `来源事件：${previous.event_id}`, `完成事件：${eventId}`,
     '状态：TAKEOVER_COMPLETED（仅规范事务日志COMPLETED且完成回读一致后生效）',
-    '接管协议：DIRECT_OPERATOR_V1', '本任务加载记录：待接收方独立建立，不继承来源已读',
+    '接管协议：DIRECT_OPERATOR_V1', automaticAdoption
+      ? '本任务加载记录：由1D接收方状态采用自动建立，不继承来源已读'
+      : '本任务加载记录：待接收方独立建立，不继承来源已读',
     '本轮权限：仅本次交接准备、提交与完成回读；旧授权不继承，业务、远端和通信另核当前有效授权',
     '旧授权继承：NONE', `旧总指挥：世代${previous.generation} STOPPED_DISPATCH；保留历史，不恢复旧授权`,
     '接续门禁：来源目标、断点和队列保留；业务授权、依赖、预算及停止条件逐项重核',
@@ -121,16 +167,22 @@ function renderCurrentV5(bytes, previous, recipient, eventId) {
   else after += `\n<!-- HISTORY:BEGIN -->${block}`;
   return Buffer.from(after);
 }
-// Versions 1..4 are frozen: historical journals keep their original byte
+// Versions 1..5 are frozen: historical journals keep their original byte
 // transformation for recovery, rollback and completed readback.
 export function renderCurrent(bytes, previous, recipient, version, eventId) {
-  assert([1, 2, 3, 4, 5, 6, 7].includes(version), 'unsupported CURRENT render version');
+  assert([1, 2, 3, 4, 5, 6, 7, 8, 9].includes(version), 'unsupported CURRENT render version');
+  if (version === 9) return renderCurrentV5(bytes, previous, recipient, eventId, true);
+  if (version === 8) {
+    const rendered = renderCurrentV5(bytes, previous, recipient, eventId, true).toString('utf8');
+    return Buffer.from(rendered.replace(/(<!-- CURRENT:BEGIN -->)([\s\S]*?)(<!-- CURRENT:END -->)/, (_, begin, current, end) =>
+      `${begin}${current.replace('接管协议：DIRECT_OPERATOR_V1', '接管协议：FAULT_CONTROL_ONLY_V1').replace('状态：TAKEOVER_COMPLETED', '状态：FAULT_CONTROL_ONLY_COMPLETED')}历史保全：HISTORICAL_WORKSPACE_PRESERVATION_UNVERIFIED；HISTORICAL_SOURCE_PRESERVATION_UNVERIFIED\n来源inventory：HISTORICAL_NOT_CERTIFIED；本次当前观察不补签旧交接材料或历史成果\n业务恢复：NOT_AUTHORIZED_BY_THIS_TRANSFER；旧Goal、自动化、预算、产品和远端动作不因转权恢复\n${end}`));
+  }
   if (version === 7) {
-    const rendered = renderCurrentV5(bytes, previous, recipient, eventId).toString('utf8');
+    const rendered = renderCurrentV5(bytes, previous, recipient, eventId, true).toString('utf8');
     return Buffer.from(rendered.replace(/(<!-- CURRENT:BEGIN -->)([\s\S]*?)(<!-- CURRENT:END -->)/, (_, begin, current, end) => `${begin}${current.replace('接管协议：DIRECT_OPERATOR_V1', '接管协议：CONTROL_ONLY_V1').replace('状态：TAKEOVER_COMPLETED', '状态：CONTROL_ONLY_COMPLETED').replace('下一行动方：接收方完成回读后核验原队列，继续当前有效授权范围内动作', '下一行动方：接收方核账并保留未完事项；依赖历史成果完整性的业务恢复须另核证据和当前授权')}历史保全：HISTORICAL_WORKSPACE_PRESERVATION_UNVERIFIED；旧V1未获验证，本次当前观察不代签历史保全\n业务恢复：NOT_AUTHORIZED_BY_THIS_TRANSFER；不恢复产品、旧Goal、自动化、预算、远端或泛化通信\n${end}`));
   }
   if (version === 6) {
-    const rendered = renderCurrentV5(bytes, previous, recipient, eventId).toString('utf8');
+    const rendered = renderCurrentV5(bytes, previous, recipient, eventId, true).toString('utf8');
     return Buffer.from(rendered.replace(/(<!-- CURRENT:BEGIN -->)([\s\S]*?)(<!-- CURRENT:END -->)/, (_, begin, current, end) => `${begin}${current.replace('接管协议：DIRECT_OPERATOR_V1', '接管协议：AUTHORITY_RECOVERY_V1').replace('状态：TAKEOVER_COMPLETED', '状态：AUTHORITY_RECOVERY_COMPLETED')}历史边界：此前未封存换任的规范转权未获证明；本次只确认接收方当前恢复，不补造旧签认\n${end}`));
   }
   if (version === 5) return renderCurrentV5(bytes, previous, recipient, eventId);
@@ -150,7 +202,7 @@ export function renderCurrent(bytes, previous, recipient, version, eventId) {
     return `${begin}${current}\n状态：TAKEOVER_COMPLETED（仅规范事务日志COMPLETED且完成回读一致后生效）\n完成事件：${eventId}\n本任务加载记录：待接收方独立建立，不继承来源已读\n接续门禁：来源目标、断点和队列保留；业务授权、依赖、预算及停止条件逐项重核\n下一行动方：接收方完成回读后核验原队列，继续当前有效授权范围内动作\n${end}`;
   }));
 }
-export function buildControlPlan(previous, options, renderVersion = 5) {
+export function buildControlPlan(previous, options, renderVersion = 9) {
   // Enablement is a navigation source, outside the four central write targets.
   // Older accepted documents may redundantly state the writer here. Detect that
   // compatibility limit before preparing an intent or touching central bytes.
@@ -168,10 +220,19 @@ export function buildControlPlan(previous, options, renderVersion = 5) {
   }
   return [...files.values()];
 }
+function completedRequiredFiles(previous, plan, projection) {
+  const required = previous.workspace.required_untracked;
+  if (projection?.completion_required_mode === undefined) return required;
+  assert(projection.completion_required_mode === 'PLANNED_TARGETS_V1', 'unsupported completion required-file projection');
+  return required.map(item => {
+    const change = plan.find(target => target.root_ref === 'source_root' && target.path_ref === item.path_ref);
+    return change ? { ...item, sha256: change.after_sha256 } : item;
+  });
+}
 function checkJournal(journal, options, history) {
   assert(journal.protocol_version === 1 && journal.event_id === options.eventId && Array.isArray(journal.plan) && journal.plan.length > 0 && journal.plan.length <= 4, 'transaction journal mismatch');
   const renderVersion = Object.hasOwn(journal, 'current_render_version') ? journal.current_render_version : 1;
-  assert([1, 2, 3, 4, 5].includes(renderVersion), 'unsupported CURRENT render version');
+  assert([1, 2, 3, 4, 5, 9].includes(renderVersion), 'unsupported CURRENT render version');
   const previous = history.records.find(item => item.seal_digest === journal.previous_seal_digest);
   assert(previous, 'journal predecessor absent from immutable history');
   confirmed(options, previous);
@@ -198,7 +259,8 @@ function checkJournal(journal, options, history) {
   const effective = amendment ? validateWorkspaceAmendment(previous, options, false) : previous;
   if (Object.hasOwn(journal, 'workspace_projection')) {
     assert([2, 3].includes(journal.workspace_projection?.version), 'unsupported workspace projection version');
-    for (const key of ['root_ref', 'required_untracked', 'inflight_scope']) assert(JSON.stringify(draft.workspace?.[key]) === JSON.stringify(effective.workspace?.[key]), `journal changed protected workspace ${key}`);
+    for (const key of ['root_ref', 'inflight_scope']) assert(JSON.stringify(draft.workspace?.[key]) === JSON.stringify(effective.workspace?.[key]), `journal changed protected workspace ${key}`);
+    assert(JSON.stringify(draft.workspace?.required_untracked) === JSON.stringify(completedRequiredFiles(effective, journal.plan, journal.workspace_projection)), 'journal changed protected workspace required_untracked');
   } else assert(JSON.stringify(draft?.workspace) === JSON.stringify(previous.workspace), 'journal changed protected workspace');
   for (const key of ['objective', 'prohibitions', 'rule_baseline', 'invalidation_conditions', 'runtime_acceptance_status', 'professional_acceptance_status']) assert(JSON.stringify(draft?.[key]) === JSON.stringify(effective[key]), `journal changed protected ${key}`);
   assert(draft?.schema_version === 4 && draft.generation === previous.generation + 1 && draft.writer_id === options.recipient.writerId && draft.event_id === options.eventId && draft.handoff_phase === 'TAKEOVER_COMPLETED' && draft.switch_status === 'COMPLETED' && draft.communications?.status === 'NONE', 'journal completion target mismatch');
@@ -208,6 +270,27 @@ function checkJournal(journal, options, history) {
     assert(target.path_ref === source.path_ref && target.root_ref === source.root_ref && target.owner === source.owner && target.digest === (change ? change.after_sha256 : source.digest), 'journal source evidence mismatch');
   }
   return previous;
+}
+
+// Read-only completion check used by the receiver's post-commit readback.
+// This reuses the same immutable journal contract as takeover/recovery instead
+// of treating a CURRENT marker alone as proof that the transaction completed.
+export function verifyCompletedTakeoverJournal(journal, options, history) {
+  assert(journal?.status === 'COMPLETED', 'TAKEOVER_INCOMPLETE: takeover journal is not completed');
+  const previous = checkJournal(journal, options, history);
+  const completed = history.records.find(record => record.event_id === journal.event_id);
+  assert(completed?.handoff_phase === 'TAKEOVER_COMPLETED' && completed.switch_status === 'COMPLETED',
+    'TAKEOVER_INCOMPLETE: takeover completion seal is missing');
+  assert(completed.generation === previous.generation + 1 &&
+    completed.writer_id === options.recipient.writerId &&
+    completed.transition?.intent_digest === journal.intent_digest,
+  'TAKEOVER_INCOMPLETE: takeover completion does not match the journal');
+  if (journal.completed_seal_digest !== undefined) assert(journal.completed_seal_digest === completed.seal_digest, 'TAKEOVER_INCOMPLETE: saved completion digest differs from immutable history');
+  const expected = { ...journal.draft, seal_sequence: completed.seal_sequence,
+    previous_seal_digest: previous.seal_digest, transition: completed.transition, seal_digest: '' };
+  expected.seal_digest = sealDigest(expected);
+  assert(canonicalJson(expected) === canonicalJson(completed), 'TAKEOVER_INCOMPLETE: completed seal differs from the frozen journal draft');
+  return completed;
 }
 export function recheckDependencies(journal, options, previous) {
   const workflowRoot = options.workflowRoot || path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../总指挥工作流/第二代总指挥的工作模式');
@@ -249,7 +332,9 @@ function commitJournal(journal, paths, options) {
   recheckDependencies(journal, options, previous);
   if (journal.workspace_projection) {
     const effective = journal.workspace_projection.version === 3 ? validateWorkspaceAmendment(previous, options, false) : previous;
-    const workspace = { ...effective.workspace, ...readGitWorkspaceBaseline(options.sourceRoot, effective.workspace.required_untracked?.map(item => item.path_ref) ?? [], effective.workspace.inflight_scope ?? null) };
+    const workspace = { ...effective.workspace,
+      ...readGitWorkspaceBaseline(options.sourceRoot, effective.workspace.required_untracked?.map(item => item.path_ref) ?? [], effective.workspace.inflight_scope ?? null),
+      required_untracked: completedRequiredFiles(effective, journal.plan, journal.workspace_projection) };
     recheckDependencies(journal, options, previous);
     if (committed) assert(JSON.stringify(committed.workspace) === JSON.stringify(workspace), 'completed workspace conflicts with transaction evidence');
     journal.draft.workspace = workspace;
@@ -260,7 +345,7 @@ function commitJournal(journal, paths, options) {
   options.fault?.('after-seal');
   const live = verifyChain(options.sealDirectory, options);
   assert(live.status === 'PASS' && live.control_status === 'READY' && live.latest.event_id === journal.event_id, `completed readback failed: ${live.errors.join('; ')}`);
-  journal.status = 'COMPLETED'; journal.completed_at = new Date().toISOString(); writeJournal(paths.journal, journal);
+  journal.status = 'COMPLETED'; journal.completed_seal_digest = live.latest.seal_digest; journal.completed_at = new Date().toISOString(); writeJournal(paths.journal, journal);
   return { status: 'COMPLETED', generation: live.latest.generation, writer_id: live.latest.writer_id, restrictions: live.latest.restrictions || [], old_authorization_inherited: false };
 }
 export function takeoverHandoff(options) {
@@ -268,50 +353,79 @@ export function takeoverHandoff(options) {
   assert(!history.errors.length, `candidate history invalid: ${history.errors.join('; ')}`);
   const latest = history.records.at(-1); assert(latest, 'candidate material missing');
   privateControlStorage(latest, options);
+  if (latest.handoff_phase === 'CURRENT_ATTESTATION' && latest.event_id === `${options.eventId}:receiver-adoption`) {
+    assertCompletedReceiverIdentity(history, options);
+    return attachReceiverAdoption({ status: 'COMPLETED', generation: latest.generation, writer_id: latest.writer_id, restrictions: latest.restrictions || [], old_authorization_inherited: false }, options);
+  }
   if (latest.event_id === options.eventId && latest.handoff_phase === 'TAKEOVER_COMPLETED') {
     const previous = history.records.at(-2); confirmed(options, previous);
-    return withControlLock(latest, options, paths => {
+    const result = withControlLock(latest, options, paths => {
       assertControlReady(latest, options);
-      const journal = JSON.parse(fs.readFileSync(paths.journal, 'utf8')); checkJournal(journal, options, history);
-      if (journal.workspace_projection?.version === 3) recheckDependencies(journal, options, previous);
-      const live = verifyChain(options.sealDirectory, options);
-      assert(journal.status === 'COMPLETED' && live.status === 'PASS' && live.control_status === 'READY' && latest.writer_id === options.recipient.writerId && latest.previous_seal_digest === previous.seal_digest && latest.transition?.intent_digest === journal.intent_digest, 'completed takeover needs recovery or revalidation');
+      const journal = JSON.parse(fs.readFileSync(paths.journal, 'utf8'));
+      verifyCompletedTakeoverJournal(journal, options, history);
+      const identity = verifyControlIdentity(latest, options);
+      assert(identity.status === 'PASS' && identity.identity.platform_task_id === options.recipient.platformTaskId, 'completed takeover receiver identity changed');
+      // Receiver adoption checks its frozen before/after state before reading
+      // live source digests, so its own interrupted writes remain recoverable.
       return { status: 'COMPLETED', generation: latest.generation, writer_id: latest.writer_id, restrictions: latest.restrictions || [], old_authorization_inherited: false };
     });
+    return attachReceiverAdoption(result, options);
   }
   confirmed(options, latest);
-  return withControlLock(latest, options, paths => {
+  assert(latest.workspace.worktree_fingerprint?.algorithm !== 'git-diff-binary+untracked-content-sha256-v1', 'WORKSPACE_REBASE_REQUIRED: collect an index-bound baseline before changing authority');
+  const result = withControlLock(latest, options, paths => {
     assertControlReady(latest, options);
     const result = verifyHandoffCandidate({ ...options, nextGeneration: latest.generation + 1, nextWriterId: options.recipient.writerId, eventId: options.eventId });
     assert(['READY', 'READY_WITH_RESTRICTIONS'].includes(result.status) && !result.errors.length, `candidate verification failed: ${result.errors.join('; ')}`);
     const plan = buildControlPlan(latest, options);
-    let workspaceProjection = captureTransactionWorkspace(latest, plan, options);
+    const preview = structuredClone(latest);
+    Object.assign(preview, { generation: latest.generation + 1, writer_id: options.recipient.writerId, event_id: options.eventId });
+    for (const item of plan) for (const name of item.names) preview.sources[name].digest = item.after_sha256;
+    if (!history.pending_intents.length) {
+      assert(options.adoption === undefined, 'receiver readiness: explicit adoption is only supported for a frozen or completed event; new takeover requires automatic binding');
+      preflightReceiverAdoption(options, preview, plan);
+    }
+    let workspaceProjection = { ...captureTransactionWorkspace(latest, plan, options), completion_required_mode: 'PLANNED_TARGETS_V1' };
     let intent;
     if (history.pending_intents.length) {
       assert(history.pending_intents.length === 1 && result.rotation.status === 'MATCHED', 'existing pending intent target mismatch');
       intent = history.pending_intents[0];
       if (intent.record_type === 'handoff-direct-transition-intent') assert(JSON.stringify(intent.authorization) === JSON.stringify(options.confirmation), 'pending direct confirmation mismatch');
-      if (Object.hasOwn(intent, 'workspace_projection_sha256')) assert(byteDigest(Buffer.from(JSON.stringify(workspaceProjection))) === intent.workspace_projection_sha256, 'pending workspace projection immutable anchor mismatch');
+      if (Object.hasOwn(intent, 'workspace_projection_sha256')) {
+        if (byteDigest(Buffer.from(JSON.stringify(workspaceProjection))) !== intent.workspace_projection_sha256) {
+          const legacy = { ...workspaceProjection };
+          delete legacy.completion_required_mode;
+          assert(byteDigest(Buffer.from(JSON.stringify(legacy))) === intent.workspace_projection_sha256, 'pending workspace projection immutable anchor mismatch');
+          workspaceProjection = legacy;
+        }
+      }
       else workspaceProjection = undefined; // Preserve old intent bytes and strict old recovery semantics.
     } else intent = prepareDirectTransition(options.sealDirectory, { ...options, expectedPreviousDigest: latest.seal_digest, workspace_projection_sha256: byteDigest(Buffer.from(JSON.stringify(workspaceProjection))) }).intent;
     const stamp = new Date().toISOString();
     const draft = structuredClone(validateWorkspaceAmendment(latest, options));
+    draft.workspace.required_untracked = completedRequiredFiles(draft, plan, workspaceProjection);
     delete draft.authority_recovery;
     Object.assign(draft, { schema_version: 4, generation: latest.generation + 1, writer_id: options.recipient.writerId, old_writer_status: options.confirmation.old_writer_status, event_id: options.eventId, fact_cutoff: stamp, sealed_at: stamp, switch_status: 'COMPLETED', handoff_phase: 'TAKEOVER_COMPLETED', candidate_verification_status: result.status === 'READY' ? 'PASS' : 'PASS_WITH_RESTRICTIONS', control_handoff_confidence: 'HIGH', communications: { status: 'NONE' }, restrictions: result.remote.status === 'UNKNOWN' ? ['REMOTE_UNOBSERVED'] : [], remote: { ...draft.remote, status: result.remote.status, head: result.remote.head || null, observed_at: result.remote.observed_at || null }, transition: null, migration: null, seal_digest: '' });
     for (const item of plan) for (const name of item.names) { draft.sources[name].digest = item.after_sha256; draft.sources[name].fact_cutoff = stamp; }
-    const journal = { protocol_version: 1, current_render_version: 5, ...(workspaceProjection ? { workspace_projection: workspaceProjection } : {}), status: 'PREPARED', event_id: options.eventId, previous_seal_digest: latest.seal_digest, confirmation: structuredClone(options.confirmation), intent_digest: intent.transition_digest, intent_path: `handoff-transition.${intent.previous_sequence}.${intent.transition_digest}.json`, plan, draft, prepared_at: stamp };
+    const journal = { protocol_version: 1, current_render_version: 9, ...(workspaceProjection ? { workspace_projection: workspaceProjection } : {}), status: 'PREPARED', event_id: options.eventId, previous_seal_digest: latest.seal_digest, confirmation: structuredClone(options.confirmation), intent_digest: intent.transition_digest, intent_path: `handoff-transition.${intent.previous_sequence}.${intent.transition_digest}.json`, plan, draft, prepared_at: stamp };
     // Durable evidence precedes the first central file mutation.
     writeJournal(paths.journal, journal); options.fault?.('after-journal');
     return withControlTransaction(latest, options, () => commitJournal(journal, paths, options));
   });
+  return attachReceiverAdoption(result, options);
 }
 export function recoverTakeover(options) {
   const history = readChain(options.sealDirectory), latest = history.records.at(-1); assert(latest, 'recovery material missing');
   privateControlStorage(latest, options);
-  return withControlTransaction(latest, options, paths => {
+  if (latest.handoff_phase === 'CURRENT_ATTESTATION' && latest.event_id === `${options.eventId}:receiver-adoption`) {
+    assertCompletedReceiverIdentity(history, options);
+    return attachReceiverAdoption({ status: 'COMPLETED', generation: latest.generation, writer_id: latest.writer_id, restrictions: latest.restrictions || [], old_authorization_inherited: false }, options);
+  }
+  const result = withControlTransaction(latest, options, paths => {
     const journal = JSON.parse(fs.readFileSync(paths.journal, 'utf8'));
     return commitJournal(journal, paths, options);
   });
+  return attachReceiverAdoption(result, options);
 }
 
 // A failed transaction may be safely withdrawn before its immutable completion
@@ -349,6 +463,8 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.a
     const config = JSON.parse(fs.readFileSync(configPath, 'utf8')), base = path.dirname(path.resolve(configPath));
     for (const name of ['sourceRoot', 'externalControlPlaneRoot', 'sealDirectory', 'workflowRoot', 'manifestPath']) if (config[name]) config[name] = path.resolve(base, config[name]);
     const action = mode === 'recover' ? recoverTakeover : mode === 'rollback' ? rollbackTakeover : takeoverHandoff;
-    console.log(JSON.stringify(action(config), null, 2));
+    const result = action(config);
+    console.log(JSON.stringify(result, null, 2));
+    if (result.receiver_adoption?.status === 'BLOCKED') process.exitCode = 1;
   } catch (error) { console.error(error.message); process.exitCode = 1; }
 }

@@ -4,14 +4,43 @@ $ErrorActionPreference = 'Stop'
 $utf8 = New-Object Text.UTF8Encoding($false)
 $bom = New-Object Text.UTF8Encoding($true)
 $data = Join-Path $PSScriptRoot ('.local/' + $Instance)
-[IO.Directory]::CreateDirectory($data) | Out-Null
+$startupErrorPath = Join-Path $data 'startup-error.txt'
+try {
+    [IO.Directory]::CreateDirectory($data) | Out-Null
+} catch {
+    $message = [string]$_.Exception.Message
+    try {
+        [IO.Directory]::CreateDirectory($data) | Out-Null
+        [IO.File]::WriteAllText($startupErrorPath, $message, $utf8)
+    } catch {}
+    if (-not $NoBrowser) {
+        try {
+            Add-Type -AssemblyName System.Windows.Forms
+            [Windows.Forms.MessageBox]::Show($message, '本地工作台启动失败') | Out-Null
+        } catch {}
+    }
+    exit 1
+}
 $connectionPath = Join-Path $data 'connection.json'
 $lock = $null
 $listener = $null
 $jobs = @{}
 $lockOwned = $false
-. (Join-Path $PSScriptRoot 'Read-DeskMetadata.ps1')
+try {
+    . (Join-Path $PSScriptRoot 'Read-DeskMetadata.ps1')
+} catch {
+    $message = [string]$_.Exception.Message
+    try { [IO.File]::WriteAllText($startupErrorPath, $message, $utf8) } catch {}
+    if (-not $NoBrowser) {
+        try {
+            Add-Type -AssemblyName System.Windows.Forms
+            [Windows.Forms.MessageBox]::Show($message, '本地工作台启动失败') | Out-Null
+        } catch {}
+    }
+    exit 1
+}
 $mode=if($Synthetic){'isolated-synthetic'}else{'local-readonly'}
+$connectionUrl = $null
 
 function Get-ProjectTaskOrder($items) {
     # Only an unambiguous topic + number pair changes position. Titles are labels, not authority.
@@ -79,6 +108,110 @@ function Error-Text([string]$Message) {
     }
     if ($translations.ContainsKey($Message)) { return $translations[$Message] }
     return 'The local operation failed. No successful save is confirmed. Check local file access and retry.'
+}
+function Test-ExistingDeskHealthy([string]$ConnectionText) {
+    if ([string]::IsNullOrWhiteSpace($ConnectionText)) { return $false }
+    $response = $null
+    $responseStream = $null
+    $bodyBuffer = $null
+    try {
+        $connection = $ConnectionText | ConvertFrom-Json -ErrorAction Stop
+        if ($connection.url -isnot [string] -or $connection.mode -isnot [string]) { return $false }
+        $rawUrl = $connection.url
+        $match = [regex]::Match($rawUrl, '^http://127\.0\.0\.1:(\d{1,5})/#([a-f0-9]{64})$')
+        $processId = 0
+        if (-not $match.Success -or -not [int]::TryParse([string]$connection.pid, [ref]$processId) -or $processId -le 0) { return $false }
+        if ($connection.mode -cne $mode) { return $false }
+        $process = Get-Process -Id $processId -ErrorAction Stop
+        if ($process.HasExited -or $process.ProcessName -notin @('powershell', 'pwsh')) { return $false }
+        $port = [int]$match.Groups[1].Value
+        $recordedPort = 0
+        if ($port -lt 1 -or $port -gt 65535 -or
+            -not [int]::TryParse([string]$connection.port, [ref]$recordedPort) -or $recordedPort -ne $port) { return $false }
+        $request = [Net.HttpWebRequest]::Create("http://127.0.0.1:$port/api/health")
+        $request.Method = 'GET'
+        $request.Proxy = $null
+        $request.AllowAutoRedirect = $false
+        $request.Timeout = 750
+        $request.ReadWriteTimeout = 200
+        $request.Headers['X-SessionDesk'] = $match.Groups[2].Value
+        $deadlineMilliseconds = 1500
+        $stopwatch = [Diagnostics.Stopwatch]::StartNew()
+        $legacy = $false
+        try {
+            $response = $request.GetResponse()
+        } catch [Net.WebException] {
+            $failedResponse = $_.Exception.Response
+            if ($null -eq $failedResponse) { return $false }
+            $missingHealthRoute = [int]$failedResponse.StatusCode -eq 404
+            $failedResponse.Dispose()
+            if (-not $missingHealthRoute) { return $false }
+            # The invalid ID exits before job updates or metadata reads. This
+            # authenticated capability probe stays small for any task count.
+            $legacy = $true
+            $request = [Net.HttpWebRequest]::Create("http://127.0.0.1:$port/api/job?id=sessiondesk-startup-probe")
+            $request.Method = 'GET'
+            $request.Proxy = $null
+            $request.AllowAutoRedirect = $false
+            $request.Timeout = 750
+            $request.ReadWriteTimeout = 200
+            $request.Headers['X-SessionDesk'] = $match.Groups[2].Value
+            try {
+                $response = $request.GetResponse()
+            } catch [Net.WebException] {
+                $response = $_.Exception.Response
+                if ($null -eq $response) { return $false }
+            }
+        }
+        $expectedStatus = if ($legacy) { 404 } else { 200 }
+        if ([int]$response.StatusCode -ne $expectedStatus) { return $false }
+        if ($response.ContentType -notmatch '^application/json(?:\s*;|\s*$)') { return $false }
+        $maxBodyBytes = 4096
+        if ($response.ContentLength -lt 1 -or $response.ContentLength -gt $maxBodyBytes) { return $false }
+        $responseStream = $response.GetResponseStream()
+        $bodyBuffer = New-Object IO.MemoryStream
+        $buffer = New-Object byte[] 1024
+        while ($bodyBuffer.Length -lt $response.ContentLength) {
+            if ($stopwatch.ElapsedMilliseconds -ge $deadlineMilliseconds) { $request.Abort(); return $false }
+            $remainingBytes = [int]($response.ContentLength - $bodyBuffer.Length)
+            $read = $responseStream.Read($buffer, 0, [Math]::Min($buffer.Length, $remainingBytes))
+            if ($read -le 0) { return $false }
+            $bodyBuffer.Write($buffer, 0, $read)
+        }
+        if ($bodyBuffer.Length -ne $response.ContentLength -or $stopwatch.ElapsedMilliseconds -gt $deadlineMilliseconds) { $request.Abort(); return $false }
+        $bodyText = [Text.Encoding]::UTF8.GetString($bodyBuffer.ToArray())
+        if ($bodyText -notmatch '^\s*\{') { return $false }
+        $payload = $bodyText | ConvertFrom-Json -ErrorAction Stop
+        if ($legacy) {
+            return ($null -ne $payload -and @($payload.PSObject.Properties).Count -eq 1 -and
+                $payload.error -is [string] -and $payload.error -cin @(
+                    '尚无本次运行的查询。', 'No query is available for this service run.'))
+        }
+        return ($null -ne $payload -and $payload.service -is [string] -and $payload.service -ceq 'codex-session-desk' -and
+            ($payload.api_version -is [int] -or $payload.api_version -is [long]) -and $payload.api_version -eq 1)
+    }
+    catch {
+        return $false
+    }
+    finally {
+        if ($null -ne $responseStream) { $responseStream.Dispose() }
+        if ($null -ne $bodyBuffer) { $bodyBuffer.Dispose() }
+        if ($null -ne $response) { $response.Dispose() }
+    }
+}
+function Clear-StartupError {
+    try {
+        if ([IO.File]::Exists($startupErrorPath)) { [IO.File]::Delete($startupErrorPath) }
+    } catch {}
+}
+function Write-StartupError([string]$Message) {
+    try { [IO.File]::WriteAllText($startupErrorPath, $Message, $utf8) } catch {}
+}
+function Show-StartupError([string]$Message) {
+    try {
+        Add-Type -AssemblyName System.Windows.Forms
+        [Windows.Forms.MessageBox]::Show($Message, '本地工作台启动失败') | Out-Null
+    } catch {}
 }
 function Write-Atomic([string]$Path, [string]$Text) {
     $temp = $Path + '.pending'
@@ -186,19 +319,37 @@ function Persist-Job($Job) {
     } catch {$Job.historySaved=$false}
 }
 
+function Stop-DeskQueryProcess($Job) {
+    if (-not $Job.process.HasExited) { $Job.process.Kill() }
+    if (-not $Job.process.WaitForExit(5000)) {
+        throw 'Query process exit is unconfirmed; the service remains active. / 查询进程退出尚未确认，工作台保持运行。'
+    }
+}
+
 function Update-Job($Job) {
     if ($Job.state -eq 'running') {
-        if (-not $Job.process.HasExited -and (([DateTime]::UtcNow - $Job.started).TotalSeconds -gt 120)) {
-            $Job.process.Kill()
-            $Job.process.WaitForExit()
+        if (-not $Job.process.HasExited -and (([DateTime]::UtcNow - $Job.started).TotalSeconds -gt 120) -and
+            (-not $Job.stopRetryAfter -or [DateTime]::UtcNow -ge $Job.stopRetryAfter)) {
             $Job.timedOut = $true
+            try { Stop-DeskQueryProcess $Job }
+            catch {
+                $Job.error = $_.Exception.Message
+                $Job.stopRetryAfter = [DateTime]::UtcNow.AddSeconds(5)
+            }
         }
         if ($Job.process.HasExited) {
-            $Job.process.WaitForExit()
-            $Job.output = $Job.stdout.GetAwaiter().GetResult()
-            $errorText = $Job.stderr.GetAwaiter().GetResult()
-            $Job.state = if ($Job.process.ExitCode -eq 0 -and -not $Job.timedOut) { 'done' } else { 'failed' }
-            $Job.error = if ($Job.timedOut) { '查询超过 120 秒，已终止。' } else { $errorText.Trim() }
+            try {
+                if (-not $Job.process.WaitForExit(5000)) { throw 'Query process completion was not confirmed.' }
+                if (-not $Job.stdout.Wait(5000) -or -not $Job.stderr.Wait(5000)) { throw 'Query output did not close before the deadline.' }
+                $Job.output = $Job.stdout.GetAwaiter().GetResult()
+                $errorText = $Job.stderr.GetAwaiter().GetResult()
+                $Job.state = if ($Job.process.ExitCode -eq 0 -and -not $Job.timedOut) { 'done' } else { 'failed' }
+                $Job.error = if ($Job.timedOut) { '查询超过 120 秒，已终止。' } else { $errorText.Trim() }
+            } catch {
+                $Job.state = 'failed'
+                $Job.output = ''
+                $Job.error = 'Query output could not be read completely. / 查询输出未能完整读取：' + $_.Exception.Message
+            }
             $Job.finished = [DateTime]::UtcNow.ToString('o')
             $Job.process.Dispose()
             if($Job.state -eq 'done'){
@@ -227,28 +378,56 @@ function Update-Job($Job) {
     }
     return @{id=$Job.id;run=$Job.run;language=$Job.language;state=$Job.state;output=$Job.output;error=$Job.error;finished=$Job.finished;nameChange=$Job.nameChange;metadataWarning=$Job.metadataWarning;level=$Job.level;score=$Job.score;contextPercent=$Job.contextPercent;contextInputTokens=$Job.contextInputTokens;contextObservedAt=$Job.contextObservedAt;assessmentVersion=$Job.assessmentVersion;contextGrowth=$Job.contextGrowth;roundsToObservation=$Job.roundsToObservation;scoreBasis=$Job.scoreBasis;sourceChanged=$false;historySaved=$Job.historySaved;reportAvailable=($Job.state -eq 'done')}
 }
+$deskPrimaryFailure = $null
 try {
     try {
         $lockPath = Join-Path $data 'server.lock'
-        for ($attempt = 0; $attempt -lt 6; $attempt++) {
+        $lastTestedConnection = $null
+        for ($attempt = 0; $attempt -lt 40; $attempt++) {
             try {
                 $lock = [IO.File]::Open($lockPath, 'OpenOrCreate', 'ReadWrite', 'None')
                 $lockOwned=$true
                 break
             } catch [IO.IOException] {
-                if ($attempt -eq 5) { throw }
-                Start-Sleep -Milliseconds (100 * ($attempt + 1))
+                $currentConnection = $null
+                if ([IO.File]::Exists($connectionPath)) {
+                    try { $currentConnection = [IO.File]::ReadAllText($connectionPath) } catch {}
+                }
+                # Avoid repeating a slow health probe for unchanged stale connection data.
+                if ($currentConnection -and $currentConnection -cne $lastTestedConnection) {
+                    $lastTestedConnection = $currentConnection
+                    if (Test-ExistingDeskHealthy $currentConnection) {
+                        if (-not $NoBrowser) {
+                            $existing = $currentConnection | ConvertFrom-Json
+                            Start-Process ([string]$existing.url) | Out-Null
+                        }
+                        Clear-StartupError
+                        Write-Output 'The local desk is already running.'
+                        exit 0
+                    }
+                }
+                if ($attempt -eq 39) { throw }
+                Start-Sleep -Milliseconds 250
             }
         }
     }
     catch {
-        # An existing instance owns this exact state directory. Never start a second writer.
-        if (-not $NoBrowser -and [IO.File]::Exists($connectionPath)) {
-            $existing = [IO.File]::ReadAllText($connectionPath) | ConvertFrom-Json
-            if ($existing.url -match '^http://127\.0\.0\.1:[0-9]+/#([a-f0-9]{64})$') { Start-Process $existing.url | Out-Null }
+        # Only report an existing instance after PID, token, port and a local
+        # identity response all agree. A stale or forged lock must fail closed.
+        $finalConnectionText = $null
+        if ([IO.File]::Exists($connectionPath)) {
+            try { $finalConnectionText = [IO.File]::ReadAllText($connectionPath) } catch {}
         }
-        Write-Output 'The local desk is already running.'
-        exit 0
+        if (Test-ExistingDeskHealthy $finalConnectionText) {
+            if (-not $NoBrowser) {
+                $existing = $finalConnectionText | ConvertFrom-Json
+                Start-Process ([string]$existing.url) | Out-Null
+            }
+            Clear-StartupError
+            Write-Output 'The local desk is already running.'
+            exit 0
+        }
+        throw '本地工作台锁已被占用，但连接文件或健康检查无效；为避免误报“已启动”，已停止。 / The desk lock is held, but its connection or health check is invalid; startup stopped to avoid a false success.'
     }
     $tasksPath = Join-Path $data 'tasks.json'
     $script:taskList = @()
@@ -318,21 +497,12 @@ try {
     $source = [IO.File]::ReadAllText($sourcePath)
     $snapshotHash=[Security.Cryptography.SHA256]::Create()
     try{$snapshotSource=$mode+'|'+$codexData+'|'+[BitConverter]::ToString($snapshotHash.ComputeHash([IO.File]::ReadAllBytes($sourcePath)))}finally{$snapshotHash.Dispose()}
-    if ([regex]::Matches($source,[regex]::Escape('$env:USERPROFILE')).Count -ne 4) { throw '分析器的隔离锚点已变化，停止启动。' }
-    if($Synthetic){
-    $literal = "'" + $profile.Replace("'","''") + "'"
-    $isolated = $source.Replace('$env:USERPROFILE',$literal)
-    if ($isolated.Replace($literal,'$env:USERPROFILE') -cne $source) { throw '隔离副本校验失败。' }
-    }else{
-        $homeLiteral="'"+$codexData.Replace("'","''")+"'"
-        $isolated=$source
-        foreach($suffix in @('.codex','.codex\sessions','.codex\archived_sessions')){
-            $anchor='Join-Path $env:USERPROFILE '+"'"+$suffix+"'"
-            if(-not $isolated.Contains($anchor)){throw 'Analyzer data-root anchor changed.'}
-            $replacement=if($suffix -eq '.codex'){$homeLiteral}else{'Join-Path '+$homeLiteral+" '"+$suffix.Substring(7)+"'"}
-            $isolated=$isolated.Replace($anchor,$replacement)
-        }
+    if ($source -notmatch '(?m)^\s*\[string\]\$CodexHome\s*,?\s*$') {
+        throw '分析器缺少显式 CodexHome 参数，停止启动。'
     }
+    # The child receives the already resolved root as data. Keeping the
+    # analyzer source unchanged avoids brittle path-literal rewriting.
+    $isolated = $source
     [IO.File]::WriteAllText((Join-Path $runtime 'isolated-analyzer.ps1'),$isolated,$bom)
     [IO.File]::WriteAllText((Join-Path $runtime 'Invoke-IsolatedAnalyzer.ps1'),[IO.File]::ReadAllText((Join-Path $PSScriptRoot 'Invoke-IsolatedAnalyzer.ps1')),$bom)
     $powershell = Join-Path $env:SystemRoot 'System32/WindowsPowerShell/v1.0/powershell.exe'
@@ -341,8 +511,10 @@ try {
     $probe=New-Object Net.Sockets.TcpListener([Net.IPAddress]::Loopback,0);$probe.Start();$port=$probe.LocalEndpoint.Port;$probe.Stop()
     $base="http://127.0.0.1:$port"
     $listener=New-Object Net.HttpListener;$listener.Prefixes.Add($base+'/');$listener.Start()
-    Write-Atomic $connectionPath (@{url=($base+'/#'+$token);port=$port;mode=$mode;pid=$PID} | ConvertTo-Json)
-    if (-not $NoBrowser) { Start-Process ($base+'/#'+$token) | Out-Null }
+    $connectionUrl = $base+'/#'+$token
+    Write-Atomic $connectionPath (@{url=$connectionUrl;port=$port;mode=$mode;pid=$PID} | ConvertTo-Json)
+    Clear-StartupError
+    if (-not $NoBrowser) { Start-Process $connectionUrl | Out-Null }
     $stopping=$false
     $waiting=$listener.BeginGetContext($null,$null)
     while (-not $stopping) {
@@ -361,6 +533,7 @@ try {
             $route=$request.Url.AbsolutePath
             if ($route -eq '/' -and $request.HttpMethod -eq 'GET') { Send-Body $context 200 ([IO.File]::ReadAllText((Join-Path $PSScriptRoot 'desk.html'))) 'text/html; charset=utf-8';continue }
             if ($request.Headers['X-SessionDesk'] -cne $token) { Send-Json $context @{error='连接凭证无效，请双击启动入口重新打开。'} 403;continue }
+            if ($request.HttpMethod -eq 'GET' -and $route -eq '/api/health') { Send-Json $context @{service='codex-session-desk';api_version=1};continue }
             if ($request.HttpMethod -eq 'GET' -and $route -eq '/api/tasks') { Sync-Metadata;Send-Json $context @{tasks=@($script:taskList);language=$script:language;mode=$mode;version='0.2.0-dev.10'};continue }
             if ($request.HttpMethod -eq 'GET' -and $route -eq '/api/history') {
                 $id=$request.QueryString['id']
@@ -455,7 +628,7 @@ try {
                 if ([IO.File]::Exists($metadata)) { [IO.File]::Delete($metadata) }
                 $info=New-Object Diagnostics.ProcessStartInfo
                 $info.FileName=$powershell
-                $info.Arguments='-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "'+(Join-Path $runtime 'Invoke-IsolatedAnalyzer.ps1')+'" -TaskId "'+$id+'" -ReportPath "'+$report+'"'
+                $info.Arguments='-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "'+(Join-Path $runtime 'Invoke-IsolatedAnalyzer.ps1')+'" -TaskId "'+$id+'" -ReportPath "'+$report+'" -CodexHome "'+$codexData+'"'
                 $info.Arguments+=' -Language "'+$queryLanguage+'" -MetadataPath "'+$metadata+'"'
                 $info.UseShellExecute=$false;$info.CreateNoWindow=$true;$info.RedirectStandardOutput=$true;$info.RedirectStandardError=$true
                 $info.StandardOutputEncoding=$utf8;$info.StandardErrorEncoding=$utf8
@@ -472,17 +645,49 @@ try {
                 $id=$request.QueryString['id'];if (-not (Valid-Id $id) -or -not $jobs.ContainsKey($id) -or (Update-Job $jobs[$id]).state -ne 'done') { Send-Json $context @{error='当前查询没有可用报告。'} 404;continue }
                 Send-Json $context @{text=[IO.File]::ReadAllText($jobs[$id].report)};continue
             }
-            if ($request.HttpMethod -eq 'POST' -and $route -eq '/api/shutdown') { foreach($job in @($jobs.Values)){Update-Job $job|Out-Null};Send-Json $context @{stopped=$true};$stopping=$true;continue }
+            if ($request.HttpMethod -eq 'POST' -and $route -eq '/api/shutdown') {
+                foreach($job in @($jobs.Values)) {
+                    Update-Job $job|Out-Null
+                    if ($job.state -eq 'running') {
+                        Stop-DeskQueryProcess $job
+                        $job.state='failed';$job.error='Query cancelled by tool shutdown.'
+                        $job.finished=[DateTime]::UtcNow.ToString('o')
+                        $job.process.Dispose()
+                    }
+                }
+                Send-Json $context @{stopped=$true};$stopping=$true;continue
+            }
             Send-Json $context @{error='接口不存在。'} 404
         } catch { try { Send-Json $context @{error=$_.Exception.Message} 400 } catch {} }
     }
 } catch {
-    [IO.File]::WriteAllText((Join-Path $data 'startup-error.txt'),$_.Exception.Message,$utf8)
-    if (-not $NoBrowser) { Add-Type -AssemblyName System.Windows.Forms;[Windows.Forms.MessageBox]::Show($_.Exception.Message,'本地工作台启动失败') | Out-Null }
+    $deskPrimaryFailure = $_.Exception
+    Write-StartupError $_.Exception.Message
+    if (-not $NoBrowser) { Show-StartupError $_.Exception.Message }
     throw
 } finally {
-    foreach ($job in @($jobs.Values)) { if ($job.state -eq 'running') { try { if (-not $job.process.HasExited) { $job.process.Kill();$job.process.WaitForExit() };$job.process.Dispose() } catch {} } }
+    $cleanupErrors = [Collections.Generic.List[Exception]]::new()
+    foreach ($job in @($jobs.Values)) {
+        if ($job.state -eq 'running') {
+            try { Stop-DeskQueryProcess $job; $job.process.Dispose() }
+            catch { $cleanupErrors.Add($_.Exception) }
+        }
+    }
     if ($listener) { $listener.Close() }
-    if ($lockOwned -and [IO.File]::Exists($connectionPath)) { [IO.File]::Delete($connectionPath) }
+    if ($cleanupErrors.Count -eq 0 -and $lockOwned -and $connectionUrl -and [IO.File]::Exists($connectionPath)) {
+        try {
+            $currentConnection = [IO.File]::ReadAllText($connectionPath) | ConvertFrom-Json
+            if ([string]$currentConnection.pid -ceq [string]$PID -and
+                [string]$currentConnection.url -ceq $connectionUrl) {
+                [IO.File]::Delete($connectionPath)
+            }
+        } catch {}
+    }
     if ($lock) { $lock.Dispose() }
+    if ($cleanupErrors.Count) {
+        $message='Query process cleanup failed; connection evidence was retained. / 查询进程清理未确认，已保留连接证据。'
+        Write-StartupError $message
+        if ($deskPrimaryFailure) { $cleanupErrors.Insert(0, $deskPrimaryFailure) }
+        throw [AggregateException]::new($message, [Exception[]]$cleanupErrors.ToArray())
+    }
 }

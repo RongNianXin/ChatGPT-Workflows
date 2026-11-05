@@ -16,7 +16,7 @@ const ruleRoot = path.join(root, 'rules', 'core');
 const hash = value => crypto.createHash('sha256').update(value).digest('hex');
 const names = [
   ...Array.from({ length: 12 }, (_, index) => `${String(index).padStart(2, '0')}-rule.md`),
-  ...['HandoffSeal', 'Prepare-Handoff', 'HandoffWorkspaceScope', 'HandoffTransactionWorkspace', 'Inspect-WorkspaceTracking', 'Inspect-RuleRefresh', 'Mark-Handoff-Delivered', 'Inspect-QuotaProtection'].map(name => `.github/scripts/${name}.mjs`),
+  ...['HandoffSeal', 'Receiver-Readiness', 'Prepare-Handoff', 'Query-HandoffAuthenticatedRef', 'HandoffWorkspaceScope', 'HandoffTransactionWorkspace', 'Inspect-WorkspaceTracking', 'Inspect-RuleRefresh', 'Mark-Handoff-Delivered', 'Inspect-QuotaProtection'].map(name => `.github/scripts/${name}.mjs`),
   '总指挥轻量交接启动配置.md', '规则刷新广播包.md', '规则刷新接收回执模板.md', 'templates/HANDOFF_STATE.schema.json',
   '引用的外部工具/外部工具目录.md', '引用的外部工具/外部工具自动对接规范.md'
 ];
@@ -36,6 +36,101 @@ try {
   writeManifest(original);
   const before = captureRuleRefresh(ruleRoot);
   const catalog = '引用的外部工具/外部工具目录.md';
+  const rebindReport = report => {
+    report.snapshot_sha256 = hash(JSON.stringify({ manifest_sha256: report.manifest_sha256.toLowerCase(),
+      rules: report.rules.map(({ path_ref, sha256 }) => ({ path_ref, sha256: sha256.toLowerCase() }))
+        .sort((a, b) => a.path_ref < b.path_ref ? -1 : a.path_ref > b.path_ref ? 1 : 0) }));
+    return report;
+  };
+  test('report comparison is additive, byte-only, and never attests reading or provenance', () => {
+    const source = JSON.stringify(before.report);
+    const delta = refresh.compareRuleRefreshReports(before.report, before.report);
+    assert.equal(delta.result, 'PASS');
+    assert.equal(delta.provenance, 'NOT_ATTESTED');
+    assert.equal(delta.text_reading, 'NOT_ATTESTED');
+    assert.equal(delta.authorization_verified, false);
+    assert.deepEqual(delta.changed, []);
+    assert.deepEqual(delta.added, []);
+    assert.deepEqual(delta.removed, []);
+    assert.equal(delta.unchanged.length, names.length);
+    assert(!('skip' in delta));
+    assert.equal(JSON.stringify(before.report), source);
+  });
+  test('comparison separates changed, added, removed, reordered and case-renamed paths', () => {
+    const old = structuredClone(before.report);
+    old.rules.push({ path_ref: 'optional-old.md', sha256: hash('old'), matches_manifest: true });
+    rebindReport(old);
+    const current = structuredClone(before.report);
+    current.rules[0].sha256 = hash('changed');
+    current.rules.push({ path_ref: '__proto__', sha256: hash('safe data'), matches_manifest: false });
+    current.rules.reverse(); rebindReport(current);
+    const delta = refresh.compareRuleRefreshReports(old, current);
+    assert.deepEqual(delta.changed.map(x => x.path_ref), [names[0]]);
+    assert.deepEqual(delta.added.map(x => x.path_ref), ['__proto__']);
+    assert.deepEqual(delta.removed.map(x => x.path_ref), ['optional-old.md']);
+    assert.equal(delta.unchanged.length, names.length - 1);
+    const caseChange = structuredClone(old); caseChange.rules.at(-1).path_ref = 'OPTIONAL-old.md'; rebindReport(caseChange);
+    const rename = refresh.compareRuleRefreshReports(old, caseChange);
+    assert.deepEqual(rename.added.map(x => x.path_ref), ['OPTIONAL-old.md']);
+    assert.deepEqual(rename.removed.map(x => x.path_ref), ['optional-old.md']);
+    const reordered = structuredClone(before.report); reordered.rules.reverse();
+    assert.deepEqual(refresh.compareRuleRefreshReports(before.report, reordered).changed, []);
+  });
+  test('manifest-only or reported metadata changes cannot be mistaken for identical baselines', () => {
+    const next = structuredClone(before.report); next.manifest_sha256 = hash('different manifest'); rebindReport(next);
+    const delta = refresh.compareRuleRefreshReports(before.report, next);
+    assert.equal(delta.manifest_changed, true);
+    assert.deepEqual(delta.changed, []);
+    assert.notEqual(delta.baseline_snapshot_sha256, delta.current_snapshot_sha256);
+    next.declared_version = 'fixture.2'; next.manifest_synchronized = false;
+    const metadata = refresh.compareRuleRefreshReports(before.report, next);
+    assert.deepEqual(metadata.reported_metadata_changes, { declared_version: true, manifest_synchronized: true });
+    assert.equal(metadata.provenance, 'NOT_ATTESTED');
+  });
+  test('comparison normalizes digest case but never path spelling or caller objects', () => {
+    const upper = structuredClone(before.report);
+    for (const entry of upper.rules) entry.sha256 = entry.sha256.toUpperCase();
+    upper.manifest_sha256 = upper.manifest_sha256.toUpperCase(); upper.snapshot_sha256 = upper.snapshot_sha256.toUpperCase();
+    const frozen = JSON.stringify(upper);
+    assert.equal(refresh.compareRuleRefreshReports(upper, before.report).unchanged.length, names.length);
+    assert.equal(JSON.stringify(upper), frozen);
+  });
+  test('comparison rejects malformed report fields without type coercion', () => {
+    const variants = [null, [], {}, { ...before.report, rules: [] }, { ...before.report, rules: [null] }];
+    for (const [key, values] of Object.entries({ result: ['FAIL', ['PASS']], mode: ['other', ['local']],
+      text_reading: ['READ', ['NOT_ATTESTED']], declared_version: ['', '  ', 1], manifest_synchronized: ['true', null, 1],
+      manifest_sha256: [[before.report.manifest_sha256], 1], snapshot_sha256: [[before.report.snapshot_sha256], '0'.repeat(64)] })) {
+      for (const value of values) variants.push({ ...before.report, [key]: value });
+    }
+    for (const report of variants) {
+      assert.throws(() => refresh.compareRuleRefreshReports(report, before.report), { code: 'INVALID_COMPARISON_REPORT' });
+      assert.throws(() => refresh.compareRuleRefreshReports(before.report, report), { code: 'INVALID_COMPARISON_REPORT' });
+    }
+  });
+  test('comparison rejects missing required rules, unsafe paths and canonical duplicates even with new hashes', () => {
+    const variants = [];
+    const missing = structuredClone(before.report); missing.rules.shift(); variants.push(rebindReport(missing));
+    for (const name of ['../outside.md', '/absolute.md', 'C:/<OUTSIDE>/private.md', 'folder\\private.md', 'folder//file.md', './file.md', 'bad\0name']) {
+      const value = structuredClone(before.report); value.rules.push({ path_ref: name, sha256: hash('data'), matches_manifest: true }); variants.push(rebindReport(value));
+    }
+    for (const pair of [['extra.md', 'EXTRA.md'], ['e\u0301.md', 'é.md']]) {
+      const value = structuredClone(before.report);
+      for (const path_ref of pair) value.rules.push({ path_ref, sha256: hash('data'), matches_manifest: true });
+      variants.push(rebindReport(value));
+    }
+    for (const mutate of [value => { value.rules[0].sha256 = [value.rules[0].sha256]; },
+      value => { value.rules[0].matches_manifest = 'true'; }, value => { value.rules[0].sha256 = hash('forged without rebinding'); }]) {
+      const value = structuredClone(before.report); mutate(value); variants.push(value);
+    }
+    for (const report of variants) assert.throws(() => refresh.compareRuleRefreshReports(report, before.report), { code: 'INVALID_COMPARISON_REPORT' });
+  });
+  test('self-consistent reports with optional omissions still cannot attest completeness or reading', () => {
+    const more = structuredClone(before.report); more.rules.push({ path_ref: 'optional.md', sha256: hash('optional'), matches_manifest: true }); rebindReport(more);
+    const delta = refresh.compareRuleRefreshReports(more, before.report);
+    assert.equal(delta.provenance, 'NOT_ATTESTED');
+    assert.equal(delta.text_reading, 'NOT_ATTESTED');
+    assert.deepEqual(delta.removed.map(x => x.path_ref), ['optional.md']);
+  });
   test('local capture is read-only and does not attest model reading or editor buffers', () => {
     assert.equal(before.report.manifest_synchronized, true);
     assert.equal(before.report.text_reading, 'NOT_ATTESTED');
@@ -134,6 +229,32 @@ try {
     }
   });
   const cli = (...args) => spawnSync(process.execPath, [path.join(workspace, '.github/scripts/Inspect-RuleRefresh.mjs'), '--rule-root', ruleRoot, ...args], { cwd: root, encoding: 'utf8' });
+  test('opt-in CLI comparison preserves the full report and reading plan, default output is unchanged', () => {
+    const ordinary = JSON.parse(cli().stdout);
+    const outcome = cli('--baseline-json', JSON.stringify(before.report));
+    assert.equal(outcome.status, 0, outcome.stderr);
+    const { comparison, ...rest } = JSON.parse(outcome.stdout);
+    assert.deepEqual(rest, ordinary);
+    assert(!('comparison' in ordinary));
+    assert(comparison.changed.some(entry => entry.path_ref === catalog));
+    assert.equal(comparison.text_reading, 'NOT_ATTESTED');
+    assert.equal(JSON.parse(cli('--baseline-json', '{broken').stderr).code, 'INVALID_COMPARISON_REPORT');
+  });
+  test('comparison conflicts fail before source capture and never bypass local or pinned validation', () => {
+    fs.writeFileSync(manifestPath, '{broken');
+    for (const args of [['--file', catalog], ['--offset', '0'], ['--length', '1'],
+      ['--activity-operation', 'capture'], ['--activity-operation', 'deliver']]) {
+      const run = cli('--baseline-json', JSON.stringify(before.report), ...args);
+      assert.equal(run.status, 1); assert.equal(run.stdout, '');
+      assert.equal(JSON.parse(run.stderr).code, 'INVALID_INPUT');
+    }
+    const bad = structuredClone(before.report); bad.rules.pop();
+    assert.equal(JSON.parse(cli('--baseline-json', JSON.stringify(bad)).stderr).code, 'INVALID_COMPARISON_REPORT');
+    writeManifest(original);
+    const strict = cli('--mode', 'pinned', '--baseline-json', JSON.stringify(before.report));
+    assert.equal(strict.status, 1); assert.equal(JSON.parse(strict.stderr).code, 'MANIFEST_MISMATCH');
+    assert.equal(JSON.parse(cli('--expected', before.report.snapshot_sha256, '--baseline-json', JSON.stringify(before.report)).stderr).code, 'SOURCE_CHANGED');
+  });
   const activity = () => ({ schema_version: 1,
     current: { request_ref: 'request-B', event_ref: 'event-B', turn_ref: 'turn-B' },
     refresh: { request_ref: 'request-B', event_ref: 'event-B', turn_ref: 'turn-B',
@@ -141,6 +262,19 @@ try {
   });
   const activityPath = path.join(root, 'loading-record.json');
   const saveActivity = value => fs.writeFileSync(activityPath, JSON.stringify({ rule_refresh_activity: value }));
+  test('comparison obeys the existing activity slot and cannot reopen a terminal event', () => {
+    const value = activity();
+    let run = cli('--baseline-json', JSON.stringify(before.report), '--activity-json', JSON.stringify(value));
+    assert.equal(run.status, 0, run.stderr);
+    assert.equal(JSON.parse(run.stdout).activity_guard.action, 'READ');
+    for (const [change, code] of [[x => { x.refresh.status = 'COMPLETED'; }, 'ACTIVITY_TERMINAL'],
+      [x => { x.refresh.event_ref = 'other'; }, 'ACTIVITY_MISROUTED'],
+      [x => { x.refresh.snapshot_sha256 = before.report.snapshot_sha256; }, 'SOURCE_CHANGED']]) {
+      const invalid = activity(); change(invalid);
+      run = cli('--baseline-json', JSON.stringify(before.report), '--activity-json', JSON.stringify(invalid));
+      assert.equal(run.status, 1); assert.equal(run.stdout, ''); assert.equal(JSON.parse(run.stderr).code, code);
+    }
+  });
   test('Markdown carrier preserves surrounding text and uses the same activity guard', () => {
     const markdownPath = path.join(root, 'progress.md');
     const text = `# Existing progress\nKeep this text\n<!-- RULE_REFRESH_ACTIVITY:BEGIN -->\n${JSON.stringify({ rule_refresh_activity: activity() })}\n<!-- RULE_REFRESH_ACTIVITY:END -->\nExisting tail\n`;

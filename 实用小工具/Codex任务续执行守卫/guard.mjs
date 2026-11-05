@@ -93,7 +93,11 @@ export function handleHook(directory, event) {
     }
     if (kind === 'PreToolUse' || kind === 'PostToolUse') {
       if (!event.tool_use_id) throw Error('缺少工具调用标识');
-      if (state.status === 'VERIFIED') { state.status = 'RUNNING'; state.reason = '验收后发生了工具活动，须重新验收'; }
+      if (state.status === 'VERIFIED') {
+        state.status = 'RUNNING';
+        state.reason = '验收后发生了工具活动，须重新验收';
+        state.acceptanceGeneration = (state.acceptanceGeneration ?? 0) + 1;
+      }
       if (kind === 'PreToolUse') state.activeTools[event.tool_use_id] = { tool: event.tool_name ?? 'unknown' };
       else {
         const response = event.tool_response;
@@ -125,7 +129,8 @@ export function handleHook(directory, event) {
     // Another merged hook may have requested more work after our earlier PASS.
     // Recheck each new Stop; an old PASS must not certify later changes.
     if (terminal.has(state.status) && state.status !== 'VERIFIED') return save(stop(state.status, state.reason));
-    if (prior?.eventHash === eventHash) {
+    if (prior?.eventHash === eventHash &&
+      (prior.generation ?? 0) === (state.acceptanceGeneration ?? 0)) {
       if (event.stop_hook_active === true && prior.result.decision === 'block') {
         state.status = 'STALLED'; state.reason = '重复的续作后结束事件无法区分重投与无进展，保守停止';
         return save(stop(state.status, state.reason));
@@ -136,7 +141,7 @@ export function handleHook(directory, event) {
     let output;
     const finish = (status, reason, result) => {
       state.status = status; state.reason = reason;
-      state.events[key] = { eventHash, result };
+      state.events[key] = { eventHash, generation: state.acceptanceGeneration ?? 0, result };
       return save(result);
     };
     const halt = (status, reason) => finish(status, reason, stop(status, reason));
@@ -175,7 +180,8 @@ export function prepare(contractFile, directory) {
   atomic(path.join(directory, 'state.json'), {
     version: 1, status: 'ARMED', contractHash: hash(bytes), guardHash: hash(fs.readFileSync(self)), sessionId: null,
     deadline: Date.now() + contract.maxMinutes * 60000,
-    continuations: 0, stopCount: 0, checkCount: 0, noProgress: 0, activeTools: {}, events: {},
+    continuations: 0, stopCount: 0, checkCount: 0, noProgress: 0, acceptanceGeneration: 0,
+    activeTools: {}, events: {},
   });
   return contract;
 }
@@ -205,15 +211,41 @@ export async function runTask({ contractFile, directory, prompt, codex, extraCon
   let owner;
   try { owner = fs.openSync(lockFile, 'wx'); }
   catch { const old = read(lockFile); throw Error(`本工作项已有锁：${alive(old.pid) ? '实例仍存活' : '需核验旧状态后人工解除'}；不启动新业务`); }
-  fs.writeFileSync(owner, JSON.stringify({ pid: process.pid, processStartedAt: new Date(Date.now() - process.uptime() * 1000).toISOString(), directory: path.resolve(directory) }));
-  let child, timer, timedOut = false, cancelled = false;
-  const terminate = () => {
-    if (!child?.pid || child.exitCode !== null || child.signalCode !== null) return;
-    // Only the child created by this invocation, never an existing Codex process.
-    if (process.platform === 'win32') spawnSync('taskkill.exe', ['/PID', String(child.pid), '/T', '/F'], { windowsHide: true, stdio: 'ignore' });
-    else { try { process.kill(-child.pid, 'SIGTERM'); } catch {} }
+  const ownerRecord = { pid: process.pid, processStartedAt: new Date(Date.now() - process.uptime() * 1000).toISOString(), directory: path.resolve(directory) };
+  fs.writeFileSync(owner, JSON.stringify(ownerRecord));
+  let child, timer, exitTimer, settleExit, termination, cancelMarkerError, preserveOwnerLock = false, timedOut = false, cancelled = false;
+  const finishExit = result => {
+    clearTimeout(exitTimer);
+    settleExit?.(result);
   };
-  const cancel = () => { cancelled = true; if (fs.existsSync(directory)) fs.writeFileSync(path.join(directory, 'cancel'), ''); terminate(); };
+  const terminate = () => {
+    if (!child?.pid || termination) return;
+    termination = { childPid: child.pid, requested: cancelled ? 'CANCELLED' : 'LIMIT', commandConfirmed: false };
+    if (child.exitCode === null && child.signalCode === null) {
+      // Only the child created by this invocation, never an existing Codex process.
+      try {
+        if (process.platform === 'win32') {
+          const result = spawnSync('taskkill.exe', ['/PID', String(child.pid), '/T', '/F'],
+            { windowsHide: true, stdio: 'ignore', timeout: 3000, killSignal: 'SIGKILL' });
+          termination.commandConfirmed = !result.error && result.status === 0;
+          if (!termination.commandConfirmed) termination.error = result.error?.message || `taskkill exit ${result.status}`;
+        } else {
+          process.kill(-child.pid, 'SIGTERM');
+          termination.commandConfirmed = true;
+        }
+      } catch (error) { termination.error = error.message; }
+    }
+    exitTimer = setTimeout(() => {
+      preserveOwnerLock = true;
+      finishExit({ code: null, exitConfirmed: false, error: 'Owned CLI exit was not confirmed within the termination grace period.' });
+    }, 5000);
+  };
+  const cancel = () => {
+    cancelled = true;
+    try { if (fs.existsSync(directory)) fs.writeFileSync(path.join(directory, 'cancel'), ''); }
+    catch (error) { cancelMarkerError = error.message; }
+    terminate();
+  };
   try {
     if (fs.existsSync(registration)) throw Error(`工作项已登记；请先回读原运行 ${read(registration).directory}，不可通过换目录清零预算`);
     const contract = prepare(contractFile, directory);
@@ -233,14 +265,27 @@ export async function runTask({ contractFile, directory, prompt, codex, extraCon
         else if (Date.now() >= deadline) { timedOut = true; terminate(); }
       }, 250);
       const exit = await new Promise(resolve => {
-        child.once('error', error => resolve({ code: null, error: error.message }));
-        child.once('close', (code, signal) => resolve({ code, signal }));
+        settleExit = resolve;
+        child.once('error', error => {
+          const exitConfirmed = !child.pid || child.exitCode !== null || child.signalCode !== null;
+          preserveOwnerLock = !exitConfirmed;
+          finishExit({ code: null, error: error.message, exitConfirmed });
+        });
+        child.once('close', (code, signal) => finishExit({ code, signal, exitConfirmed: true }));
       });
       clearInterval(timer);
+      if (exit.exitConfirmed === false) {
+        preserveOwnerLock = true;
+        child.on('error', () => {});
+        child.unref();
+        try { child.stdin.destroy(); } catch (error) { exit.detachError = error.message; }
+        fs.writeFileSync(lockFile, JSON.stringify({ ...ownerRecord, childPid: child.pid, exitConfirmed: false, termination, cancelMarkerError }));
+      }
       let state;
       try { state = read(path.join(directory, 'state.json')); }
       catch { state = { status: 'GUARD_ERROR', reason: '守卫状态不可读' }; }
-      if (cancelled || fs.existsSync(path.join(directory, 'cancel'))) { state.status = 'CANCELLED'; state.reason = '本次运行已取消'; }
+      if (exit.exitConfirmed === false) { state.status = 'GUARD_ERROR'; state.reason = '自有CLI退出尚未确认；已保留归属锁和登记，不自动重启或重放'; }
+      else if (cancelled || fs.existsSync(path.join(directory, 'cancel'))) { state.status = 'CANCELLED'; state.reason = cancelMarkerError ? '取消标记写入失败；自有CLI退出已确认' : '本次运行已取消'; }
       else if (timedOut || Date.now() >= state.deadline) { state.status = 'LIMIT'; state.reason = '累计时限已到；仍在运行时仅终止本启动器拥有的CLI进程树'; }
       else if (fs.existsSync(path.join(directory, 'hook-error.json'))) {
         state.status = 'GUARD_ERROR';
@@ -251,12 +296,15 @@ export async function runTask({ contractFile, directory, prompt, codex, extraCon
       else if (!terminal.has(state.status) || !state.stopCount) { state.status = 'UNVERIFIED'; state.reason = '缺少Stop终态验收，不能把CLI退出0当作完成'; }
       else if (state.status === 'VERIFIED' && (state.lastCheck?.status !== 'PASS' || !state.checkCount || Object.keys(state.activeTools ?? {}).length)) { state.status = 'UNVERIFIED'; state.reason = '有效验收记录或在途状态不一致'; }
       state.cliExit = exit;
+      if (termination) state.termination = termination;
+      if (cancelMarkerError) state.cancelMarkerError = cancelMarkerError;
       atomic(path.join(directory, 'state.json'), state);
-      return { status: state.status, verified: state.status === 'VERIFIED', continuations: state.continuations, stopCount: state.stopCount, reason: state.reason, directory: path.resolve(directory) };
+      return { status: state.status, verified: state.status === 'VERIFIED', exitConfirmed: exit.exitConfirmed !== false, continuations: state.continuations, stopCount: state.stopCount, reason: state.reason, directory: path.resolve(directory) };
     } finally { fs.closeSync(log); fs.closeSync(errors); }
   } finally {
-    clearInterval(timer); process.removeListener('SIGINT', cancel); process.removeListener('SIGTERM', cancel);
-    fs.closeSync(owner); fs.unlinkSync(lockFile);
+    clearInterval(timer); clearTimeout(exitTimer); process.removeListener('SIGINT', cancel); process.removeListener('SIGTERM', cancel);
+    fs.closeSync(owner);
+    if (!preserveOwnerLock) fs.unlinkSync(lockFile);
   }
 }
 
@@ -272,7 +320,7 @@ async function main() {
     }
   } else if (action === 'status') {
     const state = read(path.join(args[0], 'state.json'));
-    console.log(JSON.stringify({ status: state.status, finalized: Boolean(state.cliExit), verified: state.status === 'VERIFIED' && state.cliExit?.code === 0, reason: state.reason, continuations: state.continuations, stopCount: state.stopCount, checkCount: state.checkCount }, null, 2));
+    console.log(JSON.stringify({ status: state.status, finalized: Boolean(state.cliExit) && state.cliExit.exitConfirmed !== false, verified: state.status === 'VERIFIED' && state.cliExit?.code === 0 && state.cliExit.exitConfirmed !== false, reason: state.reason, continuations: state.continuations, stopCount: state.stopCount, checkCount: state.checkCount }, null, 2));
   } else if (action === 'stop') {
     if (!fs.existsSync(path.join(args[0], 'state.json'))) throw Error('不是守卫运行目录');
     fs.writeFileSync(path.join(args[0], 'cancel'), ''); console.log('已请求停止本次守卫，不影响其他任务');

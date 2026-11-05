@@ -1,12 +1,13 @@
 ﻿[CmdletBinding()]
 param([Parameter(Mandatory)][string]$TaskId, [Parameter(Mandatory)][string]$ReportPath,
-    [ValidateSet('zh-CN','en-US')][string]$Language = 'zh-CN', [string]$MetadataPath)
+[ValidateSet('zh-CN','en-US')][string]$Language = 'zh-CN', [string]$MetadataPath,
+    [string]$CodexHome)
 $ErrorActionPreference = 'Stop'
 [Console]::OutputEncoding = New-Object Text.UTF8Encoding($false)
 try {
     # This wrapper is copied beside the isolated analyzer, never run against the original.
     $script = Join-Path $PSScriptRoot 'isolated-analyzer.ps1'
-    $output = . $script -TaskId $TaskId -ReportPath $ReportPath -Language $Language | Out-String -Width 180
+    $output = . $script -TaskId $TaskId -ReportPath $ReportPath -Language $Language -CodexHome $CodexHome | Out-String -Width 180
     if ($MetadataPath) {
         # The analyzer owns the score and the warning level; this wrapper only passes them through.
         $score = if ($null -ne $totalScore) { [int]$totalScore } else { $null }

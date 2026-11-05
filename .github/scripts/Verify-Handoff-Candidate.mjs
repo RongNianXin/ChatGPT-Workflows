@@ -5,7 +5,8 @@ import { fileURLToPath } from 'node:url';
 import { verifyChain, observeControlIdentity } from './HandoffSeal.mjs';
 import { assertPrivateControlStorage, controlPaths } from './HandoffControl.mjs';
 import { validateWorkspaceAmendment } from './HandoffWorkspaceAmendment.mjs';
-import { classifyRuleDrift, verifyRuleManifest, verifyWorkspaceBaseline, readLiveRemoteBaseline, verifyHandoffInventory } from './Prepare-Handoff.mjs';
+import { verifyReceiverReadiness } from './Receiver-Readiness.mjs';
+import { classifyRuleDrift, verifyRuleManifest, verifyWorkspaceBaseline, readLiveRemoteBaseline, verifyHandoffInventory, handoffReceptionRoute } from './Prepare-Handoff.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const defaultWorkflowRoot = path.resolve(here, '..', '..', '总指挥工作流', '第二代总指挥的工作模式');
@@ -54,8 +55,12 @@ export function verifyHandoffCandidate({ sealDirectory, sourceRoot, externalCont
     result.actions.push('已完成接管的封条只能按历史/当前状态核验，不能重复作为候选输入');
     return result;
   }
-  if (chain.latest.restrictions?.includes('HISTORICAL_WORKSPACE_PRESERVATION_UNVERIFIED')) {
+  result.reception_route = handoffReceptionRoute(chain.latest);
+  try { result.receiver_readiness = verifyReceiverReadiness(chain.latest, { sourceRoot, externalControlPlaneRoot, sealDirectory }); }
+  catch (error) { result.errors.push(error.message); return result; }
+  if (result.reception_route.protocol === 'CONTROL_ONLY_V1') {
     result.errors.push('CONTROL_ONLY_REQUIRED: historical preservation remains uncertified; ordinary takeover cannot erase this restriction');
+    result.actions.push('普通接管保持拒绝。按04使用 Recover-CommanderAuthority.mjs 的仅控制权分支；当前操作者一次1D确认已明确包含保留历史保全未认证限制、仅移交中央控制权时，无需重复确认。否则只补缺失确认。仍须独立当前观察和事务核验，不适用于来源冲突、中央身份脱节或无正式材料的故障接任');
     return result;
   }
   try {
@@ -94,7 +99,7 @@ export function verifyHandoffCandidate({ sealDirectory, sourceRoot, externalCont
     result.remote = { status: 'PASS', head: remote.head, observed_at: remote.observed_at };
   } catch (error) {
     result.remote = { status: 'UNKNOWN', error: error.message };
-    if (remoteRequired) { result.errors.push(`REMOTE_REQUIRED: ${error.message}`); return result; }
+    if (remoteRequired || ['REMOTE_PROBE_TIMEOUT', 'REMOTE_PROBE_ABORTED'].includes(error.code)) { result.errors.push(`REMOTE_REQUIRED: ${error.message}`); return result; }
     result.actions.push('远端暂不可观察；下一步不依赖远端时可保持 READY_WITH_RESTRICTIONS，恢复后重核');
   }
   if (result.remote?.status === 'PASS' && chain.latest.remote?.status === 'PASS' && sha(result.remote.head) !== sha(chain.latest.remote.head)) {
@@ -106,6 +111,7 @@ export function verifyHandoffCandidate({ sealDirectory, sourceRoot, externalCont
   // A stop recommendation must use an unchanged observation group, not the first cached chain.
   try {
     const finalChain = verifyChain(sealDirectory, { sourceRoot, externalControlPlaneRoot });
+    verifyReceiverReadiness(finalChain.latest, { sourceRoot, externalControlPlaneRoot, sealDirectory });
     verifyHandoffInventory(finalChain.latest, { sourceRoot, externalControlPlaneRoot });
     assertPrivateControlStorage(finalChain.latest, { sourceRoot, externalControlPlaneRoot });
     const finalManifest = verifyRuleManifest(workflowRoot, manifestPath);
@@ -151,6 +157,6 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.a
     const output = verifyHandoffCandidate({ sealDirectory: path.resolve(sealDirectory), sourceRoot: path.resolve(sourceRoot), externalControlPlaneRoot, remoteRequired: rest.includes('--remote-required'),
       nextGeneration: malformedTarget ? NaN : generationValue === undefined ? undefined : Number(generationValue), nextWriterId: flag('--next-writer-id'), eventId: flag('--takeover-event-id') });
     console.log(JSON.stringify(output, null, 2));
-    process.exitCode = ['READY', 'READY_WITH_RESTRICTIONS'].includes(output.status) ? 0 : 1;
+    process.exitCode = ['READY', 'READY_WITH_RESTRICTIONS'].includes(output.status) && output.errors.length === 0 ? 0 : 1;
   }
 }

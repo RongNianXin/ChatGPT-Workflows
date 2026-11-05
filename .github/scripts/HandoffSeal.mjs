@@ -2,8 +2,9 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
+import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { validWorkspaceFingerprint, validateScopedWorkspaceSources } from './HandoffWorkspaceScope.mjs';
+import { FULL_WORKSPACE_ALGORITHM, LEGACY_WORKSPACE_ALGORITHM, validWorkspaceFingerprint, validateScopedWorkspaceSources } from './HandoffWorkspaceScope.mjs';
 import { assertControlReady, withControlLock, resolveSource } from './HandoffControl.mjs';
 
 const HEX = /^[0-9a-f]{64}$/;
@@ -181,7 +182,7 @@ export function validateSeal(seal, { checkDigest = true, requireExtensions = fal
   for (const key of Object.keys(seal)) if (!TOP_LEVEL_KEYS.has(key)) fail(errors, `unknown top-level field: ${key}`);
   if (![1, 2, 3, 4, 5].includes(seal.schema_version)) fail(errors, 'schema_version must be 1, 2, 3, 4, or 5');
   if (seal.schema_version < 4 && Object.hasOwn(seal, 'restrictions')) fail(errors, 'legacy seal cannot contain v4 restrictions');
-  if (seal.schema_version >= 4 && (!Array.isArray(seal.restrictions) || seal.restrictions.some(value => !['REMOTE_UNOBSERVED', HISTORICAL_WORKSPACE_RESTRICTION].includes(value)) || new Set(seal.restrictions).size !== seal.restrictions.length || (seal.remote?.status === 'UNKNOWN') !== seal.restrictions.includes('REMOTE_UNOBSERVED'))) fail(errors, 'invalid v4 dependency restrictions');
+  if (seal.schema_version >= 4 && (!Array.isArray(seal.restrictions) || seal.restrictions.some(value => !['REMOTE_UNOBSERVED', HISTORICAL_WORKSPACE_RESTRICTION, HISTORICAL_SOURCE_RESTRICTION].includes(value)) || new Set(seal.restrictions).size !== seal.restrictions.length || (seal.remote?.status === 'UNKNOWN') !== seal.restrictions.includes('REMOTE_UNOBSERVED'))) fail(errors, 'invalid v4 dependency restrictions');
   const authorityRecovery = seal.schema_version === 5 && seal.handoff_phase === 'AUTHORITY_RECOVERY_COMPLETED';
   if (seal.schema_version === 5 && !authorityRecovery) fail(errors, 'schema 5 is reserved for explicit authority recovery');
   if (authorityRecovery) {
@@ -257,7 +258,9 @@ export function validateSeal(seal, { checkDigest = true, requireExtensions = fal
   // v3 READY/COMPLETED still requires a live remote baseline; v4 may use
   // UNKNOWN with the explicit REMOTE_UNOBSERVED restriction below.
   if (['READY', 'COMPLETED'].includes(seal.switch_status) && ((r?.status !== 'PASS' && !(seal.schema_version >= 4 && r?.status === 'UNKNOWN' && seal.restrictions?.includes('REMOTE_UNOBSERVED'))) || seal.source_digest_status !== 'PASS')) fail(errors, 'READY status requires remote PASS and source digest PASS');
-  if (seal.switch_status === 'READY_WITH_RESTRICTIONS' && seal.source_digest_status !== 'PASS') fail(errors, 'READY_WITH_RESTRICTIONS requires source digest PASS');
+  // Legacy restricted UNKNOWN remains readable; known conflict and unsupported
+  // offline readiness must not be laundered through any preparation entry.
+  if (seal.switch_status === 'READY_WITH_RESTRICTIONS' && (seal.source_digest_status !== 'PASS' || ['FAIL', 'NOT_APPLICABLE'].includes(r?.status))) fail(errors, 'READY_WITH_RESTRICTIONS requires source digest PASS and remote PASS or UNKNOWN');
   // READY describes candidate material readiness, not a transfer of authority.
   if (seal.switch_status === 'COMPLETED' && !['STOPPED_DISPATCH', 'ARCHIVED'].includes(seal.old_writer_status)) fail(errors, 'COMPLETED requires old writer stopped or archived');
   if (seal.switch_status === 'COMPLETED' && seal.control_handoff_confidence !== 'HIGH') fail(errors, 'COMPLETED requires control_handoff_confidence HIGH');
@@ -286,18 +289,57 @@ function sealFiles(dir) {
 }
 const AUTHORITY_PHASE = 'AUTHORITY_RECOVERY_COMPLETED';
 export const HISTORICAL_WORKSPACE_RESTRICTION = 'HISTORICAL_WORKSPACE_PRESERVATION_UNVERIFIED';
-export const isControlOnly = confirmation => confirmation?.protocol_version === 2 && confirmation.scope === 'CONTROL_ONLY_TAKEOVER';
-export const authorityRenderVersion = confirmation => isControlOnly(confirmation) ? 7 : 6;
-export const authorityRestrictions = transaction => [...new Set([...transaction.observation.restrictions, ...(isControlOnly(transaction.confirmation) ? [HISTORICAL_WORKSPACE_RESTRICTION] : [])])];
+export const HISTORICAL_SOURCE_RESTRICTION = 'HISTORICAL_SOURCE_PRESERVATION_UNVERIFIED';
+// A restricted schema-5 recovery is historical evidence after the control
+// plane has moved on.  It may be inspected, but it is never a current
+// readiness proof by itself.
+export const HISTORICAL_UNVERIFIED = 'HISTORICAL_UNVERIFIED';
+const STRICT_WORKSPACE_ALGORITHM = FULL_WORKSPACE_ALGORITHM;
+const EXPECTED_HISTORICAL_RESTRICTION_ERRORS = new Set(['control-only historical scoped workspace requires strict current re-observation']);
+export const isFaultTakeover = confirmation => confirmation?.protocol_version === 3 && confirmation.scope === 'FAULT_CONTROL_ONLY_TAKEOVER';
+export const isControlOnly = confirmation => (confirmation?.protocol_version === 2 && confirmation.scope === 'CONTROL_ONLY_TAKEOVER') || isFaultTakeover(confirmation);
+export const authorityRenderVersion = confirmation => isFaultTakeover(confirmation) ? 8 : isControlOnly(confirmation) ? 7 : 6;
+export const authorityRestrictions = transaction => [...new Set([...transaction.observation.restrictions, ...(isControlOnly(transaction.confirmation) ? [HISTORICAL_WORKSPACE_RESTRICTION] : []), ...(isFaultTakeover(transaction.confirmation) ? [HISTORICAL_SOURCE_RESTRICTION] : [])])];
 export function authorityRequiredFiles(transaction) {
   return transaction.observation.workspace.required_untracked.map(file => {
     const change = isControlOnly(transaction.confirmation) && transaction.plan.find(item => item.root_ref === 'source_root' && item.path_ref === file.path_ref);
     return change ? { ...file, sha256: change.after_sha256 } : file;
   });
 }
-export function controlOnlyContinuityErrors(previous, observation) {
+export const FAULT_PROJECTION_SOURCES = ['task_contract', 'task_plan', 'progress'];
+export function controlOnlyContinuityErrors(previous, observation, confirmation, { allowLegacyHistory = false } = {}) {
   const errors = [];
-  if (previous?.handoff_phase !== 'MATERIAL_PREPARED' || previous.workspace?.inflight_scope || observation.workspace?.inflight_scope || observation.workspace?.worktree_fingerprint?.algorithm !== 'git-diff-binary+untracked-content-sha256-v1') errors.push('control-only requires settled material and a full strict current workspace, without exclusions');
+  if (isFaultTakeover(confirmation)) {
+    if (!['TAKEOVER_COMPLETED', 'AUTHORITY_RECOVERY_COMPLETED', 'CURRENT_ATTESTATION'].includes(previous?.handoff_phase)
+      || previous.switch_status !== 'COMPLETED') errors.push('fault takeover requires a settled completed predecessor');
+    if (observation.workspace?.inflight_scope || observation.workspace?.worktree_fingerprint?.algorithm !== FULL_WORKSPACE_ALGORITHM) errors.push('fault takeover requires a full index-bound strict V2 observation');
+    const oldNames = Object.keys(previous?.sources ?? {}), newNames = Object.keys(observation.sources ?? {});
+    if (oldNames.some(name => !newNames.includes(name)) || newNames.some(name => !oldNames.includes(name) && !FAULT_PROJECTION_SOURCES.includes(name))
+      || !['task_contract', 'progress'].every(name => newNames.includes(name))) errors.push('fault takeover may only add current task_contract, optional task_plan and progress sources');
+    for (const [name, source] of Object.entries(previous?.sources ?? {})) {
+      for (const field of ['path_ref', 'root_ref', 'owner']) if (source[field] !== observation.sources?.[name]?.[field]) errors.push(`fault takeover changed historical source binding: ${name}.${field}`);
+    }
+    for (const name of ['task_contract', 'progress', ...(observation.sources?.task_plan ? ['task_plan'] : [])]) {
+      const source = observation.sources?.[name];
+      if (source?.root_ref !== 'source_root' || !relativeRef(source?.path_ref) || source.path_ref.split(/[\\/]+/).includes('.git')) errors.push(`fault takeover requires an existing source-root ${name}`);
+    }
+    for (const field of ['objective', 'prohibitions', 'invalidation_conditions']) if (canonicalJson(previous?.[field]) !== canonicalJson(observation[field])) errors.push(`fault takeover cannot replace historical ${field}`);
+    if (previous?.workspace?.root_ref !== observation.workspace?.root_ref || previous?.remote?.default_ref !== observation.remote?.default_ref) errors.push('fault takeover cannot move the workspace or remote target');
+    const currentFiles = new Map(observation.workspace?.required_untracked?.map(item => [item.path_ref, item]));
+    if ((previous.workspace?.required_untracked ?? []).some(item => !currentFiles.has(item.path_ref))) errors.push('fault takeover cannot drop protected historical file references');
+    const allowedExtra = new Set(FAULT_PROJECTION_SOURCES.map(name => observation.sources?.[name]?.path_ref));
+    if ([...currentFiles.keys()].some(ref => !(previous.workspace?.required_untracked ?? []).some(item => item.path_ref === ref) && !allowedExtra.has(ref))) errors.push('fault takeover cannot expand protected file reads beyond the explicit task/plan/progress sources');
+    return errors;
+  }
+  // A CURRENT_MIGRATION seal is already a settled current-only baseline. A
+  // receiver may therefore perform the same-generation control-only handoff
+  // after independently refreshing it into a new strict MATERIAL_PREPARED
+  // observation; requiring the old pre-migration phase here deadlocks the
+  // first handoff after a safe legacy migration.
+  const algorithm = observation.workspace?.worktree_fingerprint?.algorithm;
+  const fullWorkspace = algorithm === STRICT_WORKSPACE_ALGORITHM || (allowLegacyHistory && algorithm === LEGACY_WORKSPACE_ALGORITHM);
+  if (!['MATERIAL_PREPARED', 'CURRENT_MIGRATION'].includes(previous?.handoff_phase) || (!observation.workspace?.inflight_scope && !fullWorkspace)) errors.push('control-only requires settled material and a full strict current workspace, without exclusions');
+  if (previous.workspace?.inflight_scope || observation.workspace?.inflight_scope) errors.push('control-only historical scoped workspace requires strict current re-observation');
   if (canonicalJson(Object.keys(previous?.sources ?? {}).sort()) !== canonicalJson(Object.keys(observation.sources ?? {}).sort())) errors.push('control-only source set changed');
   for (const [name, source] of Object.entries(previous?.sources ?? {})) {
     const observed = observation.sources?.[name];
@@ -311,8 +353,9 @@ export function controlOnlyContinuityErrors(previous, observation) {
   return errors;
 }
 function preservationRestrictionErrors(seal, previous) {
-  if (!previous?.restrictions?.includes(HISTORICAL_WORKSPACE_RESTRICTION)) return [];
-  return !seal.restrictions?.includes(HISTORICAL_WORKSPACE_RESTRICTION) || seal.runtime_acceptance_status !== 'NOT_RUN' || seal.professional_acceptance_status !== 'NOT_RUN'
+  const inherited = [HISTORICAL_WORKSPACE_RESTRICTION, HISTORICAL_SOURCE_RESTRICTION].filter(value => previous?.restrictions?.includes(value));
+  if (!inherited.length) return [];
+  return inherited.some(value => !seal.restrictions?.includes(value)) || seal.runtime_acceptance_status !== 'NOT_RUN' || seal.professional_acceptance_status !== 'NOT_RUN'
     ? ['historical workspace restriction cannot be cleared or converted to business acceptance by an ordinary seal'] : [];
 }
 const authorityHash = record => digest(canonicalJson(Object.fromEntries(Object.entries(record).filter(([key]) => key !== 'recovery_digest'))));
@@ -384,15 +427,16 @@ export function readAuthorityIntent(file) {
   if (errors.length) throw new Error(errors.join('; '));
   return intent;
 }
-function authorityLinkErrors(seal, previous, intent) {
+function authorityLinkErrors(seal, previous, intent, historyOptions) {
   if (!previous || !intent) return ['authority recovery requires its immutable intent and strict predecessor'];
   const tx = intent.transaction, o = tx.observation, errors = [], controlOnly = isControlOnly(tx.confirmation);
-  if (controlOnly) errors.push(...controlOnlyContinuityErrors(previous, o));
+  if (controlOnly) errors.push(...controlOnlyContinuityErrors(previous, o, tx.confirmation, historyOptions));
   if (intent.previous_seal_digest !== previous.seal_digest || intent.previous_sequence !== previous.seal_sequence || intent.previous_generation !== previous.generation || intent.previous_writer_id !== previous.writer_id || o.generation !== previous.generation + (controlOnly ? 0 : 1) || seal.generation !== o.generation + 1 || seal.writer_id !== tx.recipient.writerId || seal.event_id !== intent.event_id || seal.old_writer_status !== tx.confirmation.old_writer_status || seal.authority_recovery?.previous_seal_digest !== previous.seal_digest || seal.authority_recovery?.prepared_at !== intent.prepared_at || Date.parse(seal.sealed_at) < Date.parse(intent.prepared_at) || Date.parse(o.fact_cutoff) < Date.parse(previous.fact_cutoff)) errors.push('authority recovery three-anchor or time mismatch');
-  if (Object.keys(previous.sources).sort().join(',') !== Object.keys(o.sources).sort().join(',') || Object.keys(o.sources).sort().join(',') !== Object.keys(seal.sources).sort().join(',')) errors.push('authority recovery cannot change the source set');
+  if ((!isFaultTakeover(tx.confirmation) && Object.keys(previous.sources).sort().join(',') !== Object.keys(o.sources).sort().join(',')) || Object.keys(o.sources).sort().join(',') !== Object.keys(seal.sources).sort().join(',')) errors.push('authority recovery cannot change the source set');
   for (const [name, source] of Object.entries(o.sources)) {
     const historical = previous.sources[name], target = seal.sources[name], change = tx.plan.find(item => item.names.includes(name));
-    if (!historical || !target || historical.path_ref !== source.path_ref || (historical.root_ref || 'source_root') !== (source.root_ref || 'source_root') || target.path_ref !== source.path_ref || target.root_ref !== source.root_ref || target.owner !== source.owner || target.digest !== (change ? change.after_sha256 : source.digest)) errors.push(`authority recovery source binding mismatch: ${name}`);
+    const addition = isFaultTakeover(tx.confirmation) && !historical && FAULT_PROJECTION_SOURCES.includes(name);
+    if ((!historical && !addition) || !target || (historical && (historical.path_ref !== source.path_ref || (historical.root_ref || 'source_root') !== (source.root_ref || 'source_root'))) || target.path_ref !== source.path_ref || target.root_ref !== source.root_ref || target.owner !== source.owner || target.digest !== (change ? change.after_sha256 : source.digest)) errors.push(`authority recovery source binding mismatch: ${name}`);
   }
   for (const key of ['objective', 'prohibitions', 'rule_baseline', 'invalidation_conditions', 'remote']) if (canonicalJson(seal[key]) !== canonicalJson(o[key])) errors.push(`authority recovery changed frozen ${key}`);
   if (canonicalJson(seal.restrictions) !== canonicalJson(authorityRestrictions(tx))) errors.push('authority recovery changed frozen restrictions');
@@ -465,7 +509,7 @@ export function readChain(dir, { ignoreOwnLock = false } = {}) {
     if (previous && (seal.seal_sequence !== previous.seal_sequence + 1 || seal.previous_seal_digest !== previous.seal_digest)) fail(errors, `chain break at sequence ${seal.seal_sequence}`);
     if (previous && seal.generation < previous.generation) fail(errors, `generation rollback at sequence ${seal.seal_sequence}`);
     if (previous && seal.generation === previous.generation && seal.writer_id !== previous.writer_id) fail(errors, `writer change without generation transition at sequence ${seal.seal_sequence}`);
-    if (seal.handoff_phase === AUTHORITY_PHASE && seal.schema_version === 5) authorityLinkErrors(seal, previous, authorityIntents.get(seal.authority_recovery?.intent_digest)).forEach(error => fail(errors, error));
+    if (seal.handoff_phase === AUTHORITY_PHASE && seal.schema_version === 5) authorityLinkErrors(seal, previous, authorityIntents.get(seal.authority_recovery?.intent_digest), { allowLegacyHistory: true }).forEach(error => fail(errors, error));
     else if (previous && seal.generation > previous.generation && (seal.generation !== previous.generation + 1 || seal.writer_id === previous.writer_id || !['STOPPED_DISPATCH', 'ARCHIVED'].includes(seal.old_writer_status))) fail(errors, `unsafe generation transition at sequence ${seal.seal_sequence}`);
     preservationRestrictionErrors(seal, previous).forEach(error => fail(errors, error));
     if (seal.schema_version >= 3 && seenEventIds.has(seal.event_id)) fail(errors, `duplicate event_id at sequence ${seal.seal_sequence}: ${seal.event_id}`);
@@ -524,6 +568,101 @@ export function readChain(dir, { ignoreOwnLock = false } = {}) {
     withdrawalEvents.add(withdrawal.event_id);
   }
   return { records, intents: [...intents.values()], recoveries: [...recoveries.values()], pending_intents: pendingIntents, authority_intents: [...authorityIntents.values()], authority_withdrawals: [...authorityWithdrawals.values()], pending_authority_recoveries: pendingAuthority, historical_assurance: hasLegacyRecords ? 'LEGACY_UNVERIFIED' : 'STRICT_V3', errors };
+}
+
+// Read-only inspection for the old control-only recovery layout.  This does
+// not read live source files and deliberately cannot return READY.
+export function inspectHistoricalRestrictedRecovery(dir, { ignoreOwnLock = false } = {}) {
+  const history = readChain(dir, { ignoreOwnLock });
+  const latest = history.records.at(-1) ?? null;
+  const recognized = latest?.schema_version === 5
+    && latest.handoff_phase === AUTHORITY_PHASE
+    && latest.restrictions?.includes(HISTORICAL_WORKSPACE_RESTRICTION);
+  if (!recognized) return {
+    status: 'BLOCKED', current_ready: false, historical_assurance: 'NONE',
+    historical_chain_status: 'BLOCKED', source_status: 'NOT_CHECKED', records: history.records.length,
+    errors: [...history.errors, 'no recognized restricted schema-5 authority recovery']
+  };
+  return {
+    status: HISTORICAL_UNVERIFIED, current_ready: false, historical_assurance: HISTORICAL_UNVERIFIED,
+    historical_chain_status: history.errors.some(error => !EXPECTED_HISTORICAL_RESTRICTION_ERRORS.has(error)) ? 'BLOCKED' : 'PASS', source_status: 'NOT_CHECKED',
+    records: history.records.length, errors: [...history.errors],
+    expected_historical_restrictions: history.errors.filter(error => EXPECTED_HISTORICAL_RESTRICTION_ERRORS.has(error)),
+    latest: Object.fromEntries(['seal_digest', 'seal_sequence', 'generation', 'writer_id', 'sealed_at', 'handoff_phase', 'restrictions'].map(key => [key, latest[key]])),
+    workspace_algorithm: latest.workspace?.worktree_fingerprint?.algorithm ?? null
+  };
+}
+
+function emptySealDirectory(dir) {
+  if (!fs.existsSync(dir)) return true;
+  if (!fs.statSync(dir).isDirectory()) return false;
+  return fs.readdirSync(dir).length === 0;
+}
+
+// Resolve the nearest existing ancestor before checking a target that may not
+// exist yet. This prevents a symlink/junction parent from escaping sourceRoot.
+function physicalTarget(target) {
+  const suffix = [];
+  let cursor = path.resolve(target);
+  while (!fs.existsSync(cursor)) {
+    const parent = path.dirname(cursor);
+    if (parent === cursor) throw new Error(`cannot resolve an existing ancestor for: ${target}`);
+    suffix.unshift(path.basename(cursor));
+    cursor = parent;
+  }
+  return path.join(fs.realpathSync(cursor), ...suffix);
+}
+
+function assertIgnoredSealDirectory(dir, sourceRoot) {
+  const relative = path.relative(path.resolve(sourceRoot), path.resolve(dir));
+  if (!relative || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) {
+    throw new Error('current migration target seal directory must stay inside sourceRoot');
+  }
+  const result = spawnSync('git', ['-C', path.resolve(sourceRoot), 'check-ignore', '-q', '--', relative.replaceAll(path.sep, '/')], { stdio: 'ignore' });
+  if (result.status !== 0) throw new Error('current migration target seal directory must be excluded by the source repository .gitignore');
+}
+
+export function normalizeCurrentMigrationDraft(draft) {
+  const current = structuredClone(draft);
+  current.schema_version = 4;
+  current.candidate_verification_status = 'PASS_WITH_RESTRICTIONS';
+  current.restrictions = [...new Set([...(current.restrictions ?? []), HISTORICAL_WORKSPACE_RESTRICTION])];
+  current.restrictions = current.restrictions.filter(value => value !== 'REMOTE_UNOBSERVED');
+  if (current.remote?.status === 'UNKNOWN') current.restrictions.push('REMOTE_UNOBSERVED');
+  current.runtime_acceptance_status = 'NOT_RUN';
+  current.professional_acceptance_status = 'NOT_RUN';
+  return current;
+}
+
+// Create the first strict current-only migration seal in a separate empty
+// directory.  The old restricted chain is read-only evidence and is never
+// appended to, amended, or treated as a current chain predecessor.
+export function appendCurrentMigrationSeal(dir, draft, { legacySealDirectory, sourceRoot, externalControlPlaneRoot } = {}) {
+  if (!legacySealDirectory) throw new Error('legacy seal directory is required for current migration');
+  if (!sourceRoot) throw new Error('sourceRoot is required for current migration');
+  const legacyPath = path.resolve(legacySealDirectory), targetPath = path.resolve(dir);
+  const legacyReal = fs.realpathSync(legacyPath);
+  const targetComparable = fs.existsSync(targetPath) ? fs.realpathSync(targetPath) : physicalTarget(targetPath);
+  const sourceReal = fs.realpathSync(path.resolve(sourceRoot || ''));
+  if (!insideRoot(sourceReal, legacyReal) || !insideRoot(sourceReal, targetComparable)) throw new Error('current migration seal directories must stay inside sourceRoot');
+  if (insideRoot(legacyReal, targetComparable) || insideRoot(targetComparable, legacyReal)) throw new Error('current migration requires separate, non-nested seal directories');
+  assertIgnoredSealDirectory(targetComparable, sourceReal);
+  if (!emptySealDirectory(targetPath)) throw new Error('current migration target seal directory must be empty');
+  const historical = inspectHistoricalRestrictedRecovery(legacyReal);
+  if (historical.status !== HISTORICAL_UNVERIFIED || historical.historical_chain_status !== 'PASS') throw new Error(`historical restricted chain is not migratable: ${historical.errors.join('; ') || historical.historical_chain_status}`);
+  if (!draft || ![3, 4].includes(draft.schema_version) || draft.handoff_phase !== 'CURRENT_MIGRATION') throw new Error('current migration requires a schema v3/v4 CURRENT_MIGRATION draft');
+  if (draft.workspace?.inflight_scope || draft.workspace?.worktree_fingerprint?.algorithm !== STRICT_WORKSPACE_ALGORITHM) throw new Error('current migration requires a full strict V2 workspace without an in-flight scope');
+  if (draft.seal_sequence !== undefined && draft.seal_sequence !== 1) throw new Error('current migration must be the first seal in the new directory');
+  if (draft.previous_seal_digest !== undefined && draft.previous_seal_digest !== null) throw new Error('current migration must have no predecessor in the new directory');
+  const migration = draft.migration;
+  if (!migration || migration.legacy_latest_seal_digest !== historical.latest.seal_digest || migration.legacy_generation !== historical.latest.generation || migration.legacy_writer_id !== historical.latest.writer_id || migration.basis !== 'CURRENT_ONLY_NO_RETROACTIVE_TRANSITION' || !iso(migration.migrated_at) || Date.parse(migration.migrated_at) < Date.parse(historical.latest.sealed_at)) throw new Error('current migration does not bind the inspected historical seal');
+  const rechecked = inspectHistoricalRestrictedRecovery(legacyReal);
+  if (rechecked.status !== HISTORICAL_UNVERIFIED || rechecked.historical_chain_status !== 'PASS' || rechecked.latest?.seal_digest !== historical.latest.seal_digest) throw new Error('historical restricted chain changed during migration preparation; retry from the new current record');
+  const current = normalizeCurrentMigrationDraft(draft);
+  const seal = appendSeal(targetPath, current, { sourceRoot, externalControlPlaneRoot, expectedPreviousDigest: null });
+  const verified = verifyChain(targetPath, { sourceRoot, externalControlPlaneRoot });
+  if (verified.status !== 'PASS' || !verified.handoff_ready || verified.latest?.seal_digest !== seal.seal_digest) throw new Error(`current migration readback failed: ${verified.errors.join('; ')}`);
+  return { seal, historical, verified };
 }
 
 export function verifyChain(dir, options = {}) {
@@ -705,7 +844,7 @@ export function prepareAuthorityRecovery(dir, transaction, options) {
     errors.push(...validateFreshAuthorityAttempt(history, transaction));
     const observation = transaction.observation;
     errors.push(...validateAuthorityConfirmation(transaction.confirmation, observation, transaction.recipient, previous));
-    if (isControlOnly(transaction.confirmation)) errors.push(...controlOnlyContinuityErrors(previous, observation));
+    if (isControlOnly(transaction.confirmation)) errors.push(...controlOnlyContinuityErrors(previous, observation, transaction.confirmation));
     errors.push(...verifySourceFiles(observation, options.sourceRoot, options.externalControlPlaneRoot));
     const identity = observeControlIdentity(observation, options);
     if (identity.status !== 'PASS' || identity.identity?.platform_task_id !== transaction.confirmation.observed_platform_id) errors.push('observed authority identity is not live-valid');
@@ -767,6 +906,7 @@ function planSealAppendFromState(dir, draft, { expectedPreviousDigest, sourceRoo
     }
     return { action: 'REUSE', seal: structuredClone(previous) };
   }
+  if (draft.workspace?.worktree_fingerprint?.algorithm === LEGACY_WORKSPACE_ALGORITHM) throw new Error('WORKSPACE_REBASE_REQUIRED: new seals require an independently bound index; preserve historical V1 and collect a strict V2 baseline');
   if (expectedPreviousDigest !== undefined && expectedPreviousDigest !== actualPreviousDigest) throw new Error('expected previous digest mismatch');
   if (current.pending_authority_recoveries?.length && !authorityTicket) throw new Error('AUTHORITY_RECOVERY_PENDING: ordinary writes cannot consume a recovery intent');
   if (current.pending_intents.length && !transitionTicket) throw new Error('an unconsumed transition intent must be consumed or explicitly recovered before appending');
@@ -929,8 +1069,9 @@ export function summarizeChain(result) {
 if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1])) {
   const [command, target, sourceRoot, ...rest] = process.argv.slice(2);
   if (command === 'verify' && target) { const historicalOnly = rest.includes('--history-only'); const externalControlPlaneRoot = rest.find(value => value.startsWith('--external-control-plane-root='))?.slice('--external-control-plane-root='.length); const result = verifyChain(path.resolve(target), { sourceRoot, externalControlPlaneRoot, verifyLatestSources: !historicalOnly }); console.log(JSON.stringify(rest.includes('--summary') ? summarizeChain(result) : result, null, 2)); process.exitCode = result.status === 'PASS' ? 0 : 1; }
+  else if (command === 'inspect-history' && target) { const result = inspectHistoricalRestrictedRecovery(path.resolve(target)); console.log(JSON.stringify(result, null, 2)); process.exitCode = result.status === HISTORICAL_UNVERIFIED && result.historical_chain_status === 'PASS' ? 0 : 1; }
   else if (command === 'prepare' && target && sourceRoot && rest.length >= 3) { const [nextGeneration, nextWriterId, eventId] = rest; const externalControlPlaneRoot = rest.find(value => value.startsWith('--external-control-plane-root='))?.slice('--external-control-plane-root='.length); const result = prepareTransition(path.resolve(target), { sourceRoot, externalControlPlaneRoot, nextGeneration: Number(nextGeneration), nextWriterId, eventId }); console.log(JSON.stringify(result, null, 2)); }
   else if (command === 'recover' && target && sourceRoot && rest.length >= 3) { const [previousDigest, intentDigest, eventId] = rest; const externalControlPlaneRoot = rest.find(value => value.startsWith('--external-control-plane-root='))?.slice('--external-control-plane-root='.length); const result = recoverTransition(path.resolve(target), { sourceRoot, externalControlPlaneRoot, expectedPreviousDigest: previousDigest, expectedIntentDigest: intentDigest, eventId }); console.log(JSON.stringify(result, null, 2)); }
   else if (command === 'append' && target && sourceRoot && rest.length >= 1) { const [draftPath, transitionTicket] = rest; const externalControlPlaneRoot = rest.find(value => value.startsWith('--external-control-plane-root='))?.slice('--external-control-plane-root='.length); const draft = JSON.parse(fs.readFileSync(draftPath, 'utf8')); const result = appendSeal(path.resolve(target), draft, { sourceRoot, externalControlPlaneRoot, transitionTicket }); console.log(JSON.stringify(result, null, 2)); }
-  else { console.error('usage: node HandoffSeal.mjs verify <seal-directory> <source-root> [--external-control-plane-root=<root>] [--history-only] [--summary] | prepare <seal-directory> <source-root> <next-generation> <next-writer-id> <event-id> [--external-control-plane-root=<root>] | recover <seal-directory> <source-root> <previous-digest> <intent-digest> <recovery-event-id> [--external-control-plane-root=<root>] | append <seal-directory> <source-root> <draft-json> [transition-ticket] [--external-control-plane-root=<root>]'); process.exitCode = 2; }
+  else { console.error('usage: node HandoffSeal.mjs verify <seal-directory> <source-root> [--external-control-plane-root=<root>] [--history-only] [--summary] | inspect-history <seal-directory> | prepare <seal-directory> <source-root> <next-generation> <next-writer-id> <event-id> [--external-control-plane-root=<root>] | recover <seal-directory> <source-root> <previous-digest> <intent-digest> <recovery-event-id> [--external-control-plane-root=<root>] | append <seal-directory> <source-root> <draft-json> [transition-ticket] [--external-control-plane-root=<root>]'); process.exitCode = 2; }
 }

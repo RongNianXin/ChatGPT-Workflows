@@ -1,0 +1,18 @@
+{
+  "description": "Inactive example: advisory compact reminder; review the experiment note before enabling.",
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "^compact$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"<ABSOLUTE_SCRIPT_PATH>\"",
+            "timeout": 3,
+            "additionalContextLimit": 512
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -4,12 +4,16 @@ import crypto from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { captureRuleRefresh } from './Inspect-RuleRefresh.mjs';
+import { FAULT_PROJECTION_SOURCES } from './HandoffSeal.mjs';
+import { enterSyntheticSuite } from './SyntheticTestRuntime.mjs';
+const synthetic = await enterSyntheticSuite(import.meta.url, { timeoutMs: 120000 });
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const workflow = path.join(root, '总指挥工作流', '第二代总指挥的工作模式');
 // Existing prose contracts check visible wording; the dedicated reference check
 // separately validates these hidden semantic bindings and history boundaries.
 const read = name => fs.readFileSync(path.join(workflow, name), 'utf8')
+  .replace(/\r\n?/g, '\n')
   .replace(/<!-- SCENARIO_(?:REFS:[^\n]*|HISTORY:(?:BEGIN|END)) -->/g, '');
 const sha256 = value => crypto.createHash('sha256').update(value).digest('hex').toUpperCase();
 const schema = JSON.parse(fs.readFileSync(path.join(workflow, 'templates', 'HANDOFF_STATE.schema.json'), 'utf8'));
@@ -18,6 +22,7 @@ const REFRESH_REQUIRED_RULES = [
   '.github/scripts/HandoffSeal.mjs',
   '.github/scripts/Recover-CommanderAuthority.mjs',
   '.github/scripts/Prepare-Handoff.mjs',
+  '.github/scripts/Query-HandoffAuthenticatedRef.mjs',
   '.github/scripts/Mark-Handoff-Delivered.mjs',
   '.github/scripts/Inspect-RuleRefresh.mjs',
   '.github/scripts/Inspect-QuotaProtection.mjs',
@@ -48,7 +53,143 @@ for (const name of ['README.md', 'README.en.md']) {
     throw new Error('Retired REA must not remain a homepage recommendation');
   }
 }
+const runtimeFailureDocuments = {
+  tools: fs.readFileSync(path.join(root, '引用的外部工具', '外部工具自动对接规范.md'), 'utf8'),
+  diagnosis: read('docs/PIPELINE_DIAGNOSIS_AND_ALGORITHM_TUNING_STANDARD.md'),
+  testing: read('docs/AUTOMATED_TESTING_LESSONS.md')
+};
+const ruleSection = (text, heading) => text.replace(/\r\n?/g, '\n')
+  .split(`${heading}\n`)[1]?.split(/\n#{1,3} /)[0] || '';
+function assertRuntimeFailureRoutes(documents) {
+  const body = ruleSection(documents.tools, '### 1.4 配置发现与运行状态');
+  const toolText = documents.tools.replace(/\r\n?/g, '\n');
+  const anchor = '<a id="configuration-discovery"></a>';
+  if (toolText.split(anchor).length !== 2 ||
+      !toolText.includes(`${anchor}\n### 1.4 配置发现与运行状态\n`) ||
+      !body.includes('首次报不可用') || !body.includes('最近适用成功记录')) {
+    throw new Error('Runtime failure rule must remain in the configuration-discovery section');
+  }
+  for (const [key, file, heading, entryPattern] of [
+    ['diagnosis', 'PIPELINE_DIAGNOSIS_AND_ALGORITHM_TUNING_STANDARD.md',
+      '### 2.1 2E 分流与 2C 连续执行', /^1\..*$/m],
+    ['testing', 'AUTOMATED_TESTING_LESSONS.md',
+      '### 2.6 自动验证后的反思、首选建议与人工参与', /^- 有未解决失败.*$/m]
+  ]) {
+    const entry = ruleSection(documents[key], heading).match(entryPattern)?.[0] || '';
+    const routes = [...entry.matchAll(/\[[^\]]+\]\(([^)]+#configuration-discovery)\)/g)];
+    if (!entry.includes('工具、运行环境或启动入口报不可用时') || routes.length !== 1 ||
+        path.resolve(workflow, 'docs', path.dirname(file), routes[0][1].split('#')[0]) !==
+          path.join(root, '引用的外部工具', '外部工具自动对接规范.md')) {
+      throw new Error(`Runtime failure route missing or misbound in ${key}`);
+    }
+  }
+}
+assertRuntimeFailureRoutes(runtimeFailureDocuments);
+const withoutFailureRoute = text => text.replace(/\[[^\]]+\]\([^)]+#configuration-discovery\)/g, '');
+const routeMutations = [
+  ['diagnosis link removed', { ...runtimeFailureDocuments, diagnosis: withoutFailureRoute(runtimeFailureDocuments.diagnosis) }],
+  ['testing link removed', { ...runtimeFailureDocuments, testing: withoutFailureRoute(runtimeFailureDocuments.testing) }],
+  ['wrong target', { ...runtimeFailureDocuments, diagnosis: runtimeFailureDocuments.diagnosis.replace(
+    '外部工具自动对接规范.md#configuration-discovery', 'README.md#configuration-discovery') }],
+  ['link outside first-failure entry', { ...runtimeFailureDocuments,
+    testing: `${withoutFailureRoute(runtimeFailureDocuments.testing)}\n${runtimeFailureDocuments.testing.match(/\[[^\]]+\]\([^)]+#configuration-discovery\)/)?.[0] || ''}` }],
+  ['anchor removed', { ...runtimeFailureDocuments, tools: runtimeFailureDocuments.tools.replace('<a id="configuration-discovery"></a>', '') }],
+  ['anchor moved to another section', { ...runtimeFailureDocuments, tools: runtimeFailureDocuments.tools
+    .replace('<a id="configuration-discovery"></a>', '')
+    .replace('### 1.1 统一按需选择与读取', '<a id="configuration-discovery"></a>\n### 1.1 统一按需选择与读取') }],
+  ['anchor duplicated', { ...runtimeFailureDocuments, tools: `${runtimeFailureDocuments.tools}\n<a id="configuration-discovery"></a>` }],
+  ['rule outside its section', { ...runtimeFailureDocuments, tools: runtimeFailureDocuments.tools.replace('### 1.4 配置发现与运行状态', '### Unrelated section') }],
+  ['unconditional entry', { ...runtimeFailureDocuments, diagnosis: runtimeFailureDocuments.diagnosis.replace(
+    '工具、运行环境或启动入口报不可用时', '每次反馈时') }]
+];
+for (const [label, documents] of routeMutations) {
+  let rejected = false;
+  try { assertRuntimeFailureRoutes(documents); } catch { rejected = true; }
+  if (!rejected) throw new Error(`Runtime failure route mutation was accepted: ${label}`);
+}
+console.log(`Runtime failure entry references: PASS (2 routes, ${routeMutations.length} mutation rejections; not a live-agent behavior test)`);
+const isolationDocuments = {
+  authorization: read('09-自动化授权与风险分级.md'),
+  core: read('02-总指挥核心规则.md'),
+  resources: read('05-模型选择与资源策略.md'),
+  manual: read('01-操作者操作手册.md'),
+  testing: read('docs/AUTOMATED_TESTING_LESSONS.md'),
+  diagnosis: read('docs/PIPELINE_DIAGNOSIS_AND_ALGORITHM_TUNING_STANDARD.md')
+};
+function assertComputerUseIsolation(documents) {
+  const anchor = '<a id="computer-use-isolation"></a>';
+  const body = ruleSection(documents.authorization, '### 前台控制的独立授权门禁')
+    .split('\n#### 前台控制结束后的释放与验收')[0];
+  if (documents.authorization.split(anchor).length !== 2 ||
+      !documents.authorization.includes(`${anchor}\n### 前台控制的独立授权门禁\n`)) {
+    throw new Error('Computer Use isolation must have one bound authorization entry');
+  }
+  for (const text of [
+    '任务对象与动作授权', '不使用宿主全局鼠标键盘', '不另索取前台控制授权',
+    '不要求先证明其他工具全部失败', '侧栏中可见',
+    '工具名称、无痕、独立配置、后台或最小化', '未知时只暂停该隔离调用',
+    '停止相关输入', '当前任务的精确授权', '凭据', '远端写入', '更高优先级'
+  ]) {
+    if (!body.includes(text)) throw new Error(`Computer Use isolation boundary missing: ${text}`);
+  }
+  if (/Computer Use 只在无头|才.*调用 Computer Use/.test(body)) {
+    throw new Error('Computer Use must not be restricted by tool name alone');
+  }
+  for (const key of ['core', 'resources', 'manual', 'testing', 'diagnosis']) {
+    const ref = `${['testing', 'diagnosis'].includes(key) ? '../' : ''}09-自动化授权与风险分级.md#computer-use-isolation`;
+    if (!documents[key].includes(`](${ref})`)) throw new Error(`Missing isolation route: ${key}`);
+  }
+  if (!documents.resources.includes('单 worker') ||
+      !body.includes('登录、凭据、隐私、外发、费用、安装、高资源和远端写入')) {
+    throw new Error('Isolation must preserve resource and action-specific gates');
+  }
+  if (/“后台运行”[^。\n]*只表示不抢占前台/.test(documents.resources)) {
+    throw new Error('Background operation alone must not certify foreground isolation');
+  }
+}
+assertComputerUseIsolation(isolationDocuments);
+const isolationMutations = [
+  ['missing anchor', { ...isolationDocuments, authorization: isolationDocuments.authorization.replace('<a id="computer-use-isolation"></a>', '') }],
+  ['duplicate anchor', { ...isolationDocuments, authorization: `${isolationDocuments.authorization}\n<a id="computer-use-isolation"></a>` }],
+  ...[
+    '任务对象与动作授权', '不使用宿主全局鼠标键盘', '不另索取前台控制授权',
+    '不要求先证明其他工具全部失败', '侧栏中可见',
+    '工具名称、无痕、独立配置、后台或最小化', '未知时只暂停该隔离调用',
+    '停止相关输入', '登录、凭据、隐私、外发、费用、安装、高资源和远端写入', '更高优先级'
+  ].map(text => [`removed boundary: ${text}`, {
+    ...isolationDocuments, authorization: isolationDocuments.authorization.replace(text, '')
+  }]),
+  ...['core', 'resources', 'manual', 'testing', 'diagnosis'].map(key => [`wrong isolation route: ${key}`, {
+    ...isolationDocuments, [key]: isolationDocuments[key].replace(/09-自动化授权与风险分级\.md#computer-use-isolation/g, '09-自动化授权与风险分级.md#unrelated')
+  }]),
+  ['background label treated as proof', { ...isolationDocuments,
+    resources: `${isolationDocuments.resources}\n“后台运行”或“无头浏览器”只表示不抢占前台窗口。` }]
+];
+for (const [label, documents] of isolationMutations) {
+  let rejected = false;
+  try { assertComputerUseIsolation(documents); } catch { rejected = true; }
+  if (!rejected) throw new Error(`Computer Use isolation mutation was accepted: ${label}`);
+}
+console.log(`Computer Use isolation contracts: PASS (5 routes, ${isolationMutations.length} mutation rejections; static prose only, no desktop or browser execution)`);
 const checks = [
+  ['runtime failures compare the selected object with applicable success evidence', ruleSection(runtimeFailureDocuments.tools,
+    '### 1.4 配置发现与运行状态'), [
+    '首次报不可用', '相关调用对象或配置变化后再次失败', '先在当前授权内只读核对',
+    '最近适用成功记录', '当前用途和版本', '选错对象、定位未继承、真实缺失或损坏',
+    '核清前只报告本次调用失败', '通用安装提示', '无法读取或核验的记录', '没有成功记录时',
+    '相关登记和已知位置', '不静默改用其他环境', '不自动执行历史命令',
+    '实际运行、安装、凭据、受保护资料和高资源验证', '同阶段已核且仍有效的证据'
+  ]],
+  ['shared profile writes use one root owner and preserve stop decisions', read('11-操作者协作画像规范.md'), [
+    '不按产品项目分别产生', '不是默认画像写者', '一份已有且获准的私有安全元数据主记录',
+    '项目总指挥换任不自动转移根级画像写权', '本窗口已停止，根级状态待同步',
+    '旧副本、旧 `enabled` 和候选不得恢复开关', '该复核不是并发锁', 'schema_version: 4'
+  ]],
+  ['planning and collaboration use current scene meanings', `${read('02-总指挥核心规则.md')}\n${read('09-自动化授权与风险分级.md')}\n${read('04-状态、目标变更与交接规范.md')}`, [
+    '场景 2A 与 4F 共存编排', '当前3A只做项目初步分析',
+    '确认 2A 分区不自动授权完整 4F', '独立 4F 后续',
+    '独立审查按场景五及其协作规范'
+  ]],
   ['project source triage preserves provenance and disposition authority', fs.readFileSync(path.join(root, 'AGENTS.md'), 'utf8'), ['远端同步前的未知来源文件处置', '先在已有读取授权内核对', '独立判断是否有必要保留', '历史来源仍记“未确认”', '不得把接管写成原作者或原始来源已确认', '取得针对精确对象的最终删除确认前保留原件', '满足发布门禁后才可列入同步候选', '不据此阻断无依赖工作', '不新增平行台账或后台巡检']],
   ['workflow feedback preserves the main task and gives a scoped change decision', read('02-总指挥核心规则.md'), ['先回应新增内容，再沿仍有效的主线继续', '主线目标、实际结果、未完断点及下一行动方和推荐动作', '是否需要修改工作流、判断依据是什么、修改后会有什么影响', '不另造模板或推定新增实施、通信与其他项目权限']],
   ['handoff planning shares locked admission without reviving stopped writers', `${read('04-状态、目标变更与交接规范.md')}\n${read('01-操作者操作手册.md')}`, ['planSealAppend', '原有双锁内重新核验', '预检不创建目录、锁、证明或附件', 'CURRENT_ATTESTATION_REQUIRED', '无需为正常内部准备反复请求操作者继续', '不要求即时续签封条']],
@@ -139,6 +280,10 @@ checks.push(['refresh continuity preserves exact reading and real stop condition
 checks.push(['refresh result belongs to its current event rather than old business', `${read('规则刷新接收回执模板.md')}\n${read('09-自动化授权与风险分级.md')}`, ['最终结果必须对应当前刷新事件', '旧业务答复', 'MESSAGE_ID', '待确认', '平台完成']]);
 checks.push(['rule refresh separates source authority, adoption record and identity control', `${read('规则刷新广播包.md')}\n${read('规则刷新接收回执模板.md')}\n${read('09-自动化授权与风险分级.md')}`, ['规则来源选择门禁', 'RULE_SOURCE_LOCATOR', 'SOURCE_NOT_LOCATED', 'STALE_SOURCE_UNCONFIRMED', '规则采用记录', 'RULE_ADOPTION=PASS', 'PROJECT_REGISTRATION=SYNC_PENDING', '本次不需要额外处理', '自动原子更新', '不得修改总指挥、唯一写者、CURRENT']]);
 checks.push(['rule drift has automatic rebase without operator version choice', `${read('规则刷新广播包.md')}\n${read('01-操作者操作手册.md')}\n${read('02-总指挥核心规则.md')}\n${read('04-状态、目标变更与交接规范.md')}\n${read('10-自动状态索引规范.md')}`, ['rule_baseline', 'RULE_REBASE_PENDING', 'SUPERSEDED_BY_RULE_REBASE', '不要求操作者选择版本', '只暂停受影响阶段', 'PINNED_CURRENT / RULE_REBASE_PENDING / REBASED / REBASE_BLOCKED']]);
+checks.push(['ordinary substantive work routes unexplained rule drift without blind adoption or global stop', `${read('02-总指挥核心规则.md')}\n${read('10-自动状态索引规范.md')}`, ['普通实质任务发现规则漂移时的分流', '不要求先执行独立规则刷新场景或上下文交接', '核对来源', 'manifest 是否自洽', '仅为兼容性更新时，自动采用当前规则', 'RULE_SOURCE_UNVERIFIED', 'RULE_REBASE_PENDING', 'STOP_AFFECTED', '不沿用旧的 `READY`', '不覆盖未知改动', '低风险只读核对和已获权的安全工作可以继续', '不启动后台轮询', '不能把规则“已读取”写成通信、中央写入或业务执行授权']]);
+checks.push(['milestone aliases map to one evidence-bearing stage result', `${read('02-总指挥核心规则.md')}\n${read('03-专项任务卡模板.md')}`, ['推进到里程碑', '推进到阶段性成果', '做到一个阶段结果', '推进到可交付节点', '先形成一个可验收成果', '阶段结果', '实质变化', '可以独立核对', '下一阶段能够据此继续或交接', '不按命令数量、文件数量、聊天轮数或固定时间定义', '不得把单个命令', '未验证的微小修改包装成阶段成果']]);
+checks.push(['milestone batching reorders by dependencies without weakening gates', read('02-总指挥核心规则.md'), ['步骤重排与合并', '依赖关系，而不是不可改变的编号列表', '同一目标、授权、共同起始基线和冲突域', '没有中间人工决定', '失败不会产生新的未核账副作用', '结果可以连续验证', '影响范围可限定', '[1+3]、2、4、5', '第3步依赖第2步', '必须保持 `1、2、3、4、5`', '不改变授权、验证、回滚、交接和人工门禁']]);
+checks.push(['handoff freeze and post-takeover drift stay separate', `${read('02-总指挥核心规则.md')}\n${read('04-状态、目标变更与交接规范.md')}\n${read('10-自动状态索引规范.md')}`, ['旧总指挥只做 `CLOSEOUT_ONLY` 收口', '候选立即失效', '重新对账和生成候选', '`TAKEOVER_COMPLETED` 回读完成后', '接管后的来源漂移', '不追溯撤销新任身份', '不恢复旧写者', '`latest_source_status=FAIL`', '普通新任进度更新不要求每次续签封条', '不是操作系统级拦截']]);
 checks.push(['feedback triages before costly 2C and repairs within scope', `${read('01-操作者操作手册.md')}\n${read('docs/PIPELINE_DIAGNOSIS_AND_ALGORITHM_TUNING_STANDARD.md')}`, ['先描述现象；AI 定点核对后决定是否进入 2C', '最小定点核对后仍无法定位', '原因及修复边界已有可靠证据的，在现有授权内局部修复与回归', '已有同一问题的修复授权时直接修复与回归', '仅报结果且没有开放目标', '一次列明拟改范围、影响和验证以请求差额授权']]);
 checks.push(['workflow entry points load triage before full diagnosis', `${read('00-第二代工作流总览.md')}\n${read('02-总指挥核心规则.md')}\n${read('docs/WORKFLOW_OVERVIEW.md')}`, ['先读 `docs/PIPELINE_DIAGNOSIS_AND_ALGORITHM_TUNING_STANDARD.md` 的 2.1 做最小分流', '先读取 `docs/PIPELINE_DIAGNOSIS_AND_ALGORITHM_TUNING_STANDARD.md` 的 2.1 并完成最小定点核对', '2E 失败反馈先按 2.1 最小分流']]);
 checks.push(['diagnosis keeps node-level evidence while reporting results first', `${read('00-第二代工作流总览.md')}\n${read('01-操作者操作手册.md')}\n${read('docs/PIPELINE_DIAGNOSIS_AND_ALGORITHM_TUNING_STANDARD.md')}`, ['逐项核对输入、处理、输出、不变量、观测证据和失败信号', '可证伪对照验证根因', '默认先报告复现和版本', '完整节点和证据留在工作项中供回查', '复杂分叉、证据争议']]);
@@ -243,6 +388,7 @@ checks.push(['natural-language routing uses a minimal scenario pack', `${read('0
 checks.push(['legacy tasks migrate with dual-read single-write', `${read('04-状态、目标变更与交接规范.md')}\n${read('10-自动状态索引规范.md')}`, ['场景路由与旧任务兼容过渡', '双读、单写', 'LEGACY_READABLE', 'MIGRATION_REQUIRED', 'MIGRATED', 'MIGRATION_BLOCKED', '不得被静默重启']]);
 checks.push(['independent review requires evidence-complete reading', `${read('docs/EXECUTION_AND_INDEPENDENT_REVIEW.md')}\n${read('06-复盘与优化规则.md')}\n${fs.readFileSync(path.join(root, 'AGENTS.md'), 'utf8')}`, ['必要正文', '`UNKNOWN/INCOMPLETE_REVIEW`', '读取清单、证据指针', 'REVIEW_COMPLETED', '不得输出“审查通过”']]);
 checks.push(['recurrence triage requires a permanent measure', `${read('02-总指挥核心规则.md')}\n${read('06-复盘与优化规则.md')}`, ['故障复发性与永久修复门禁', '一次性环境因素', '可复现的操作失误', '系统性流程缺口', '永久措施', '回归验证']]);
+checks.push(['same-tool no-progress results switch observation instead of looping', `${read('02-总指挥核心规则.md')}\n${read('10-自动状态索引规范.md')}`, ['同一工具、相同参数、连续两次', '相同的无进展结果', '不得继续原样调用', '读取结果文件', '文件更新时间', '进程状态', '`NO_PROGRESS_RECHECK`', '机械改变无意义参数绕过循环保护', '不要求所有任务持续向聊天输出进度', '项目自己的阶段状态、终态、超时和清理仍由项目入口负责']]);
 checks.push(['Goal acceptance evidence and raw platform states stay bounded', `${read('01-操作者操作手册.md')}\n${read('02-总指挥核心规则.md')}\n${read('04-状态、目标变更与交接规范.md')}\n${read('10-自动状态索引规范.md')}`, ['AUTO_VERIFIABLE', 'VISUAL_REVIEW', 'PROXY_ONLY', 'HUMAN_OR_PROFESSIONAL_GATE', '没有严格量化定义的自然语言目标', '有界试验或可逆替代', '平台原始状态：保留客户端或工具实际返回值', '来源项目归属核验']]);
 checks.push(['handoff obeys current-turn precedence and formal route', `${read('01-操作者操作手册.md')}\n${read('02-总指挥核心规则.md')}\n${read('04-状态、目标变更与交接规范.md')}\n${fs.readFileSync(path.join(root, 'AGENTS.md'), 'utf8')}`, ['自然语言在这里仅是路由信号，不是交接快照授权', '上一轮“下一轮再交接”等说法只保留为背景', '不得仅凭历史意图生成正式快照', '当前轮优先于历史时序约定', '自然语言不构成捷径', '必须补齐 1C/1D 的预检、收口核账、快照交付', '不存在“场景 EC”', '1B 预处理']]);
 checks.push(['handoff closeout distinguishes pending work from blockers', read('04-状态、目标变更与交接规范.md'), ['收口”是把执行中或结果未知的动作停在安全原子边界', '普通未完成项只要有状态、责任对象、精确断点、下一行动和失效条件', '高风险动作未安全停止', '必须 `BLOCKED`']]);
@@ -254,6 +400,7 @@ checks.push(['handoff continuation and scoped automation', `${read('01-操作者
 checks.push(['handoff baseline separates pinned snapshot, live epoch and adoption record', `${read('01-操作者操作手册.md')}\n${read('04-状态、目标变更与交接规范.md')}\n${read('总指挥轻量交接启动配置.md')}\n${read('交接阶段矩阵.md')}\n${read('07-总指挥交接记录模板.md')}`, ['rule_baseline', 'live_rule_epoch', '项目登记采用记录', '`RULE_REBASE_PENDING`', '`NEWER_COMPATIBLE`', '`AFFECTED_RECHECK`', '`SUPERSEDED_BY_RULE_REBASE`', '不要求操作者选择旧/新版本', '当前工具不会按数字自动寻找或切换旧版', '完整规则根']]);
 checks.push(['workflow enablement does not confuse rule source with project adoption', `${read('../工作流启用声明.md')}\n${fs.readFileSync(path.join(root, 'AGENTS.md'), 'utf8')}\n${read('规则刷新广播包.md')}\n${read('规则刷新接收回执模板.md')}`, ['RULE_SOURCE_STATUS', 'PROJECT_ADOPTION_RECORD', '项目登记旧指纹或待同步不否定规则刷新', 'RULE_ADOPTION_RECORD：SYNCED/SYNC_PENDING', '只有依赖控制面的动作标记 `UNKNOWN/BLOCKED`']]);
 checks.push(['handoff verification is executable and layered', `${read('07-总指挥交接记录模板.md')}\n${read('01-操作者操作手册.md')}\n${read('04-状态、目标变更与交接规范.md')}\n${read('总指挥轻量交接启动配置.md')}`, ['封条验证入口', '完整 `HandoffSeal.mjs verify` 命令', '`INPUT_REQUIRED`', '缺少任一根目录报INPUT_REQUIRED', '不把调用缺参写成来源损坏']]);
+checks.push(['1C delivery and single 1D confirmation cover the bounded reception routes', `${read('01-操作者操作手册.md')}\n${read('04-状态、目标变更与交接规范.md')}\n${read('总指挥轻量交接启动配置.md')}\n${read('09-自动化授权与风险分级.md')}`, ['从当前手册提取同一份1D确认正文', '保留历史保全未认证限制，仅移交中央控制权', '不恢复业务、自动化或远端权限', '附件内生成的确认副本和路线字段本身不授予权限', '仅远端未知不触发仅控制权分支', '不能借此放行', '不表示所有可回源授权一律作废']]);
 checks.push(['handoff candidate reply is human-first', `${read('01-操作者操作手册.md')}\n${read('04-状态、目标变更与交接规范.md')}\n${read('总指挥轻量交接启动配置.md')}\n${read('07-总指挥交接记录模板.md')}`, ['统一使用 02 规定的五项外壳', '真正阻断', '默认不展示机器字段', '只有操作者明确要求详细核验', '不得把 `NOT_RUN`、`GENERATED_NOT_DELIVERED`', '写入第 2 或第 3 项的人话说明', '下列字段只供机器记录和异常定位']]);
 checks.push(['handoff preflight is first gate and candidate is unique', `${read('04-状态、目标变更与交接规范.md')}\n${read('10-自动状态索引规范.md')}\n${read('06-复盘与优化规则.md')}`, ['把 `preflight_only` 当作第一道机器门', '固定 `fact_cutoff`', 'SUPERSEDED', '有限重试和退避', '当前唯一 active candidate', '附件与封条保持两阶段']]);
 checks.push(['handoff freezes only after current facts align and failed preflight makes no half update', read('04-状态、目标变更与交接规范.md'), ['CURRENT 必须同时对齐当前平台任务', '唯一写者', '规则版本与 manifest 摘要', '事实截点和实际工作区', '先完整更新来源并回读', '完整预检失败', '不提前写入“已准备”“已接管”等中央终态', '不以半更新后的 CURRENT', '重新计算摘要并整体回读']]);
@@ -269,6 +416,7 @@ checks.push(['Goal repeated limits require bounded approval and preserve history
 checks.push(['Goal approval and platform recovery are separate', read('01-操作者操作手册.md'), ['文本批准不保证平台自动恢复', '客户端独立硬限额', '只说“继续”或点击恢复按钮，不自动增加预算', '状态未知时不声称已恢复']]);
 checks.push(['unselected permission menu is not an authorization', goalBudget, ['旧权限菜单未选择而原样发送时', '不视为全选', '删除整个栏目仍只沿用已有授权']]);
 checks.push(['Goal recovery or window change does not reset a cycle', goalBudget, ['都不自动开始新工作周期', '不默认归零', '明确暂停不计时但不清零', '不能修改平台 Goal 的持久预算']]);
+checks.push(['execution, wall and platform clocks remain separate with bounded cleanup', goalBudget, ['并行区间取并集', 'timeUsedSeconds', '平台读数减少、重置或不可读，不清零本周期累计', '仍计入相应执行区间', '缺失事件或相互矛盾的时间记 `UNKNOWN`', '执行预算暂停不冻结存活进程的超时', '实际执行210秒、自然墙钟510秒', '规则检查、本地隔离测试和宿主观察']]);
 checks.push(['new cycle cannot repeat exhausted failed methods', goalBudget, ['操作者明确批准新工作周期的目标与预算后', '保留上周期记录及关联', '不因周期预算更新获准重复旧失败方法', '硬上限不得绕过']]);
 checks.push(['manual step pauses only dependent work', read('01-操作者操作手册.md'), ['只暂停依赖该问题的步骤', '没有安全且有意义的已授权工作可继续时才收口', '总预算到限按各自规则停止']]);
 checks.push(['prompt language review stays in the existing workflow', read('06-复盘与优化规则.md'), ['文档质量检查并入现有生成、验证和审查流程，不新增审批层', '谁执行、执行什么、针对什么对象、在什么条件下执行', '作者从操作者角度完整读一遍实际复制块', '润色没有改变权限、停止条件和验证义务', '不能证明语言正确']]);
@@ -283,6 +431,101 @@ checks.push(['5A template and dispatch distinguish minimal authorization evidenc
 let failed = 0;
 const ordinaryDelivery = read('04-状态、目标变更与交接规范.md').split('### 6.0.1 交接主快照与材料入口')[1]?.split('### 外部专业职责的续接')[0] || '';
 const ordinaryManual = read('01-操作者操作手册.md');
+// These contracts verify maintained text and its boundaries, not live AI adherence.
+const closureCore = read('02-总指挥核心规则.md');
+const closureReview = read('06-复盘与优化规则.md');
+const closureHandoff = read('04-状态、目标变更与交接规范.md');
+const closureTerms = ['本轮交付类型', '公共修改与验证状态', '关联事项仍待决定或实施',
+  '已有有效实施授权时继续完成', '下一行动方和第一项具体动作', '无需操作'];
+const recordTerms = ['首次提出日期', '原始消息时间不可核时标明未知', '从当前待办移入已解决记录',
+  '保留原记录和完成证据', '不把文字存档当作Git版本检查点'];
+const closureSection = text => (text.split('#### 分析、实施与验证的交付状态')[1] || '').split(/^#{1,4} /m)[0];
+const recordSection = text => (text.split('## 1.1 工作流结论的本轮持久化规则')[1] || '').split(/^## /m)[0];
+const backlogSection = text => (recordSection(text).split('### 待办分流与案例验收')[1] || '').split(/^### /m)[0];
+const backlogTerms = [
+  '【待案例验收】',
+  '已完成修复和必要自动验证',
+  '没有已知未修缺陷',
+  '可由AI在现有授权内自动验收的部分先执行',
+  '同一事项同时含有修复、自动验证和真实案例时拆分',
+  '各类独立重新编号',
+  '不因移入案例类而降低新故障的处理优先级',
+  '完成项移出活动待办，保留原记录与验收证据'
+];
+function backlogFeedbackErrors(core, review) {
+  const errors = backlogTerms.filter(term => !backlogSection(review).includes(term));
+  const link = '[待办分流与案例验收](06-复盘与优化规则.md#待办分流与案例验收)';
+  if (!closureSection(core).includes(link)) errors.push('delivery section must link to the single backlog rule');
+  if (review.split('### 待办分流与案例验收').length !== 2) errors.push('backlog rule must have one owner section');
+  return errors;
+}
+const backlogErrors = backlogFeedbackErrors(closureCore, closureReview);
+if (backlogErrors.length) { failed++; console.error(`FAIL: backlog classification contract: ${backlogErrors.join('; ')}`); }
+else {
+  const mutations = [
+    ...backlogTerms.map(term => [term, closureCore,
+      closureReview.replace(backlogSection(closureReview), backlogSection(closureReview).replaceAll(term, ''))]),
+    ['wrong source link', closureCore.replace('06-复盘与优化规则.md#待办分流与案例验收',
+      '06-复盘与优化规则.md#missing-backlog-section'), closureReview],
+    ['duplicate owner', closureCore, `${closureReview}\n### 待办分流与案例验收\n`]
+  ];
+  for (const [name, core, review] of mutations) {
+    if (!backlogFeedbackErrors(core, review).length) {
+      failed++; console.error(`FAIL: backlog mutation accepted: ${name}`);
+    }
+  }
+  console.log(`Backlog classification contract: PASS (${mutations.length} omission/link/duplicate mutations rejected)`);
+}
+function closureFeedbackErrors(core, review, manual, handoff) {
+  const errors = [];
+  for (const term of closureTerms) if (!closureSection(core).includes(term)) errors.push(`delivery status: ${term}`);
+  for (const term of recordTerms) if (!recordSection(review).includes(term)) errors.push(`issue record: ${term}`);
+  const parent = manual.indexOf('### 场景 Gen3：');
+  if (parent < manual.indexOf('## 场景七：') || parent > manual.indexOf('## 可选功能场景：')) errors.push('Gen3 must remain in general capabilities');
+  const feedback = (manual.split('### 场景 Gen3：')[1] || '').split('## 可选功能场景：')[0];
+  const source = (feedback.split('#### 场景 Gen3.1：')[1] || '').split('#### 场景 Gen3.2：')[0];
+  const receiver = feedback.split('#### 场景 Gen3.2：')[1] || '';
+  const copy = text => text.split('```text')[1]?.split('```')[0] || '';
+  for (const term of ['无论问题已解决', '未启用', '你的自查不得称作另一个实例', '材料由我手工转交，不自行发送']) {
+    if (!copy(source).includes(term)) errors.push(`source report: ${term}`);
+  }
+  for (const term of ['本轮只评估并记录', '可以同时成立', '来源陈述或待确认', '不以新建配对']) {
+    if (!copy(receiver).includes(term)) errors.push(`maintainer assessment: ${term}`);
+  }
+  for (const anchor of ['scenario-issue-feedback', 'scenario-issue-report', 'scenario-workflow-assessment']) {
+    if (manual.split(`<a id="${anchor}"></a>`).length !== 2) errors.push(`unique feedback anchor: ${anchor}`);
+  }
+  const fault = (handoff.split('#### 无正式移交材料的故障接任')[1] || '').split(/^#{1,4} /m)[0];
+  const names = fault.match(/仅允许增加现有的\s*`([^`]+)`/)?.[1].split('/').map(value => value.trim()) || [];
+  if (new Set(names).size !== names.length || JSON.stringify([...names].sort()) !== JSON.stringify([...FAULT_PROJECTION_SOURCES].sort())) {
+    errors.push('fault projection source prose differs from the shared whitelist');
+  }
+  return errors;
+}
+const closureErrors = closureFeedbackErrors(closureCore, closureReview, ordinaryManual, closureHandoff);
+if (closureErrors.length) { failed++; console.error(`FAIL: delivery and feedback contracts: ${closureErrors.join('; ')}`); }
+else console.log('PASS: delivery and feedback contracts');
+const removeSectionTerm = (text, section, term) => {
+  const body = section(text);
+  if (!body.includes(term)) throw new Error(`mutation target missing: ${term}`);
+  return text.replace(body, body.replaceAll(term, ''));
+};
+const closureMutations = [
+  ...closureTerms.map(term => [term, removeSectionTerm(closureCore, closureSection, term), closureReview, ordinaryManual, closureHandoff]),
+  ...recordTerms.map(term => [term, closureCore, removeSectionTerm(closureReview, recordSection, term), ordinaryManual, closureHandoff]),
+  ['source copy missing', closureCore, closureReview, ordinaryManual.replace('材料由我手工转交，不自行发送', ''), closureHandoff],
+  ['receiver copy missing', closureCore, closureReview, ordinaryManual.replace('来源陈述或待确认', ''), closureHandoff],
+  ['duplicate feedback anchor', closureCore, closureReview, ordinaryManual + '\n<a id="scenario-issue-report"></a>', closureHandoff],
+  ['missing task_plan', closureCore, closureReview, ordinaryManual, closureHandoff.replace('`task_contract / task_plan / progress`', '`task_contract / progress`')],
+  ['extra projection source', closureCore, closureReview, ordinaryManual, closureHandoff.replace('`task_contract / task_plan / progress`', '`task_contract / task_plan / progress / other`')],
+  ['duplicate projection source', closureCore, closureReview, ordinaryManual, closureHandoff.replace('`task_contract / task_plan / progress`', '`task_contract / task_plan / progress / progress`')]
+];
+if (!closureErrors.length) {
+  for (const [name, core, review, manual, handoff] of closureMutations) {
+    if (!closureFeedbackErrors(core, review, manual, handoff).length) { failed++; console.error(`FAIL: closure mutation accepted: ${name}`); }
+  }
+  console.log(`Delivery and feedback mutation rejection: ${closureMutations.length} cases checked`);
+}
 const ordinaryPrepare = ordinaryManual.split('### 场景 1E：')[1]?.split('### 场景 1F：')[0] || '';
 const ordinaryTakeover = ordinaryManual.split('### 场景 1F：')[1]?.split('### 场景 1G：')[0] || '';
 checks.push(['ordinary handoff uses scoped rule acquisition rather than a serial full 0A refresh', ordinaryPrepare.split('```text')[1]?.split('```')[0] || '', ['只补读本次交接需要的最新完整规则', '不串行启动完整0A', '不让我另发指令']]);
@@ -314,6 +557,12 @@ checks.push(['current-request output rule rejects stale final conclusions', read
 checks.push(['in-flight steering merges additions and reports scoped cancellations', read('02-总指挥核心规则.md'), ['在途“调整方向”输入的增量合并与局部取消门禁', '中途 steering 输入', '不会自动重写已经输出的内容', '不会替 AI 把原请求标记为完成', '增补 / 纠正 / 细化（默认）', '保留原有未完成项', '明确局部取消 / 替代', '`CANCELLED` 或 `SUPERSEDED`', '提问 / 状态询问', '回到原执行账继续', '无法判定', '原请求项 + 新增项—实际动作—证据—状态', '已取消，未执行', '不声称客户端已有宿主级拦截器']]);
 checks.push(['cross-task substantive reports preserve requirements and evidence', `${read('02-总指挥核心规则.md')}\n${read('09-自动化授权与风险分级.md')}`, ['跨任务实质汇报的信息保真门禁', '逐项映射', 'REPORT_INCOMPLETE', 'INPUT_REQUIRED', 'NOT_RUN', '证据入口', '下一行动方', '`part i/n`', '合理推断']]);
 checks.push(['visible cross-task receipt is required before continuation', `${read('02-总指挥核心规则.md')}\n${read('09-自动化授权与风险分级.md')}`, ['跨任务入站的操作者可见收件硬门禁', '下一次可以产生的操作者可见文本', 'operator_feedback_status', 'HOST_NO_VISIBLE_TURN/UNKNOWN', '不能声称已读取', '来源写明“无需回复”只免除向来源回传']]);
+checks.push(['cross-task busy queue and idle receipt have distinct ordering', `${read('09-自动化授权与风险分级.md')}\n${fs.readFileSync(path.join(root, 'AGENTS.md'), 'utf8')}`, ['跨任务入站回执先行与主线结束复核（强制）', '先把它登记为 `INBOUND_EVENT`', '完整原文', '忙时先持久入队', '当前回合反馈结束', '当前回合结束前的队列核账只核保全', '空闲时若来源、载荷、回复授权和路由均已核实', 'B首工具回执', '不为先写记录抢占B', '不以是否已经执行0A或加载规则作为豁免条件', '不为回执抢占', '优先回 `RECEIVED`', '`SOURCE_REPLY_BLOCKED`', '发送工具返回成功只证明发送尝试成功']]);
+// These checks validate prose contracts, not host message delivery or UI behavior.
+checks.push(['initial collaboration requests explicitly ask for a receipt', `${read('09-自动化授权与风险分级.md')}\n${manual}\n${read('docs/EXECUTION_AND_INDEPENDENT_REVIEW.md')}`, ['主动发起场景5A', '默认明确标注 `ACK_REQUIRED`', '确无回传必要', '不对纯确认再索要回执', '首次联系按对方不了解', '不得用未解释的内部编号、缩写或暗语']]);
+checks.push(['queued inbound events block mainline closeout until reviewed', `${read('02-总指挥核心规则.md')}\n${read('09-自动化授权与风险分级.md')}`, ['主线达到原定安全收口点时', '必须先回读 FIFO 中尚未进入 `CLOSEOUT` 的入站事件', '重新取得原始载荷', '事件没有被回顾时，不得报告“本轮已完成”', '压缩、换窗和恢复时同样先回读这些事件']]);
+checks.push(['ambiguous cross-task reply decisions prefer a receipt', `${read('09-自动化授权与风险分级.md')}\n${fs.readFileSync(path.join(root, 'AGENTS.md'), 'utf8')}`, ['无法判断时优先回 `RECEIVED`', '明示无需回复和纯确认不启动互答']]);
+checks.push(['inbound queue state is persisted for recovery', read('10-自动状态索引规范.md'), ['`queue_status`', '`operator_feedback_status`', '`post_mainline_review_status`', '主线收口前必须回读并处理']]);
 checks.push(['phase closeout does not invent a new budget', read('02-总指挥核心规则.md'), ['阶段收口本身不自动产生新预算或新授权请求', '周期或预算到限', '范围/权限/风险发生变化', '明确停止条件命中', '新增高风险依赖']]);
 const reportScope = read('总指挥轻量交接启动配置.md').split('## 8. 统一接管汇报模板')[1];
 const staleReportDirectives = [
@@ -326,6 +575,60 @@ checks.push(['old overbroad or mandatory technical final directives cannot coexi
 const scene4J = manual.split('### 场景 4J：')[1]?.split('<a id="scenario-local-to-remote">')[0] || '';
 const scene4K = manual.split('### 场景 4K：')[1]?.split('<a id="场景-2f')[0] || '';
 const prStandard = read('docs/PR_SUBMISSION_AND_REVIEW_STANDARD.md');
+function prDeliveryBoundaryErrors(standard, handoff) {
+  const errors = [];
+  const candidate = ruleSection(standard, '### 3.2 本地发布就绪整理');
+  const identity = ruleSection(standard, '### 4.3.2 跨机器复现证据');
+  const receipt = ruleSection(standard, '## 13. 最小验证回执');
+  const introduction = receipt.split('```text')[0];
+  const copy = receipt.match(/```text\n([\s\S]*?)\n```/)?.[1] || '';
+  if (!candidate.includes('本次交付绑定该稳定候选及纳入范围') ||
+      !candidate.includes('新研发另作后续候选') ||
+      !candidate.includes('获准修订按第8节更新该绑定')) errors.push('delivery cutoff and authorized revision mapping');
+  const fingerprintLink = '../04-状态、目标变更与交接规范.md#指纹口径与稳定采集';
+  const links = [...identity.matchAll(/\[[^\]]+\]\(([^)]+)\)/g)].map(match => match[1]);
+  if (links.filter(link => link === fingerprintLink).length !== 1 ||
+      handoff.split('#### 指纹口径与稳定采集\n').length !== 2) errors.push('direct fingerprint section binding');
+  for (const term of ['未经规则核实的换行转换', '部分路径相等',
+    '覆盖范围/生成口径未说明的内容摘要', '已有证据范围内的结论']) {
+    if (!identity.includes(term)) errors.push('limited identity claim: ' + term);
+  }
+  for (const term of ['按当前阶段', '尚未执行不得代签', '无相关运行要求',
+    '不把未来验证设为当前阶段的已完成前置条件']) {
+    if (!introduction.includes(term)) errors.push('stage-specific receipt: ' + term);
+  }
+  for (const label of ['实际合并结果与候选映射：', '接收端检出 / 实际运行 / 成员复现：']) {
+    if (copy.split(label).length !== 2) errors.push('unique receipt copy field: ' + label);
+  }
+  const receiver = copy.split('\n').find(line => line.startsWith('接收端检出 / 实际运行 / 成员复现：')) || '';
+  if (!receiver.includes('按10.1适用范围分别记状态与证据') ||
+      !receiver.includes('负责人及下一动作')) errors.push('receiver evidence and ownership');
+  return errors;
+}
+const prDeliveryErrors = prDeliveryBoundaryErrors(prStandard, read('04-状态、目标变更与交接规范.md'));
+if (prDeliveryErrors.length) {
+  failed++; console.error(`FAIL: PR delivery boundary contract: ${prDeliveryErrors.join('; ')}`);
+} else {
+  const mergeField = prStandard.split('\n').find(line => line.startsWith('实际合并结果与候选映射：'));
+  const receiverField = prStandard.split('\n').find(line => line.startsWith('接收端检出 / 实际运行 / 成员复现：'));
+  const mutations = [
+    ['missing cutoff', prStandard.replace('本次交付绑定该稳定候选及纳入范围', '')],
+    ['wrong fingerprint section', prStandard.replace('#指纹口径与稳定采集)', '#missing-fingerprint-section)')],
+    ['unqualified normalization', prStandard.replace('未经规则核实的换行转换', '换行转换')],
+    ['unqualified digest rejection', prStandard.replace('覆盖范围/生成口径未说明的内容摘要', '内容摘要')],
+    ['future result as prerequisite', prStandard.replace('不把未来验证设为当前阶段的已完成前置条件', '')],
+    ['missing merge field', prStandard.replace(mergeField, '')],
+    ['receiver outside copy block', prStandard.replace(receiverField, '') + '\n' + receiverField],
+    ['duplicate receiver field', prStandard.replace(receiverField, receiverField + '\n' + receiverField)],
+    ['missing receiver owner', prStandard.replace('负责人及下一动作', '')]
+  ];
+  for (const [name, text] of mutations) {
+    if (!prDeliveryBoundaryErrors(text, read('04-状态、目标变更与交接规范.md')).length) {
+      failed++; console.error(`FAIL: PR delivery boundary mutation accepted: ${name}`);
+    }
+  }
+  console.log(`PR delivery boundary contract: PASS (${mutations.length} link/scope/stage/copy mutations rejected)`);
+}
 const syncChecks = read('09-自动化授权与风险分级.md').split('### 4K简单问题自主处理')[1]?.split('### ')[0] || '';
 // These assertions guard the public routing contract, not a live model's decisions.
 const permissionRules = read('09-自动化授权与风险分级.md');
@@ -462,6 +765,11 @@ const documentLifecycleRequirements = [
   ['classification separates purpose and status without new ledgers', 'health', '用途与状态分开判断，不强制新目录、逐文件标签或平行台账'],
   ['events cover stock and incremental work without background scans', 'health', '首次获准范围内有界盘点；之后只检查本批变化和受影响依赖'],
   ['uncertain provenance gets a custodian, not invented authorship', 'health', '接管保管责任不改写历史来源'],
+  ['controlled file changes have path-bound provenance', 'health', '逐文件关联精确相对路径、修改日期、来源依据和一句修改原因'],
+  ['creation and purpose changes explain why the file exists', 'health', '新建或用途改变时说明文件为何存在'],
+  ['provenance distinguishes evidence from timestamps', 'health', 'Git作者、文件时间戳或页眉日期不能单独证明授权来源'],
+  ['uncommitted changes have recoverable before and after bindings', 'health', '写前保存改动前指纹和必要恢复依据，写后回读并关联改动后指纹或Git对象'],
+  ['provenance does not alter machine formats or create parallel ledgers', 'health', '不向JSON、schema或生成物强塞注释，不建立逐文件平行台账'],
   ['correction preserves source evidence and unresolved disagreements', 'health', '原始证据保持原文；未证冲突记录分歧和使用限制'],
   ['retention and candidates reach an actual decision', 'health', '候选核验完成后同次收口实际提交有权负责人裁定'],
   ['archive is not physical cleanup', 'health', '转冷或归档不等于物理删除'],
@@ -595,6 +903,67 @@ for (const [name, section, needle] of commanderRouteRequirements) {
 console.log(`Current commander resolution: ${commanderRouteRequirements.length} section-bound prose checks and relocation counterexamples; no live routing guarantee`);
 // These checks bind public prose and entry references, not a real deployment or
 // a guarantee that an agent, server or client actually used the intended files.
+const externalIntegration = fs.readFileSync(path.join(root, '引用的外部工具', '外部工具自动对接规范.md'), 'utf8');
+const reviewProtocol = read('docs/EXECUTION_AND_INDEPENDENT_REVIEW.md');
+const accessChainStart = externalIntegration.indexOf('### 2.0 外部访问链与会话恢复');
+const accessChainEnd = externalIntegration.indexOf('### 2.1 先覆盖职责，再选择安装和调用');
+if (accessChainStart < 0 || accessChainEnd <= accessChainStart) {
+  throw new Error('external access-chain policy section is missing or out of order');
+}
+const accessChain = externalIntegration.slice(accessChainStart, accessChainEnd);
+const accessChainRequirements = [
+  ['access chain separates transport and authentication', ['网络/通道', '认证']],
+  ['browser authentication does not certify another channel', ['网页已登录不证明CLI、连接器、MCP或API已经登录']],
+  ['authentication requires independent status readback', ['独立状态回读', '登录命令成功', '状态回读']],
+  ['target identity is stable before content read', ['目标定位', '稳定对象标识', '临时序号不能作为长期身份']],
+  ['business acceptance follows content read', ['目标内容读取', '业务验收']],
+  ['headless failures are not auto-labeled as network faults', ['无头浏览器失败不能自动归因于网络', '平台风控']],
+  ['credential material stays out of records', ['禁止读取、展示或写入Cookie、Token、密码']],
+  ['persistence and recovery are separately verified', ['持久性必须单独验证', '恢复后重新做状态、目标身份和内容三项回读']],
+  ['retries and background polling stay bounded', ['有限重试预算', '不无限重试', '不启动后台轮询']]
+];
+for (const [name, needles] of accessChainRequirements) {
+  checks.push([name, accessChain, needles]);
+  for (const needle of needles) {
+    const moved = externalIntegration.replaceAll(needle, '');
+    const movedStart = moved.indexOf('### 2.0 外部访问链与会话恢复');
+    const movedEnd = moved.indexOf('### 2.1 先覆盖职责，再选择安装和调用');
+    if (moved.slice(movedStart, movedEnd).includes(needle)) {
+      throw new Error(`access-chain guard escaped section binding: ${name} / ${needle}`);
+    }
+  }
+}
+console.log(`External access chain: ${accessChainRequirements.length} layered checks and relocation counterexamples; no live platform-session guarantee`);
+const deltaReviewSections = documents => ({
+  integration: documents.integration.split('### 1.3 新能力的接入方式选择')[1]?.split(/^#{1,3} /m)[0] || '',
+  review: documents.review.split('### 1.2 最小充分审查与成本门禁')[1]?.split(/^#{1,3} /m)[0] || '',
+  prompt: documents.review.split('### 审查者')[1]?.split(/^#{1,3} /m)[0] || '',
+});
+const deltaReviewRequirements = [
+  ['overlap still checks separable deltas', 'integration', '不能仅因整体重复就跳过差异评估'],
+  ['benefits need evidence and existing guards', 'integration', '只有有据增益且能保留现有权限、安全和恢复约束时'],
+  ['unproven differences need not be adopted', 'integration', '不为融合而弱化原门禁'],
+  ['review checks original request omissions and extras', 'review', '前者按原始要求及验收检查漏做、擅增和误解'],
+  ['quality separately checks safe compatible results', 'review', '后者检查正确性、安全、兼容、可维护性及必要回归'],
+  ['one verdict does not certify the other', 'review', '一个维度通过不能代签另一个维度'],
+  ['review does not add mandatory agents or rounds', 'review', '不因此新增实例、轮次或固定长表'],
+  ['review prompt requests both conclusions', 'prompt', '分别给出需求符合性与成果质量结论'],
+];
+const deltaDocuments = { integration: externalIntegration, review: reviewProtocol };
+for (const [name, key, guard] of deltaReviewRequirements) {
+  checks.push([name, deltaReviewSections(deltaDocuments)[key], [guard]]);
+  const relocated = Object.fromEntries(Object.entries(deltaDocuments).map(([doc, text]) => [doc, text.replaceAll(guard, '') + `\n## Unrelated fixture section\n${guard}\n`]));
+  if (deltaReviewSections(relocated)[key].includes(guard)) throw new Error(`relocated delta guard escaped section binding: ${name}`);
+}
+console.log(`External deltas and dual review: ${deltaReviewRequirements.length} section-bound prose checks and relocation counterexamples; no live adoption guarantee`);
+checks.push(['core comparison points to one delta integration source', read('02-总指挥核心规则.md'), ['核可分离的有益差异', '外部工具自动对接规范.md#integration-choice', '不整套照搬']]);
+const rtkGuide = fs.readFileSync(path.join(root, '引用的外部工具', 'rtk', 'README.md'), 'utf8');
+checks.push(['RTK uses natural language with measured scoped invocation', rtkGuide, ['AI 自行核目标、原命令授权', '没有收益证据时不强制包装', '不自动安装']]);
+checks.push(['RTK Node counterexample cannot certify test acceptance', rtkGuide, ['不能可靠保留测试总数、通过数', '当前不用于测试验收', '不绕过本工作流既有 Git/LFS 门禁']]);
+checks.push(['RTK recovery is not permanent evidence or permission', rtkGuide, ['--full', '不能当作永久原件备份', '不通过自动重跑来取回日志', '当前采用显式调用，不执行 `rtk init`']]);
+checks.push(['RTK ineffective history flag blocks routine business adoption', rtkGuide, ['历史关闭配置在部分已测路径无效', '正式业务接入暂缓', '不将历史库当作原始证据档案']]);
+checks.push(['RTK integration and cost limits stay explicit', rtkGuide, ['不承诺 PowerShell/Codex 透明改写', '真实总 Token/费用收益仍待实测', '不在 iOS 本机运行']]);
+
 for (const [name, text, needles] of checks) {
   const missing = needles.filter(needle => !text.includes(needle));
   if (missing.length) { failed += 1; console.error(`FAIL: ${name}: missing ${missing.join(', ')}`); }
@@ -917,7 +1286,7 @@ console.log(`Rule refresh manifest: PASS (${sha256(manifestBytes)})`);
 const managedPaths = manifest.rules.map(item => manifest.repository_root_prefixes.some(prefix => item.path_ref.startsWith(prefix))
   ? item.path_ref : `总指挥工作流/第二代总指挥的工作模式/${item.path_ref}`);
 managedPaths.push('总指挥工作流/第二代总指挥的工作模式/规则刷新manifest.json');
-const attrs = spawnSync('git', ['check-attr', '-z', '--stdin', 'eol'], { cwd: root, input: `${managedPaths.join('\0')}\0`, encoding: 'utf8' });
+const attrs = synthetic.runSync('git', ['check-attr', '-z', '--stdin', 'eol'], { cwd: root, input: `${managedPaths.join('\0')}\0`, encoding: 'utf8' });
 const fields = attrs.stdout?.split('\0') || [];
 if (attrs.status !== 0 || fields.length !== managedPaths.length * 3 + 1 || managedPaths.some((file, index) =>
   fields[index * 3] !== file || fields[index * 3 + 1] !== 'eol' || fields[index * 3 + 2] !== 'lf' ||
@@ -929,8 +1298,8 @@ console.log(`Managed checkout line endings: PASS (${managedPaths.length} files)`
 console.log(`Workflow refresh contract: PASS (${checks.length} cases)`);
 // These offline fixtures demonstrate observable Git/runtime counterexamples;
 // they do not prove a live agent or another member followed the prose above.
-const syncFixture = spawnSync(process.execPath, [path.join(root, '.github/scripts/Test-SyncScenarios.mjs')],
-  { cwd: root, encoding: 'utf8' }); // Fixture bounds Git/IPC by its deadline and cleans up in finally.
+const syncFixture = synthetic.runSync(process.execPath, [path.join(root, '.github/scripts/Test-SyncScenarios.mjs')],
+  { cwd: root, encoding: 'utf8', timeoutMs: 70000 }); // Preserve the fixture's existing 60-second budget plus cleanup margin.
 if (syncFixture.status !== 0) {
   console.error(`FAIL: offline sync fixtures: ${syncFixture.error?.message ?? ''}\n${syncFixture.stdout ?? ''}${syncFixture.stderr ?? ''}`);
   process.exit(1);

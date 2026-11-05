@@ -128,12 +128,12 @@ function Get-FixtureHash([string]$Path) {
 }
 $isolatedAnalyzer = Join-Path $fixtureRoot 'isolated-analyzer.ps1'
 $source = [IO.File]::ReadAllText($analyzer)
-$isolated = $source.Replace('$env:USERPROFILE', ("'" + $fixtureRoot.Replace("'", "''") + "'"))
+$isolated = $source
 [IO.File]::WriteAllText($isolatedAnalyzer, $isolated, (New-Object Text.UTF8Encoding($true)))
 try {
     Write-FixtureRecords $records
     $sourceHash = Get-FixtureHash $fixturePath
-    $null = . $isolatedAnalyzer -TaskId $fictionalId -ReportPath (Join-Path $fixtureRoot 'trend.md')
+    $null = . $isolatedAnalyzer -TaskId $fictionalId -CodexHome $fixtureHome -ReportPath (Join-Path $fixtureRoot 'trend.md')
     Check ($contextPercent -eq 16 -and $contextGrowth -eq 10 -and $null -eq $roundsToObservation) 'streaming parser binds six final turn observations without a target forecast'
     Check ($handoffLevel -eq 'continue' -and $totalScore -eq 0) 'streaming forecast does not change the traditional score'
     $report=[IO.File]::ReadAllText((Join-Path $fixtureRoot 'trend.md'))
@@ -143,20 +143,20 @@ try {
     Check ((Get-FixtureHash $fixturePath) -eq $sourceHash) 'source log unchanged after report generation'
     $records += @{timestamp='2025-01-01T00:07:00Z';type='compacted';payload=@{}}
     Write-FixtureRecords $records
-    $null = . $isolatedAnalyzer -TaskId $fictionalId -ReportPath (Join-Path $fixtureRoot 'compacted.md')
+    $null = . $isolatedAnalyzer -TaskId $fictionalId -CodexHome $fixtureHome -ReportPath (Join-Path $fixtureRoot 'compacted.md')
     Check ($null -eq $contextPercent -and $handoffLevel -eq 'continue' -and $totalScore -eq 0) 'streaming compaction invalidates old observation'
     $records += @{timestamp='2025-01-01T00:08:00Z';type='event_msg';payload=@{type='token_count';info=(Info 0 1000 8000)}}
     Write-FixtureRecords $records
-    $null = . $isolatedAnalyzer -TaskId $fictionalId -ReportPath (Join-Path $fixtureRoot 'zero.md')
+    $null = . $isolatedAnalyzer -TaskId $fictionalId -CodexHome $fixtureHome -ReportPath (Join-Path $fixtureRoot 'zero.md')
     Check ($contextPercent -eq 0 -and $handoffLevel -eq 'continue' -and $totalScore -eq 0 -and $null -eq $contextGrowth -and $contextState.Points.Count -eq 0) 'streaming zero is valid but cannot attach to a completed turn'
     $records += @{timestamp='2025-01-01T00:09:00Z';type='event_msg';payload=@{type='token_count';info=$null}}
     Write-FixtureRecords $records
-    $null = . $isolatedAnalyzer -TaskId $fictionalId -ReportPath (Join-Path $fixtureRoot 'missing.md')
+    $null = . $isolatedAnalyzer -TaskId $fictionalId -CodexHome $fixtureHome -ReportPath (Join-Path $fixtureRoot 'missing.md')
     Check ($null -eq $contextPercent -and $handoffLevel -eq 'continue' -and $totalScore -eq 0) 'streaming missing new usage cannot reuse zero or older input'
     $records += @{timestamp='2025-01-01T00:10:00Z';type='event_msg';payload=@{type='token_count';info=(Info 900 1000 10000)}}
     Write-FixtureRecords $records
     [IO.File]::AppendAllText($fixturePath, '{"timestamp":"2025-01-01T00:11:00Z","type":"event_msg","payload":{', $utf8)
-    $null = . $isolatedAnalyzer -TaskId $fictionalId -ReportPath (Join-Path $fixtureRoot 'truncated.md')
+    $null = . $isolatedAnalyzer -TaskId $fictionalId -CodexHome $fixtureHome -ReportPath (Join-Path $fixtureRoot 'truncated.md')
     Check ($null -eq $contextPercent -and $handoffLevel -eq 'continue' -and $totalScore -eq 0 -and $parseWarnings -gt 0) 'streaming truncated before payload.type invalidates context'
     $records = @(
         @{timestamp='2025-01-01T00:00:00Z';type='session_meta';payload=@{id=$fictionalId;model_provider='fixture'}},
@@ -167,7 +167,7 @@ try {
     Write-FixtureRecords $records
     foreach ($locale in @('zh-CN','en-US')) {
         $reportPath = Join-Path $fixtureRoot ($locale+'-partial.md')
-        $null = . $isolatedAnalyzer -TaskId $fictionalId -ReportPath $reportPath -Language $locale
+        $null = . $isolatedAnalyzer -TaskId $fictionalId -CodexHome $fixtureHome -ReportPath $reportPath -Language $locale
         $partial = [IO.File]::ReadAllText($reportPath)
         Check ($sizeScore -eq 0 -and $compressionScore -eq 0 -and $totalScore -eq 0 -and $scoreBasis -eq 'traditional') 'high occupancy is diagnostic only; no score inflation'
         Check ($partial.Contains((Get-UiText 'ScoreEquation' @(0,0,0))) -and $partial.Contains((Get-UiText 'Unavailable'))) 'bilingual report retains traditional equation and unknown diagnostic values'
@@ -176,5 +176,33 @@ try {
     }
 } finally {
     # Retain the isolated fixtures and reports as reproducible local evidence.
+}
+try {
+    $powershell = Join-Path $env:SystemRoot 'System32/WindowsPowerShell/v1.0/powershell.exe'
+    [IO.File]::WriteAllText(
+        (Join-Path $fixtureHome 'session_index.jsonl'),
+        (@{id=$fictionalId;thread_name='虚构会话';updated_at='2025-01-01T00:01:00Z'} | ConvertTo-Json -Compress) + "`n",
+        $utf8
+    )
+    $explicitReport = Join-Path $fixtureRoot 'cli-explicit.md'
+    $explicitOutput = & $powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $analyzer `
+        -TaskId $fictionalId -CodexHome $fixtureHome -ReportPath $explicitReport 2>&1 | Out-String
+    Check ($LASTEXITCODE -eq 0 -and $explicitOutput.Contains('虚构会话')) 'CLI explicit CodexHome resolves local name and session'
+
+    $previousCodexHome = $env:CODEX_HOME
+    try {
+        $env:CODEX_HOME = $fixtureHome
+        $environmentReport = Join-Path $fixtureRoot 'cli-environment.md'
+        $environmentOutput = & $powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $analyzer `
+            -TaskId $fictionalId -ReportPath $environmentReport 2>&1 | Out-String
+        Check ($LASTEXITCODE -eq 0 -and $environmentOutput.Contains('虚构会话')) 'CLI CODEX_HOME fallback resolves local name and session'
+    }
+    finally {
+        if ($null -eq $previousCodexHome) { Remove-Item Env:CODEX_HOME -ErrorAction SilentlyContinue }
+        else { $env:CODEX_HOME = $previousCodexHome }
+    }
+}
+catch {
+    throw
 }
 Write-Output "Context observation regression: PASS ($script:checks checks; synthetic only)"

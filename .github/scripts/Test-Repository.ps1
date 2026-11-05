@@ -1,11 +1,82 @@
 [CmdletBinding()]
 param(
     # Check explicit new files before staging; ignored and out-of-repository inputs are rejected.
-    [string[]]$AdditionalPaths = @()
+    [string[]]$AdditionalPaths = @(),
+    # Requires an already installed Playwright and Edge; never installs dependencies.
+    [switch]$IncludeBrowserTests
 )
 
 $ErrorActionPreference = 'Stop'
+# Node emits UTF-8 even when a headless Windows host starts with another code page.
+[Console]::OutputEncoding = [Text.UTF8Encoding]::new($false)
+$repositoryScriptRoot = $PSScriptRoot
+function Assert-RepositoryGitEnvironment {
+    $unsafe = @(
+        [Environment]::GetEnvironmentVariables().Keys | Where-Object {
+            $_ -match '^GIT_(DIR|WORK_TREE|COMMON_DIR|INDEX_FILE|OBJECT_DIRECTORY|ALTERNATE_OBJECT_DIRECTORIES|NAMESPACE|EXEC_PATH|CONFIG|CONFIG_PARAMETERS|CONFIG_COUNT|CONFIG_KEY_.*|CONFIG_VALUE_.*|TRACE.*|REDIRECT.*|CEILING_DIRECTORIES|DISCOVERY_ACROSS_FILESYSTEM|SHALLOW_FILE|GRAFT_FILE|REPLACE_REF_BASE|QUARANTINE_PATH|ATTR_SOURCE|LITERAL_PATHSPECS|GLOB_PATHSPECS|NOGLOB_PATHSPECS|ICASE_PATHSPECS)$'
+        }
+    )
+    if ($unsafe.Count) {
+        throw ('Repository checks refuse Git environment overrides: ' + (($unsafe | Sort-Object) -join ', '))
+    }
+    $configKeys = @([Environment]::GetEnvironmentVariables().Keys | Where-Object { $_ -match '^GIT_CONFIG_(GLOBAL|SYSTEM|NOSYSTEM)$' })
+    if ($configKeys.Count) {
+        # Accept only the exact inert policy made by SyntheticTestRuntime, not arbitrary config overrides.
+        $valid = $false
+        try {
+            $base = [IO.Path]::GetFullPath((Join-Path $repositoryScriptRoot '../..'))
+            $global = [IO.Path]::GetFullPath($env:GIT_CONFIG_GLOBAL)
+            if ($global -cne $env:GIT_CONFIG_GLOBAL) { throw 'Synthetic config requires its canonical absolute path' }
+            $directory = [IO.Path]::GetDirectoryName($global)
+            $allowed = @('.codex-manual-cache', '.planning') | Where-Object {
+                $global.StartsWith((Join-Path $base $_) + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)
+            }
+            if (-not $allowed -or [IO.Path]::GetFileName($global) -cne 'isolated-git-config' -or
+                [IO.Path]::GetFileName($directory) -notmatch '^synthetic-quality-' -or
+                $env:GIT_CONFIG_NOSYSTEM -cne '1') { throw 'Invalid synthetic config binding' }
+            $empty = Join-Path $directory 'empty-git-metadata'
+            $hooks = Join-Path $directory 'empty-hooks'
+            if ($env:GIT_CONFIG_SYSTEM -cne $empty) { throw 'Invalid system config binding' }
+            foreach ($candidate in @($global, $empty, $hooks)) {
+                $item = Get-Item -LiteralPath $candidate -Force -ErrorAction Stop
+                while ($item) {
+                    if ($item.Attributes -band [IO.FileAttributes]::ReparsePoint) { throw 'Linked config path' }
+                    $item = if ($item.PSIsContainer) { $item.Parent } else { $item.Directory }
+                }
+            }
+            if ((Get-Item -LiteralPath $global).Length -gt 8192 -or
+                (Get-Item -LiteralPath $empty).Length -ne 0 -or
+                -not (Test-Path -LiteralPath $hooks -PathType Container) -or
+                @(Get-ChildItem -LiteralPath $hooks -Force).Count) { throw 'Non-inert synthetic config' }
+            $hookValue = '"' + $hooks.Replace('\', '/').Replace('"', '\"') + '"'
+            $emptyValue = '"' + $empty.Replace('\', '/').Replace('"', '\"') + '"'
+            $expected = @('[core]', (' hooksPath = ' + $hookValue), (' attributesFile = ' + $emptyValue),
+                (' excludesFile = ' + $emptyValue), ' fsmonitor = false', ' pager = ', ' askPass = ',
+                '[init]', (' templateDir = ' + $hookValue), '[commit]', ' gpgSign = false', '[tag]', ' gpgSign = false',
+                '[credential]', ' helper = ', ' interactive = false', '[protocol]', ' allow = never',
+                '[protocol "file"]', ' allow = always', '[gc]', ' auto = 0', '[maintenance]', ' auto = false', '') -join "`n"
+            $valid = [IO.File]::ReadAllText($global) -ceq $expected
+        } catch { $valid = $false }
+        if (-not $valid) { throw 'Repository checks refuse Git environment overrides: unverified synthetic config' }
+    }
+}
+Assert-RepositoryGitEnvironment
 $repoRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '../..')).Path
+
+function Test-SessionDeskBrowserRegressions {
+    param([switch]$PreflightOnly)
+    & node -e 'try { const p = process.env.SYNTHETIC_BROWSER_PLAYWRIGHT_ENTRY || require.resolve("playwright", {paths:[process.argv[1]]}); if (!require(p).chromium) throw new Error("chromium unavailable"); } catch (e) { console.error("Browser dependency unavailable: " + e.message); process.exitCode=1; }' $repositoryScriptRoot
+    if ($LASTEXITCODE -ne 0) { throw '浏览器依赖不可加载；需要已有Playwright和Edge，不自动安装，也不记为测试通过。' }
+    if ($PreflightOnly) { return }
+    foreach ($suite in @('Test-SessionDeskRendering.cjs', 'Test-WindowsSessionDesk.cjs')) {
+        & node (Join-Path $repositoryScriptRoot $suite)
+        if ($LASTEXITCODE -ne 0) { throw "无头页面回归失败：$suite" }
+    }
+    Write-Host 'Browser regression: PASS (rendering and synthetic service)'
+}
+
+# Fail before expensive suites when the requested browser dependency is absent.
+if ($IncludeBrowserTests) { Test-SessionDeskBrowserRegressions -PreflightOnly }
 
 $additionalCheckFiles = @(
     foreach ($path in $AdditionalPaths) {
@@ -38,6 +109,7 @@ $additionalCheckFiles = @(
 function Get-TrackedFiles {
     param([Parameter(Mandatory)][string]$Pattern)
 
+    Assert-RepositoryGitEnvironment
     $files = @(git -c "safe.directory=$repoRoot" -c core.quotepath=false -C $repoRoot ls-files -- $Pattern)
     if ($LASTEXITCODE -ne 0) {
         throw "无法读取 Git 跟踪文件：$Pattern"
@@ -54,7 +126,33 @@ function Get-CheckFiles {
     }) + @($additionalCheckFiles | Where-Object { $_ -like $Pattern }) | Sort-Object -Unique
 }
 
+function Test-ExplicitPlaceholderPath {
+    param([string]$Path)
+    $placeholder = '<(?:[A-Z][A-Z0-9_-]*|[\u4e00-\u9fff][\u4e00-\u9fffA-Z0-9_-]*)>'
+    return ($Path -cmatch ('^[A-Za-z]:[\\/]+(?:\.\.\.(?:[\\/]|$)|' + $placeholder + '(?:[\\/]|$)|(?i:Users)[\\/]+' + $placeholder + '(?:[\\/]|$))') -or
+        $Path -cmatch ('^/(?:Users|home)/' + $placeholder + '(?:/|$)'))
+}
+
+function Get-MachineBoundAbsolutePaths {
+    param([string]$Line)
+    $placeholder = '<(?:[A-Z][A-Z0-9_-]*|[\u4e00-\u9fff][\u4e00-\u9fffA-Z0-9_-]*)>'
+    $pattern = '(?i)(?<![A-Za-z0-9])(?:[A-Z]:[\\/]+|/(?:Users|home)/)(?:' + $placeholder + '|[^\x60\s<>"''|)\]}])*'
+    foreach ($match in [regex]::Matches($Line, $pattern)) {
+        if (-not (Test-ExplicitPlaceholderPath -Path $match.Value)) { $match.Value }
+    }
+}
+
+function Test-RepositoryLinkBoundary {
+    param([string]$Root, [string]$Target)
+    $separators = [char[]]@([IO.Path]::DirectorySeparatorChar, [IO.Path]::AltDirectorySeparatorChar)
+    $normalizedRoot = [IO.Path]::GetFullPath($Root).TrimEnd($separators)
+    $normalizedTarget = [IO.Path]::GetFullPath($Target).TrimEnd($separators)
+    return ($normalizedTarget.Equals($normalizedRoot, [StringComparison]::OrdinalIgnoreCase) -or
+        $normalizedTarget.StartsWith($normalizedRoot + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase))
+}
+
 function Test-RepositoryPathPortability {
+    Assert-RepositoryGitEnvironment
     $errors = [Collections.Generic.List[string]]::new()
     $trackedFiles = @(git -c "safe.directory=$repoRoot" -c core.quotepath=false -C $repoRoot ls-files)
     if ($LASTEXITCODE -ne 0) {
@@ -67,9 +165,12 @@ function Test-RepositoryPathPortability {
     )
 
     foreach ($relativePath in (@($trackedFiles) + @($additionalCheckFiles) | Sort-Object -Unique)) {
-        git -c "safe.directory=$repoRoot" -C $repoRoot check-ignore --no-index --quiet -- $relativePath 2>$null
-        if ($LASTEXITCODE -eq 0) {
+        $ignoreOutput = @(git -c "safe.directory=$repoRoot" -C $repoRoot check-ignore --no-index --quiet -- $relativePath 2>&1)
+        $ignoreExitCode = $LASTEXITCODE
+        if ($ignoreExitCode -eq 0) {
             $errors.Add("命中 .gitignore 的文件仍被 Git 跟踪：$relativePath")
+        } elseif ($ignoreExitCode -ne 1) {
+            throw ("Git ignore check failed (exit ${ignoreExitCode}): $relativePath" + [Environment]::NewLine + ($ignoreOutput -join [Environment]::NewLine))
         }
 
         $extension = [IO.Path]::GetExtension($relativePath)
@@ -78,12 +179,9 @@ function Test-RepositoryPathPortability {
         $fullPath = Join-Path $repoRoot $relativePath
         if (-not (Test-Path -LiteralPath $fullPath -PathType Leaf)) { continue }
         $content = [IO.File]::ReadAllText($fullPath)
-        foreach ($line in ($content -split "`r?`n")) {
-            if ($line -match '(?i)(?<![A-Za-z0-9])[A-Z]:[\\/](?!\.\.\.|<)' -and $line -notmatch '<[^>]+>') {
-                $errors.Add("文本包含机器绑定的 Windows 绝对路径：$relativePath")
-            }
-            if ($line -match '(?i)(?<![A-Za-z0-9])/(?:Users|home)/(?!\.\.\.|<)' -and $line -notmatch '<[^>]+>') {
-                $errors.Add("文本包含机器绑定的用户目录绝对路径：$relativePath")
+        foreach ($line in ($content -split "\r?\n")) {
+            foreach ($machinePath in @(Get-MachineBoundAbsolutePaths -Line $line)) {
+                $errors.Add("文本包含机器绑定的绝对路径：$relativePath")
             }
         }
         if ($content -match '(?i)file:///(?:[A-Z]:|Users/|home/)') {
@@ -126,7 +224,7 @@ function Test-MarkdownFiles {
                 $errors.Add("Markdown 链接路径无效：$relativePath -> $target")
                 continue
             }
-            if (-not $resolved.StartsWith($repoRoot, [StringComparison]::OrdinalIgnoreCase) -or
+            if (-not (Test-RepositoryLinkBoundary -Root $repoRoot -Target $resolved) -or
                 -not (Test-Path -LiteralPath $resolved)) {
                 $errors.Add("Markdown 相对链接失效：$relativePath -> $target")
             }
@@ -235,8 +333,10 @@ function Test-PowerShellFiles {
     foreach ($relativePath in (Get-CheckFiles -Pattern '*.ps1')) {
         $tokens = $null
         $parseErrors = $null
-        [void][Management.Automation.Language.Parser]::ParseFile(
-            (Join-Path $repoRoot $relativePath),
+        $source = Get-Content -LiteralPath (Join-Path $repoRoot $relativePath) -Raw -Encoding utf8
+        [void][Management.Automation.Language.Parser]::ParseInput(
+            $source,
+            $relativePath,
             [ref]$tokens,
             [ref]$parseErrors
         )
@@ -262,7 +362,7 @@ function Test-CommanderRuleVersion {
     $versions = [Collections.Generic.List[string]]::new()
 
     foreach ($relativePath in $relativePaths) {
-        $content = Get-Content -LiteralPath (Join-Path $repoRoot $relativePath) -Raw
+        $content = Get-Content -LiteralPath (Join-Path $repoRoot $relativePath) -Raw -Encoding utf8
         $match = [regex]::Match($content, '(?m)^版本：(?<version>\d{4}-\d{2}-\d{2}\.\d+)\s*$')
         if (-not $match.Success) {
             throw "规则入口缺少有效版本：$relativePath"
@@ -280,11 +380,11 @@ function Test-CommanderDurableWorkflowContract {
     $contracts = @(
         @{
             Path = '总指挥工作流/第二代总指挥的工作模式/01-操作者操作手册.md'
-            Required = @('场景 2D：展示最新修改的运行效果', '【具体目标】', '低信息部署请求与运行身份交付门禁', '效果是否通过，由我实际查看后确认', '场景判断：场景编号', '用自然语言保存计划、进度与成果', '不必记新编号', '成功时会回读并告诉你写在哪、当前状态、从哪里继续及谁做下一步。', '场景五：一个 AI 负责执行，另一个 AI 独立检查', '阶段内工作默认用当前任务的内部助手', '只有你明确要求新建独立任务或窗口时才另建', '普通“自查”“对抗式审查”默认由当前AI完成，不因此创建第二个实例。', '专项或审查者已把阶段结果交总指挥后，下一步只提出候选建议，不同时要求你执行。', '建议已被接收', '已发送待确认', '尚未送达', '直接发给专项窗口、仍属于当前阶段且不冲突的明确指令照常有效', '给一个当前有效动作或“现在不用操作”', '当前是否适合总指挥交接', '准备归档，请先整理续接材料', '当前 AI 可能收不到这个操作', '文字流程图', '默认不生成矢量图', '完整单图', '静态模板和构建器', '区分无直观样例和尚未采集', '不伪造效果', '场景 1G：任务意外中断后恢复', '简单任务没有中间成果、未提交修改或结果未知的外部动作，且完整指令可重发时，通常重发更快。已有复杂要求、值得保留的成果或昂贵验证，或上述情况不确定时，再用1G。', '场景 0B：总指挥广播最新工作流', '不需要填写事件编号、哈希、版本、变化清单或写入范围', '逐目标记录实际采用结果', '不得因为本提示词而改变身份', '恢复收益门禁', '直接重做 / 快速恢复 / 深度恢复 / 必须先核账', '不超过 150 字介绍一次', '不会创建定时任务或后台监控', 'Pe1-(a)：开启或接管操作者画像', 'Pe1-(b)：关闭操作者画像', 'Pe1-(c)：新增外部操作者画像资料', '复制粘贴文本 / 精确文件或附件路径 / 精确直接链接', '当前唯一画像写者', '逐字段明确确认', '测试的数据来源', '版本、输入、步骤和数据来源', '本地发布就绪整理', '异常项只局部暂停', '集中审核一次最终远端载荷')
+            Required = @('场景 2D：展示最新修改的运行效果', '【具体目标】', '低信息部署请求与运行身份交付门禁', '效果是否通过，由我实际查看后确认', '场景判断：场景编号', '用自然语言保存计划、进度与成果', '不必记新编号', '成功时会回读并告诉你写在哪、当前状态、从哪里继续及谁做下一步。', '场景五：一个 AI 负责执行，另一个 AI 独立检查', '阶段内工作默认用当前任务的内部助手', '只有你明确要求新建独立任务或窗口时才另建', '普通“自查”“对抗式审查”默认由当前AI完成，不因此创建第二个实例。', '专项或审查者已把阶段结果交总指挥后，下一步只提出候选建议，不同时要求你执行。', '建议已被接收', '已发送待确认', '尚未送达', '直接发给专项窗口、仍属于当前阶段且不冲突的明确指令照常有效', '给一个当前有效动作或“现在不用操作”', '当前是否适合总指挥交接', '准备归档，请先整理续接材料', '当前 AI 可能收不到这个操作', '文字流程图', '默认不生成矢量图', '完整单图', '静态模板和构建器', '区分无直观样例和尚未采集', '不伪造效果', '场景 1G：任务意外中断后恢复', '简单任务没有中间成果、未提交修改或结果未知的外部动作，且完整指令可重发时，通常重发更快。已有复杂要求、值得保留的成果或昂贵验证，或上述情况不确定时，再用1G。', '场景 0B：总指挥广播最新工作流', '不需要填写事件编号、哈希、版本、变化清单或写入范围', '逐目标记录实际采用结果', '不得因为本提示词而改变身份', '恢复收益门禁', '直接重做 / 快速恢复 / 深度恢复 / 必须先核账', '不超过 150 字介绍一次', '不会创建定时任务或后台监控', 'Pe1-(a)：开启或接管操作者画像', 'Pe1-(b)：关闭操作者画像', 'Pe1-(c)：新增外部操作者画像资料', '复制粘贴文本 / 精确文件或附件路径 / 精确直接链接', '根级画像写者', '逐字段明确确认', '测试的数据来源', '版本、输入、步骤和数据来源', '本地发布就绪整理', '异常项只局部暂停', '集中审核一次最终远端载荷')
         },
         @{
             Path = '总指挥工作流/第二代总指挥的工作模式/02-总指挥核心规则.md'
-            Required = @('为其他任务窗口准备提示词', '唯一模板选择规则', '参数自动核实与人工输入边界', '统一入口的场景与参数核验', '路由回执', '开始自然语言路由前', '当前任务未加载该修订', '自然语言路由别名', '统一计划、进度与存档语义路由', '写进计划', '中央工作项清单', '已讨论、建议、计划、已实施、已验证', '不同 Agent 实例分别执行和独立审查', '普通的同窗口自检', '唯一当前行动与跨窗口冲突收敛', '候选建议永远不可直接执行', '当前阶段行动方（执行者或独立审查者）', '兼任收口方', '操作者直接发给专项窗口的有效指令', '已确认接收 / 已发送待确认 / 尚未送达', '消息到达较晚不代表更新', '某一维度相同不能推出完整测试对象相同', '换窗与归档前连续性触发', '不按固定关键词触发', '至少生成一段可直接发给新窗口的精简续接提示词', '使用者直接点击客户端侧栏归档不会形成模型可观察消息', '不能作为该动作的授权', '需要多个设备访问时', '低信息部署请求与运行身份交付门禁', '规范启动命令及自检输出', 'COMMIT-LEDGER', '保留级别：KEY_NODE', '并存实现决议矩阵', '紧凑文本执行图', '可翻页的本地静态 HTML', '先恢复原任务身份', '恢复提示词本身不得被解释为总指挥任命', '恢复收益门禁', '前台控制授权门禁', '不自动授权 Computer Use', '本地协作画像的一次询问与节点触发', '不再重复询问', '不创建定时任务、后台轮询或独立自动化', '克隆可移植性', '相对路径不是所有场景的强制格式', '下一步提示词和单项确认卡不得重置活跃请求清单', '不能关闭整轮任务', '请求项—实际动作—证据—状态', '待补答或待确认', '强制状态回执与空输出兜底', '跨项目规则刷新的接纳门禁', '规则刷新manifest.json', '项目问题确实影响后续动作时只另列待办', '当前回合原子完成、回合间跨任务消息优先出队', '独立消息契约', '业务权限不足也返回 `BLOCKED`', '用户手册变更后的全工作流联动核验', '事故证据回归', '常规测试通过不能替代事故证据验收', '每条指令在执行前都必须完成一次与风险相称的前置检查', '第二次对抗式复审不是默认固定步骤', '操作者明确要求“对抗式审查”“再检查”或同义动作时', '不要求操作者复制新的提示词', '跨任务回执的改进闭环与最终出口硬门禁', '跨项目经验吸收', '可复用规则', '项目特定约定', '未证实建议', '未完成事项', '下一步行动建议', '规则根和其唯一本地实例', '默认唯一画像写者', 'Pe1-(a)/(b)/(c)', '逐字段确认', '工作流规则、模板、检查脚本和根 `AGENTS.md` 的写入权属于当前唯一总指挥', '其他任务窗口只提交建议包', '只有 `READY / READY_WITH_RESTRICTIONS` 才生成并交付 `final-*`', 'schema v3', 'LEGACY_UNVERIFIED', 'Prepare-Handoff.mjs', '`event_id` 全链唯一')
+            Required = @('为其他任务窗口准备提示词', '唯一模板选择规则', '参数自动核实与人工输入边界', '统一入口的场景与参数核验', '路由回执', '开始自然语言路由前', '当前任务未加载该修订', '自然语言路由别名', '统一计划、进度与存档语义路由', '写进计划', '中央工作项清单', '已讨论、建议、计划、已实施、已验证', '不同 Agent 实例分别执行和独立审查', '普通的同窗口自检', '唯一当前行动与跨窗口冲突收敛', '候选建议永远不可直接执行', '当前阶段行动方（执行者或独立审查者）', '兼任收口方', '操作者直接发给专项窗口的有效指令', '已确认接收 / 已发送待确认 / 尚未送达', '消息到达较晚不代表更新', '某一维度相同不能推出完整测试对象相同', '换窗与归档前连续性触发', '不按固定关键词触发', '至少生成一段可直接发给新窗口的精简续接提示词', '使用者直接点击客户端侧栏归档不会形成模型可观察消息', '不能作为该动作的授权', '需要多个设备访问时', '低信息部署请求与运行身份交付门禁', '规范启动命令及自检输出', 'COMMIT-LEDGER', '保留级别：KEY_NODE', '并存实现决议矩阵', '紧凑文本执行图', '可翻页的本地静态 HTML', '先恢复原任务身份', '恢复提示词本身不得被解释为总指挥任命', '恢复收益门禁', '09隔离判定与前台授权', '满足隔离条件且动作已授权时可使用', '本地协作画像的一次询问与节点触发', '不再重复询问', '不创建定时任务、后台轮询或独立自动化', '克隆可移植性', '相对路径不是所有场景的强制格式', '下一步提示词和单项确认卡不得重置活跃请求清单', '不能关闭整轮任务', '请求项—实际动作—证据—状态', '待补答或待确认', '强制状态回执与空输出兜底', '跨项目规则刷新的接纳门禁', '规则刷新manifest.json', '项目问题确实影响后续动作时只另列待办', '当前回合原子完成、回合间跨任务消息优先出队', '独立消息契约', '业务权限不足也返回 `BLOCKED`', '用户手册变更后的全工作流联动核验', '事故证据回归', '常规测试通过不能替代事故证据验收', '每条指令在执行前都必须完成一次与风险相称的前置检查', '第二次对抗式复审不是默认固定步骤', '操作者明确要求“对抗式审查”“再检查”或同义动作时', '不要求操作者复制新的提示词', '跨任务回执的改进闭环与最终出口硬门禁', '跨项目经验吸收', '可复用规则', '项目特定约定', '未证实建议', '未完成事项', '下一步行动建议', '规则根和其唯一本地实例', '根级画像写者', 'Pe1-(a)/(b)/(c)', '逐字段确认', '工作流规则、模板、检查脚本和根 `AGENTS.md` 的写入权属于当前唯一总指挥', '其他任务窗口只提交建议包', '只有 `READY / READY_WITH_RESTRICTIONS` 才生成并交付 `final-*`', 'schema v3', 'LEGACY_UNVERIFIED', 'Prepare-Handoff.mjs', '`event_id` 全链唯一')
         },
         @{
             Path = '总指挥工作流/第二代总指挥的工作模式/03-专项任务卡模板.md'
@@ -326,19 +426,19 @@ function Test-CommanderDurableWorkflowContract {
         },
         @{
             Path = '总指挥工作流/第二代总指挥的工作模式/05-模型选择与资源策略.md'
-            Required = @('无头优先与前台控制升级', '不得以非阻断通知代替确认', '不延伸为现有浏览器会话控制或 Computer Use 授权')
+            Required = @('无头优先与前台控制升级', '不以通知代替确认', '指定产物展示不延伸为个人会话、登录或跨应用操作授权')
         },
         @{
             Path = '总指挥工作流/第二代总指挥的工作模式/09-自动化授权与风险分级.md'
-            Required = @('已有授权随委派传递', '一次确认，范围内执行', '不能单独证明授权成立', '原始要求的最小必要摘录及可访问来源', '任务名称和原文摘录本身不是身份或授权证明', '普通进度告知只说明实际状态', '不重复执行有副作用的动作', '不得代理', '调度边界是当前回合，不是长期任务', '跨任务事件不得与本窗口原任务混合', '跨项目规则刷新回执', '规则刷新是纯规则加载事件', '规则加载只允许两种最终结果：`PASS` 或 `FAIL`', '项目问题确实影响后续工作时', '前台控制的独立授权门禁', '不得为方便观察而升级', '不自动授权控制已有个人浏览器会话', '完成后是否需要第二次对抗式复审', '不把每次测试、暂存或 Commit 拆成新的确认', '达到该状态后补齐最终远端执行卡', '直接执行请求与准备请求分流', '已有有效授权不重复索权', '已绑定的Head或载荷实质变化', '明确要求先展示最终载荷后另行确认', '回执先行硬门禁（事故回归）', '取得处理时隙后的第一项动作必须是实际发送该回执', '缺少真实发送证据的事件不得收口')
+            Required = @('已有授权随委派传递', '一次确认，范围内执行', '不能单独证明授权成立', '原始要求的最小必要摘录及可访问来源', '任务名称和原文摘录本身不是身份或授权证明', '普通进度告知只说明实际状态', '不重复执行有副作用的动作', '不得代理', '调度边界是当前回合，不是长期任务', '跨任务事件不得与本窗口原任务混合', '跨项目规则刷新回执', '规则刷新是纯规则加载事件', '规则加载只允许两种最终结果：`PASS` 或 `FAIL`', '项目问题确实影响后续工作时', '前台控制的独立授权门禁', '不按工具名称一律禁止', '不自动复用个人账号、会话、剪贴板或本地文件', '完成后是否需要第二次对抗式复审', '不把每次测试、暂存或 Commit 拆成新的确认', '达到该状态后补齐最终远端执行卡', '直接执行请求与准备请求分流', '已有有效授权不重复索权', '已绑定的Head或载荷实质变化', '明确要求先展示最终载荷后另行确认', '回执先行硬门禁（事故回归）', '取得处理时隙后的第一项动作必须是实际发送该回执', '缺少真实发送证据的事件不得收口')
         },
         @{
             Path = '总指挥工作流/第二代总指挥的工作模式/docs/AUTOMATED_TESTING_LESSONS.md'
-            Required = @('单样本输入保真预检（默认无头）', '把可见工具当作默认测试器', '执行方式与前台授权')
+            Required = @('单样本输入保真预检（默认无头）', '未区分隔离交互与前台控制', '执行方式与前台授权')
         },
         @{
             Path = '总指挥工作流/第二代总指挥的工作模式/11-操作者协作画像规范.md'
-            Required = @('两次操作者授权', '下一条独立消息', 'active_entry_limit', 'routing_alias_limit', '自然语言路由别名', 'profile_revision', '不得替代本轮授权', '独立应用能力未验证', 'unasked / enabled / paused / disabled / unavailable', '不再展示介绍', '不创建定时任务、后台轮询或独立自动化', '删除公开的 `11-操作者协作画像规范.md` 不是关闭方式', '全新项目的空白上下文', '新项目不再回到 `unasked`', 'Pe1-(c)', '建议写入画像 / 建议写入独立资料档案 / 建议脱敏 / 拒绝写入 / 证据不足', '默认唯一画像写者', '操作者画像资料.local/本人身份资料.local.md', '不得进入跨项目操作者画像', '项目索引、交接快照', '不参与新项目的自动画像接管', 'schema_version: 4')
+            Required = @('两次操作者授权', '下一条独立消息', 'active_entry_limit', 'routing_alias_limit', '自然语言路由别名', 'profile_revision', '不得替代本轮授权', '独立应用能力未验证', 'unasked / enabled / paused / disabled / unavailable', '不再展示介绍', '不创建定时任务、后台轮询或独立自动化', '删除公开的 `11-操作者协作画像规范.md` 不是关闭方式', '全新项目的空白上下文', '新项目不再回到 `unasked`', 'Pe1-(c)', '建议写入画像 / 建议写入独立资料档案 / 建议脱敏 / 拒绝写入 / 证据不足', '根级画像写者', '操作者画像资料.local/本人身份资料.local.md', '不得进入跨项目操作者画像', '项目索引、交接快照', '不参与新项目的自动画像接管', 'schema_version: 4')
         },
         @{
             Path = '总指挥工作流/第二代总指挥的工作模式/docs/EXECUTION_AND_INDEPENDENT_REVIEW.md'
@@ -366,7 +466,7 @@ function Test-CommanderDurableWorkflowContract {
         @{ Path = ($ruleRoot + '06-复盘与优化规则.md'); Required = @('隐藏内部编号、代码名和日志链接后', '不要求操作者复述考试') },
         @{ Path = ($ruleRoot + '总指挥轻量交接启动配置.md'); Required = @('区分完整读取、标题级定点读取和仅比对指纹', '输出截断须补读缺失部分') }
     )
-    $coreRules = Get-Content -LiteralPath (Join-Path $repoRoot ($ruleRoot + '02-总指挥核心规则.md')) -Raw
+    $coreRules = Get-Content -LiteralPath (Join-Path $repoRoot ($ruleRoot + '02-总指挥核心规则.md')) -Raw -Encoding utf8
     # Documentary routing and legacy entry checks; no live model or Git synchronization is exercised.
     $contracts += @(
         @{ Path = ($ruleRoot + '01-操作者操作手册.md'); Required = @('4H 和 4I 的区别', '场景 4I：按需安全汇合双方成果', '场景 1I：交接失败时如何处理', '交接失败时如何处理｜按故障分流', '异常恢复复制提示词', '不要新建第三个总指挥', '不要求我填写置信度或机器字段', '材料修复、候选通过或允许停旧都不等于正式交接完成', '<a id="场景-2d本地与远端长期分叉后的安全同步"></a>', '不因本提示词自动 Fetch', 'PR 合并后是否又追加提交', '可删除本地引用', '本地分支、远端分支、stash、worktree 分开列项', '本地实际仓库为准') },
@@ -383,7 +483,7 @@ function Test-CommanderDurableWorkflowContract {
 
     foreach ($contract in $contracts) {
         $fullPath = Join-Path $repoRoot $contract.Path
-        $content = Get-Content -LiteralPath $fullPath -Raw
+        $content = Get-Content -LiteralPath $fullPath -Raw -Encoding utf8
         foreach ($requiredText in $contract.Required) {
             if (-not $content.Contains($requiredText)) {
                 throw "第二代总指挥耐久契约缺失：$($contract.Path) -> $requiredText"
@@ -959,7 +1059,7 @@ function Test-TextFlowchartTemplateContract {
     )
 
     foreach ($contract in $contracts) {
-        $content = Get-Content -LiteralPath (Join-Path $repoRoot $contract.Path) -Raw
+        $content = Get-Content -LiteralPath (Join-Path $repoRoot $contract.Path) -Raw -Encoding utf8
         foreach ($requiredText in $contract.Required) {
             if (-not $content.Contains($requiredText)) {
                 throw "文字版流程图调用契约缺失：$($contract.Path) -> $requiredText"
@@ -976,7 +1076,7 @@ function Test-PipelineStepDeckTemplate {
         throw "链路分步演示模板尚未被 Git 精确跟踪：$relativePath"
     }
 
-    $content = Get-Content -LiteralPath (Join-Path $repoRoot $relativePath) -Raw
+    $content = Get-Content -LiteralPath (Join-Path $repoRoot $relativePath) -Raw -Encoding utf8
     foreach ($requiredText in @(
         'Content-Security-Policy',
         'id="previousStep"',
@@ -1057,7 +1157,7 @@ function Test-PipelineStepDeckEnhancementTool {
         }
     }
 
-    $runtime = Get-Content -LiteralPath (Join-Path $repoRoot $runtimePath) -Raw
+    $runtime = Get-Content -LiteralPath (Join-Path $repoRoot $runtimePath) -Raw -Encoding utf8
     foreach ($requiredText in @(
         'const VERSION = "2.0.1"',
         '[comparison-context]',
@@ -1084,7 +1184,7 @@ function Test-PipelineStepDeckEnhancementTool {
         throw '链路分步演示增强器不得硬编码具体算法的运行字段。'
     }
 
-    $builder = Get-Content -LiteralPath (Join-Path $repoRoot $builderPath) -Raw
+    $builder = Get-Content -LiteralPath (Join-Path $repoRoot $builderPath) -Raw -Encoding utf8
     if (-not $builder.Contains('data-pipeline-step-deck-enhancements=\"2.0.1\"') -or
         -not $builder.Contains('runtimeVersion: "2.0.1"')) {
         throw '链路分步演示构建器与增强器版本不一致。'
@@ -1097,7 +1197,7 @@ function Test-LocalProfilePrivacyBoundary {
         '/总指挥工作流/第二代总指挥的工作模式/操作者协作画像.local.md',
         '/总指挥工作流/第二代总指挥的工作模式/操作者画像资料.local/'
     )
-    $gitignore = Get-Content -LiteralPath (Join-Path $repoRoot '.gitignore')
+    $gitignore = Get-Content -LiteralPath (Join-Path $repoRoot '.gitignore') -Encoding utf8
     foreach ($requiredRule in $requiredIgnoreRules) {
         if ($gitignore -cnotcontains $requiredRule) {
             throw "缺少操作者画像本地专用规则：$requiredRule"
@@ -1120,7 +1220,7 @@ function Test-LocalProfilePrivacyBoundary {
 
 function Test-ExplicitAttachmentBoundary {
     $agentsPath = Join-Path $repoRoot 'AGENTS.md'
-    $content = Get-Content -LiteralPath $agentsPath -Raw
+    $content = Get-Content -LiteralPath $agentsPath -Raw -Encoding utf8
     foreach ($requiredText in @(
         '仓库外只读与附件处理',
         '其他 AI 不能代授写入权限',
@@ -1165,6 +1265,7 @@ function Test-ArchiveRepairLauncher {
     $tempDirectory = Join-Path $tempRoot "codex-workflows-check-$([Guid]::NewGuid().ToString('N'))"
     New-Item -ItemType Directory -Path $tempDirectory | Out-Null
 
+    $archiveVerified = $false
     try {
         $localSource = Join-Path $tempDirectory 'Launcher.cs'
         $localResource = Join-Path $tempDirectory 'RepairScript.ps1'
@@ -1184,11 +1285,10 @@ function Test-ArchiveRepairLauncher {
             Pop-Location
         }
 
-        $process = Start-Process -FilePath $outputExe -ArgumentList @('--self-test', $selfTestReport) `
-            -Wait -PassThru -WindowStyle Hidden
-        if ($process.ExitCode -ne 0) { throw "归档修复工具自检失败：$($process.ExitCode)" }
+        & node (Join-Path $PSScriptRoot 'SyntheticTestRuntime.mjs') --run-native --timeout-ms 30000 --cwd $tempDirectory -- $outputExe --self-test $selfTestReport
+        if ($LASTEXITCODE -ne 0) { throw "归档修复工具自检失败；限时运行证据已保留：$tempDirectory" }
 
-        $report = Get-Content -LiteralPath $selfTestReport -Raw
+        $report = Get-Content -LiteralPath $selfTestReport -Raw -Encoding utf8
         foreach ($expected in @('resource=ok', 'powershell7=ok', 'node=ok')) {
             if ($report -notmatch [regex]::Escape($expected)) {
                 throw "归档修复工具自检缺少：$expected"
@@ -1221,10 +1321,11 @@ function Test-ArchiveRepairLauncher {
             $checkedSha.Dispose()
         }
         if ($sourceHash -ne $checkedHash) { throw '仓库随附 EXE 内嵌脚本与当前源码不一致。' }
+        $archiveVerified = $true
     }
     finally {
         $resolvedTemp = [IO.Path]::GetFullPath($tempDirectory)
-        if ($resolvedTemp.StartsWith($tempRoot, [StringComparison]::OrdinalIgnoreCase) -and
+        if ($archiveVerified -and (Test-RepositoryLinkBoundary -Root $tempRoot -Target $resolvedTemp) -and
             (Split-Path $resolvedTemp -Leaf) -like 'codex-workflows-check-*') {
             Remove-Item -LiteralPath $resolvedTemp -Recurse -Force -ErrorAction SilentlyContinue
         }
@@ -1310,8 +1411,19 @@ function Test-TroubleshootingKnowledgeBase {
         @{ Argument = '--apply'; Signature = '安装已暂停'; Label = '安装' },
         @{ Argument = '--rollback-latest'; Signature = '回滚已暂停'; Label = '回滚' }
     )) {
-        $gateOutput = & node $migration $gate.Argument 2>&1 | Out-String
-        if ($LASTEXITCODE -eq 0 -or $gateOutput -notmatch [regex]::Escape($gate.Signature)) {
+        # Windows PowerShell 5.1 promotes native stderr to a terminating
+        # NativeCommandError under Stop. These gates intentionally expect a
+        # non-zero exit, so capture the output without changing the verdict.
+        $previousErrorActionPreference = $ErrorActionPreference
+        try {
+            $ErrorActionPreference = 'Continue'
+            $gateOutput = & node $migration $gate.Argument 2>&1 | Out-String
+            $gateExitCode = $LASTEXITCODE
+        }
+        finally {
+            $ErrorActionPreference = $previousErrorActionPreference
+        }
+        if ($gateExitCode -eq 0 -or $gateOutput -notmatch [regex]::Escape($gate.Signature)) {
             throw "真实$($gate.Label)入口没有失败关闭。"
         }
     }
@@ -1322,15 +1434,40 @@ Test-RepositoryPathPortability
 Test-MarkdownFiles
 Test-BilingualReadmes
 Test-PowerShellFiles
+& node (Join-Path $PSScriptRoot 'Test-SyntheticTestRuntime.mjs')
+if ($LASTEXITCODE -ne 0) { throw '合成测试隔离、等待时限和路径反例失败。' }
 & (Join-Path $PSScriptRoot 'Test-SessionRecordShape.ps1')
+& (Join-Path $PSScriptRoot 'Test-SessionDeskStartup.ps1')
+& (Join-Path $PSScriptRoot 'Test-SessionDeskQueryLifecycle.ps1')
+if ($LASTEXITCODE -ne 0) { throw '会话查询退出与清理回归失败。' }
 & (Join-Path $PSScriptRoot 'Test-SessionDeskOrder.ps1')
+& (Join-Path $PSScriptRoot 'Test-SessionScoreAvailability.ps1')
+& (Join-Path $PSScriptRoot 'Test-SessionContextObservation.ps1')
+& node (Join-Path $PSScriptRoot 'Test-TaskContinuationGuard.mjs')
+if ($LASTEXITCODE -ne 0) { throw '任务续执行守卫回归失败。' }
+# Test-WorkflowRefreshContract.mjs runs Test-SyncScenarios.mjs once below.
+& node (Join-Path $PSScriptRoot 'Test-StrictWorkspace.mjs')
+if ($LASTEXITCODE -ne 0) { throw '完整索引、工作树和链接边界回归失败。' }
+& node (Join-Path $PSScriptRoot 'Test-HandoffRemoteProbe.mjs')
+if ($LASTEXITCODE -ne 0) { throw '远端探测时限和失败关闭回归失败。' }
+& node (Join-Path $PSScriptRoot 'Test-HandoffAuthenticatedRef.mjs')
+if ($LASTEXITCODE -ne 0) { throw '受控认证查询、凭据管道和禁止跳转回归失败。' }
+& node (Join-Path $PSScriptRoot 'Test-SessionDeskLifecycle.cjs')
+if ($LASTEXITCODE -ne 0) { throw '会话工具测试请求与收尾时限回归失败。' }
+& node (Join-Path $PSScriptRoot 'Test-PipelineStepDeck.mjs')
+if ($LASTEXITCODE -ne 0) { throw '页面生成防覆盖与产物身份回归失败。' }
 Test-CommanderRuleVersion
+# Reject stale manual metadata and bindings before the long handoff suites.
+& node (Join-Path $PSScriptRoot 'Test-OperatorManualReferences.mjs')
+if ($LASTEXITCODE -ne 0) { throw '操作者手册场景编号、语义绑定与交叉引用检查失败。' }
 Test-CommanderDurableWorkflowContract
 Test-CommanderBoundedExecutionCases
 Test-CommanderIndependentReviewRoutingCases
 Test-PublicUsageCasePrivacyContract
 Test-CommanderNextActionConvergenceCases
 Test-CommanderContinuityRoutingCases
+& node (Join-Path $repoRoot '故障排查与解决经验/03-AI任务发消息没回应/TRB-006-发消息给AI任务却没回应/Test-CompactReminder.mjs')
+if ($LASTEXITCODE -ne 0) { throw '压缩恢复提醒离线输入输出检查失败；本检查不验证宿主触发。' }
 & node (Join-Path $PSScriptRoot 'Test-HandoffIdentity.mjs')
 if ($LASTEXITCODE -ne 0) { throw '成果连续性虚构检查失败。' }
 & node (Join-Path $PSScriptRoot 'Test-HandoffSeal.mjs')
@@ -1339,6 +1476,10 @@ if ($LASTEXITCODE -ne 0) { throw '交接封条链合成检查失败。' }
 if ($LASTEXITCODE -ne 0) { throw '接收方直接接管与中断恢复检查失败。' }
 & node (Join-Path $PSScriptRoot 'Test-Recover-CommanderAuthority.mjs')
 if ($LASTEXITCODE -ne 0) { throw '中央登记脱链异常恢复检查失败。' }
+& node (Join-Path $PSScriptRoot 'Test-Receiver-State-Adoption.mjs')
+if ($LASTEXITCODE -ne 0) { throw '接收方状态自动采用检查失败。' }
+& node (Join-Path $PSScriptRoot 'Test-FaultCommanderTakeover.mjs')
+if ($LASTEXITCODE -ne 0) { throw '无移交材料时的有限接任回归失败。' }
 & node (Join-Path $PSScriptRoot 'Test-ControlIdentity.mjs')
 if ($LASTEXITCODE -ne 0) { throw '交接控制面身份一致性检查失败。' }
 & node (Join-Path $PSScriptRoot 'Test-Prepare-Handoff.mjs')
@@ -1361,8 +1502,6 @@ if ($LASTEXITCODE -ne 0) { throw '额度保护方向、累计与重置回归失�
 if ($LASTEXITCODE -ne 0) { throw 'PR审阅交付聚合与只读载荷检查失败。' }
 & node (Join-Path $PSScriptRoot 'Test-OperatorManualExternalEntries.mjs')
 if ($LASTEXITCODE -ne 0) { throw '操作者手册与外部工具入口检查失败。' }
-& node (Join-Path $PSScriptRoot 'Test-OperatorManualReferences.mjs')
-if ($LASTEXITCODE -ne 0) { throw '操作者手册场景编号、语义绑定与交叉引用检查失败。' }
 & node (Join-Path $PSScriptRoot 'Test-Inspect-WorkspaceTracking.mjs')
 if ($LASTEXITCODE -ne 0) { throw '工作区跟踪检查失败。' }
 & node (Join-Path $PSScriptRoot 'Test-Inspect-WorktreeLifecycle.mjs')
@@ -1374,7 +1513,13 @@ Test-LocalProfilePrivacyBoundary
 Test-ExplicitAttachmentBoundary
 Test-ArchiveRepairLauncher
 Test-TroubleshootingKnowledgeBase
-Write-Host 'Repository quality checks: PASS'
+if ($IncludeBrowserTests) {
+    Test-SessionDeskBrowserRegressions
+    Write-Host 'Repository quality checks: PASS (including browser regressions)'
+} else {
+    Write-Host 'Browser regression: NOT_RUN (use -IncludeBrowserTests with installed Playwright and Edge)'
+    Write-Host 'Repository quality checks: PASS (non-browser checks only)'
+}
 # Expected rejection tests leave a nonzero native exit code. All checks above
 # must complete before reporting success to the invoking PowerShell/CI shell.
 $global:LASTEXITCODE = 0

@@ -1,5 +1,6 @@
 {
   "seal_directory": "<PROJECT_ROOT>/.private/handoff-seals",
+  "legacy_seal_directory": null,
   "source_root": "<PROJECT_ROOT>",
   "external_control_plane_root": null,
   "draft_path": "<HANDOFF_WORK_DIR>/handoff-draft-v3.json",

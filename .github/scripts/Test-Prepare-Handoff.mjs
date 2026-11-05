@@ -6,7 +6,8 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { classifyRuleDrift, detectUnicodeCollisions, findActiveControlPlaneIndexes, prepareFormalHandoff, readGitWorkspaceBaseline, readLiveRemoteBaseline, REQUIRED_RULES, verifyWorkspaceBaseline, verifyRuleManifest } from './Prepare-Handoff.mjs';
+import { classifyRuleDrift, detectUnicodeCollisions, findActiveControlPlaneIndexes, prepareFormalHandoff, readGitWorkspaceBaseline, readLiveRemoteBaseline, REQUIRED_RULES, verifyWorkspaceBaseline, verifyRuleManifest, handoffReceptionRoute } from './Prepare-Handoff.mjs';
+import { rebaseHandoffDraft } from './Rebase-Handoff-Draft.mjs';
 import { appendSeal, verifyChain } from './HandoffSeal.mjs';
 
 const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'prepare-handoff-'));
@@ -19,6 +20,31 @@ const stamp = '2026-09-21T02:00:00.000Z';
 const LONG_STATUS_PATH = `状态/${'长目录'.repeat(30)}/${'嵌套'.repeat(30)}/索引.md`;
 let passed = 0;
 const check = (name, fn) => { fn(); passed++; console.log(`PASS: ${name}`); };
+
+check('reception routing preserves restrictions without inventing operator authority', () => {
+  for (const restrictions of [[], ['REMOTE_UNOBSERVED']]) {
+    const route = handoffReceptionRoute({ restrictions });
+    assert.equal(route.protocol, 'DIRECT_OPERATOR_V1');
+    assert.deepEqual(route.inherited_restrictions, restrictions);
+    assert.equal(route.current_operator_message_required, true);
+    assert.equal(route.confirmation_scope, 'HANDOFF_PREPARE_COMMIT_ONLY');
+  }
+  for (const restrictions of [
+    ['HISTORICAL_WORKSPACE_PRESERVATION_UNVERIFIED'],
+    ['HISTORICAL_SOURCE_PRESERVATION_UNVERIFIED'],
+    ['HISTORICAL_WORKSPACE_PRESERVATION_UNVERIFIED', 'HISTORICAL_SOURCE_PRESERVATION_UNVERIFIED', 'REMOTE_UNOBSERVED']
+  ]) {
+    const route = handoffReceptionRoute({ restrictions });
+    assert.equal(route.protocol, 'CONTROL_ONLY_V1');
+    assert.deepEqual(route.inherited_restrictions, restrictions);
+    assert.equal(route.current_operator_message_required, true);
+    assert.equal(route.confirmation_scope, 'CONTROL_ONLY_TAKEOVER');
+    assert.equal(Object.hasOwn(route, 'transfer_confirmed'), false);
+  }
+  for (const restrictions of [null, 'REMOTE_UNOBSERVED', ['UNSUPPORTED_RESTRICTION'], [null]]) {
+    assert.throws(() => handoffReceptionRoute({ restrictions }), /INPUT_REQUIRED/);
+  }
+});
 
 check('rule drift classifier separates same, compatible, affected and unavailable epochs', () => {
   const pinned = { rule_version: '2026-10-05.21', manifest_sha256: 'a'.repeat(64) };
@@ -59,7 +85,9 @@ function writeCurrent(relative, body) {
 }
 
 function makeDraft(eventId) {
-  return {
+  const head = spawnSync('git', ['-C', sourceRoot, 'rev-parse', 'HEAD'], { encoding: 'utf8' });
+  assert.equal(head.status, 0, head.stderr);
+  const draft = {
     schema_version: 3,
     record_type: 'handoff-seal',
     generation: 1,
@@ -71,18 +99,20 @@ function makeDraft(eventId) {
     sealed_at: stamp,
     event_id: eventId,
     sources: {
+      task_contract: writeCurrent('task_plan.md', '<a id="current-plan"></a>'),
+      progress: writeCurrent('progress.md', '# Progress Log'),
       central_entry: writeCurrent('状态/入口.md', 'navigation'),
       workflow_enablement: writeCurrent('状态/启用声明.md', '状态：enabled'),
       central_work_items: writeCurrent('状态/中央 工作项.md', 'central'),
       current_view: writeCurrent('状态/当前视图-e\u0301.md', 'view'),
-      status_index: writeCurrent(LONG_STATUS_PATH, `项目键：synthetic\n远端目标：refs/heads/main\nHEAD=${'b'.repeat(40)}\n规则清单摘要：${'0'.repeat(64)}`)
+      status_index: writeCurrent(LONG_STATUS_PATH, `项目键：synthetic\n远端目标：refs/heads/main\nHEAD=${head.stdout.trim()}\n规则清单摘要：${'0'.repeat(64)}`)
     },
     source_digest_status: 'PASS',
     rule_baseline: { rule_version: '2026-09-28.4', manifest_sha256: 'e'.repeat(64) },
     objective: { summary: 'synthetic formal handoff', breakpoint: 'candidate verification' },
     prohibitions: ['remote-write'],
     communications: { status: 'NONE' },
-    workspace: { root_ref: '<PROJECT_ROOT>', branch: 'main', head: 'b'.repeat(40), tree: 'c'.repeat(40), staged_count: 0, tracked_modified_count: 0, untracked_count: 0, required_untracked: [], worktree_fingerprint: { algorithm: 'git-diff-binary+untracked-content-sha256-v1', tracked_diff_sha256: 'f'.repeat(64), untracked_digest: 'a'.repeat(64) } },
+    workspace: { root_ref: '<PROJECT_ROOT>' },
     remote: { status: 'PASS', default_ref: 'refs/heads/main', head: 'd'.repeat(40), observed_at: stamp },
     control_handoff_confidence: 'HIGH',
     candidate_verification_status: 'PASS',
@@ -95,6 +125,9 @@ function makeDraft(eventId) {
     invalidation_conditions: ['source drift'],
     seal_digest: ''
   };
+  draft.workspace = { root_ref: '<PROJECT_ROOT>', ...readGitWorkspaceBaseline(sourceRoot), required_untracked: [] };
+  draft.remote.head = draft.workspace.head;
+  return draft;
 }
 
 function writeJson(file, value) {
@@ -118,6 +151,7 @@ function prepareCase(number, eventId) {
   assert.notEqual(updatedStatusBody, statusBody, 'synthetic status fixture must include a zeroed rule manifest marker');
   fs.writeFileSync(statusPath, updatedStatusBody, 'utf8');
   draft.sources.status_index.digest = sha256(fs.readFileSync(statusPath));
+  draft.workspace = { ...draft.workspace, ...readGitWorkspaceBaseline(sourceRoot) };
   writeJson(draftPath, draft);
   writeJson(configPath, {
     seal_directory: path.join(sourceRoot, '.handoff-private', `case-${number}`),
@@ -135,8 +169,13 @@ function prepareCase(number, eventId) {
 
 try {
   fs.mkdirSync(sourceRoot, { recursive: true });
-  spawnSync('git', ['init', '--quiet', sourceRoot], { stdio: 'inherit' });
+  spawnSync('git', ['init', '--quiet', '--initial-branch=main', sourceRoot], { stdio: 'inherit' });
   fs.writeFileSync(path.join(sourceRoot, '.gitignore'), `.handoff-private/\n${LONG_STATUS_PATH}\n${LONG_STATUS_PATH}.handoff-control.lock\n${LONG_STATUS_PATH}.handoff-transaction.json\n${LONG_STATUS_PATH}.*.tmp\n${LONG_STATUS_PATH}.handoff-transaction.json.*.tmp\n`, 'utf8');
+  for (const args of [
+    ['add', '--', '.gitignore'],
+    ['-c', 'user.name=Synthetic', '-c', 'user.email=synthetic@example.invalid', 'commit', '--quiet', '-m', 'synthetic fixture'],
+    ['remote', 'add', 'origin', sourceRoot]
+  ]) assert.equal(spawnSync('git', ['-C', sourceRoot, ...args], { encoding: 'utf8' }).status, 0);
   fs.writeFileSync(path.join(temp, 'snapshot-template.md'), '# {{SNAPSHOT_ID}}\nseal={{SEAL_DIGEST}}\ncutoff={{FACT_CUTOFF}}\nevent={{EVENT_ID}}\nverify={{VERIFICATION_COMMAND}}\n', 'utf8');
   const workflowFilesRoot = path.join(workflowRoot, '总指挥工作流', '第二代总指挥的工作模式');
   const ruleFilePath = path_ref => path.join(path_ref.startsWith('.github/') || path_ref.startsWith('总指挥工作流/') ? workflowRoot : workflowFilesRoot, path_ref);
@@ -174,6 +213,35 @@ try {
 
   spawnSync('git', ['-C', sourceRoot, 'config', 'core.quotePath', 'true']);
   const first = prepareCase(1, 'formal-event-1');
+  check('prepare rejects missing receiver progress before sealing or final delivery', () => {
+    const sample = prepareCase(1001, 'readiness-missing');
+    const config = readJsonForTest(sample.configPath), draft = readJsonForTest(config.draft_path);
+    delete draft.sources.progress;
+    writeJson(config.draft_path, draft);
+    assert.throws(() => prepareFormalHandoff(sample.configPath), /receiver readiness.*progress/i);
+    assert.equal(fs.existsSync(sample.finalPath), false);
+    assert.equal(fs.existsSync(sample.receiptPath), false);
+    assert.equal(fs.readdirSync(config.seal_directory).length, 0);
+  });
+  check('prepare separates JSON contract from an independently sealed Markdown plan', () => {
+    const sample = prepareCase(1002, 'readiness-json');
+    const config = readJsonForTest(sample.configPath), draft = readJsonForTest(config.draft_path);
+    config.preflight_only = true; writeJson(sample.configPath, config);
+    const contract = path.join(sourceRoot, 'task-contract.json');
+    fs.writeFileSync(contract, '{"goal":"synthetic immutable contract"}\n');
+    draft.sources.task_contract = { ...draft.sources.task_contract, path_ref: 'task-contract.json', digest: sha256(fs.readFileSync(contract)) };
+    draft.workspace = { ...draft.workspace, ...readGitWorkspaceBaseline(sourceRoot) };
+    writeJson(config.draft_path, draft);
+    assert.throws(() => prepareFormalHandoff(sample.configPath), /receiver readiness.*Markdown/);
+    draft.sources.task_plan = { ...draft.sources.task_contract, path_ref: 'task_plan.md',
+      digest: sha256(fs.readFileSync(path.join(sourceRoot, 'task_plan.md'))) };
+    writeJson(config.draft_path, draft);
+    assert.match(prepareFormalHandoff(sample.configPath).status, /^READY/);
+    assert.deepEqual(JSON.parse(fs.readFileSync(contract)), { goal: 'synthetic immutable contract' });
+    // Restore the shared source workspace before the existing preparation matrix.
+    fs.unlinkSync(contract);
+    prepareCase(1003, 'readiness-restore');
+  });
   const firstResult = prepareFormalHandoff(first.configPath);
   check('formal artifact is finalized after seal and source verification', () => {
     assert.equal(firstResult.chain_status, 'PASS');
@@ -217,11 +285,12 @@ try {
   const lifecycle = prepareCase(90, 'lifecycle-first');
   const firstLifecycle = prepareFormalHandoff(lifecycle.configPath);
   const lifecycleConfig = readJsonForTest(lifecycle.configPath);
-  const nextDraft = readJsonForTest(lifecycleConfig.draft_path);
+  const nextDraft = structuredClone(verifyChain(lifecycleConfig.seal_directory, { sourceRoot }).latest);
   nextDraft.event_id = 'lifecycle-next';
   const progressPath = path.join(sourceRoot, nextDraft.sources.central_work_items.path_ref);
   fs.appendFileSync(progressPath, '\nNormal saved progress before another handoff.\n');
   nextDraft.sources.central_work_items.digest = sha256(fs.readFileSync(progressPath));
+  nextDraft.workspace = { ...nextDraft.workspace, ...readGitWorkspaceBaseline(sourceRoot) };
   lifecycleConfig.draft_path = path.join(path.dirname(lifecycle.configPath), 'next-draft.json');
   lifecycleConfig.final_output_path = path.join(outputRoot, 'sample-project-commander-handoff-20260921-final-91.md');
   lifecycleConfig.receipt_output_path = path.join(outputRoot, 'receipt-91.json');
@@ -315,9 +384,17 @@ try {
 
   const retryable = prepareCase(12, 'formal-event-12');
   check('artifact retry reuses an already appended seal', () => {
-    const first = prepareFormalHandoff(retryable.configPath);
-    fs.rmSync(retryable.finalPath, { force: true });
-    fs.rmSync(retryable.receiptPath, { force: true });
+    const originalLink = fs.linkSync;
+    try {
+      fs.linkSync = (from, to) => {
+        if (to === retryable.finalPath) throw Object.assign(new Error('synthetic final publication failure'), { code: 'EIO' });
+        return originalLink(from, to);
+      };
+      assert.throws(() => prepareFormalHandoff(retryable.configPath), /synthetic final publication failure/);
+    } finally { fs.linkSync = originalLink; }
+    assert.equal(fs.existsSync(retryable.finalPath), false);
+    const beforeReceipt = fs.readFileSync(retryable.receiptPath);
+    const first = { receipt: JSON.parse(beforeReceipt) };
     const retryConfig = readJsonForTest(retryable.configPath);
     writeJson(retryable.configPath, { ...retryConfig, preflight_only: true });
     assert.equal(prepareFormalHandoff(retryable.configPath).append_action, 'REUSE');
@@ -325,8 +402,112 @@ try {
     const second = prepareFormalHandoff(retryable.configPath);
     assert.equal(second.receipt.seal_digest, first.receipt.seal_digest);
     assert.equal(second.receipt.event_id, first.receipt.event_id);
+    assert.deepEqual(fs.readFileSync(retryable.receiptPath), beforeReceipt);
+    assert.deepEqual(prepareFormalHandoff(retryable.configPath).receipt, second.receipt);
+    const correctFinal = fs.readFileSync(retryable.finalPath);
+    fs.writeFileSync(retryable.finalPath, 'synthetic conflicting artifact');
+    assert.throws(() => prepareFormalHandoff(retryable.configPath), /conflicts/);
+    assert.equal(fs.readFileSync(retryable.finalPath, 'utf8'), 'synthetic conflicting artifact');
+    fs.writeFileSync(retryable.finalPath, correctFinal);
     const seals = fs.readdirSync(path.resolve(sourceRoot, '.handoff-private', 'case-12')).filter(name => name.startsWith('handoff-state.'));
     assert.equal(seals.length, 1);
+  });
+  for (const artifactPath of [retryable.receiptPath, retryable.finalPath]) check(`preflight preserves and rejects conflicting ${artifactPath === retryable.receiptPath ? 'receipt' : 'snapshot'} bytes`, () => {
+    const config = readJsonForTest(retryable.configPath);
+    const before = fs.readFileSync(artifactPath);
+    const sealDir = config.seal_directory;
+    const sealsBefore = fs.readdirSync(sealDir);
+    const conflict = Buffer.from('synthetic conflicting artifact');
+    fs.writeFileSync(artifactPath, conflict);
+    writeJson(retryable.configPath, { ...config, preflight_only: true });
+    try {
+      assert.throws(() => prepareFormalHandoff(retryable.configPath), /conflicts/);
+      assert.deepEqual(fs.readFileSync(artifactPath), conflict);
+      assert.deepEqual(fs.readdirSync(sealDir), sealsBefore);
+      fs.writeFileSync(artifactPath, before);
+      assert.equal(prepareFormalHandoff(retryable.configPath).append_action, 'REUSE');
+      assert.deepEqual(fs.readFileSync(artifactPath), before);
+      assert.deepEqual(fs.readdirSync(sealDir), sealsBefore);
+    } finally {
+      fs.writeFileSync(artifactPath, before);
+      writeJson(retryable.configPath, config);
+    }
+  });
+  for (const [number, kind] of [[9001, 'receipt'], [9002, 'snapshot']]) check(`${kind} temporary unlink failure preserves a verifiable pair and permits exact-event retry`, () => {
+    const input = prepareCase(number, `cleanup-event-${number}`);
+    const target = kind === 'receipt' ? input.receiptPath : input.finalPath;
+    const originalUnlink = fs.unlinkSync;
+    let leftover;
+    fs.unlinkSync = function (file) {
+      if (path.basename(String(file)).startsWith(`.${path.basename(target)}.`) && String(file).endsWith('.tmp')) {
+        leftover = String(file);
+        throw Object.assign(new Error('synthetic unlink denied'), { code: 'EACCES' });
+      }
+      return originalUnlink.call(this, file);
+    };
+    let result;
+    try { result = prepareFormalHandoff(input.configPath); } finally { fs.unlinkSync = originalUnlink; }
+    assert.equal(result.cleanup_pending.length, 1);
+    assert.ok(fs.existsSync(leftover));
+    const preserved = fs.readFileSync(leftover);
+    const config = readJsonForTest(input.configPath);
+    const seals = fs.readdirSync(config.seal_directory);
+    writeJson(input.configPath, { ...config, preflight_only: true });
+    assert.equal(prepareFormalHandoff(input.configPath).append_action, 'REUSE');
+    writeJson(input.configPath, config);
+    assert.equal(prepareFormalHandoff(input.configPath).receipt.seal_digest, result.receipt.seal_digest);
+    assert.deepEqual(fs.readFileSync(leftover), preserved);
+    assert.deepEqual(fs.readdirSync(config.seal_directory), seals);
+  });
+  check('replaced snapshot temporary path is preserved and cleanup cannot hide the publication error', () => {
+    const input = prepareCase(9003, 'cleanup-replacement-event');
+    const originalLink = fs.linkSync, originalUnlink = fs.unlinkSync;
+    let replacement;
+    fs.linkSync = function (from, to) {
+      if (to === input.receiptPath) {
+        const name = fs.readdirSync(path.dirname(input.finalPath)).find(name => name.startsWith(`.${path.basename(input.finalPath)}.`) && name.endsWith('.tmp'));
+        replacement = path.join(path.dirname(input.finalPath), name);
+        originalUnlink(replacement);
+        fs.writeFileSync(replacement, 'synthetic unrelated replacement', { flag: 'wx' });
+        throw new Error('synthetic original receipt publication error');
+      }
+      return originalLink.call(this, from, to);
+    };
+    try { assert.throws(() => prepareFormalHandoff(input.configPath), /original receipt publication error.*temporary cleanup blocked.*replaced/); }
+    finally { fs.linkSync = originalLink; }
+    assert.equal(fs.readFileSync(replacement, 'utf8'), 'synthetic unrelated replacement');
+    assert.equal(fs.existsSync(input.finalPath), false);
+  });
+  check('cleanup denial retains the original failure and preserves the owned temporary file', () => {
+    const input = prepareCase(9004, 'cleanup-primary-error-event');
+    const originalLink = fs.linkSync, originalUnlink = fs.unlinkSync;
+    let leftover;
+    fs.linkSync = function (from, to) {
+      if (to === input.finalPath) throw new Error('synthetic original snapshot publication error');
+      return originalLink.call(this, from, to);
+    };
+    fs.unlinkSync = function (file) {
+      if (path.basename(String(file)).startsWith(`.${path.basename(input.finalPath)}.`) && String(file).endsWith('.tmp')) {
+        leftover = String(file);
+        throw Object.assign(new Error('synthetic cleanup denied'), { code: 'EACCES' });
+      }
+      return originalUnlink.call(this, file);
+    };
+    try { assert.throws(() => prepareFormalHandoff(input.configPath), /original snapshot publication error.*temporary cleanup blocked.*cleanup denied/); }
+    finally { fs.linkSync = originalLink; fs.unlinkSync = originalUnlink; }
+    assert.equal(fs.existsSync(leftover), true);
+    assert.equal(fs.existsSync(input.finalPath), false);
+  });
+  check('unbound hard links are rejected without changing either linked file', () => {
+    const input = prepareCase(9005, 'unbound-hardlink-event');
+    prepareFormalHandoff(input.configPath);
+    const unrelated = path.join(outputRoot, 'unrelated-link.txt');
+    fs.linkSync(input.finalPath, unrelated);
+    const before = fs.readFileSync(input.finalPath), config = readJsonForTest(input.configPath);
+    writeJson(input.configPath, { ...config, preflight_only: true });
+    assert.throws(() => prepareFormalHandoff(input.configPath), /unbound hard link/);
+    assert.deepEqual(fs.readFileSync(input.finalPath), before);
+    assert.deepEqual(fs.readFileSync(unrelated), before);
   });
 
   spawnSync('git', ['-C', sourceRoot, 'config', 'core.quotePath', 'false']);
@@ -467,6 +648,7 @@ try {
   const registryPath = path.join(sourceRoot, 'control-plane-registry.json');
   writeJson(registryPath, { schema_version: 1, canonical_index: registeredDraft.sources.status_index.path_ref, legacy_indexes: [{ path: 'legacy/AI状态索引.md', status: 'HISTORICAL_ONLY', sha256: sha256(fs.readFileSync(legacyPath)), reason: 'preserved historical evidence' }] });
   registeredDraft.sources.control_plane_registry = { owner: 'current-commander', path_ref: 'control-plane-registry.json', digest: sha256(fs.readFileSync(registryPath)), fact_cutoff: stamp };
+  registeredDraft.workspace = { ...registeredDraft.workspace, ...readGitWorkspaceBaseline(sourceRoot) };
   writeJson(path.join(path.dirname(registeredLegacy.configPath), 'draft.json'), registeredDraft);
   check('registered historical control plane does not block formal output', () => {
     const result = prepareFormalHandoff(registeredLegacy.configPath);
@@ -507,6 +689,13 @@ try {
     fs.writeFileSync(path.join(workspaceProbe, 'untracked.txt'), 'two\n', 'utf8');
     assert.ok(verifyWorkspaceBaseline(workspaceProbe, sameCountBaseline).some(error => error.includes('worktree_fingerprint.untracked_digest')));
   });
+  check('required workspace evidence reports the changed path instead of only an aggregate drift', () => {
+    const required = path.join(workspaceProbe, 'progress.md');
+    fs.writeFileSync(required, 'before\n', 'utf8');
+    const baseline = { ...readGitWorkspaceBaseline(workspaceProbe, ['progress.md']), required_untracked: [{ path_ref: 'progress.md', sha256: sha256(fs.readFileSync(required)), reason: 'current progress evidence' }] };
+    fs.writeFileSync(required, 'after\n', 'utf8');
+    assert.ok(verifyWorkspaceBaseline(workspaceProbe, baseline).some(error => error === 'workspace required file drift: progress.md'));
+  });
   check('live remote probe observes the advertised head instead of a stale draft value', () => {
     const remoteBare = path.join(temp, 'remote-probe.git');
     const remoteWork = path.join(temp, 'remote-probe-work');
@@ -543,9 +732,61 @@ try {
   // The earlier legacy-drift rejection deliberately left an invalid index.
   // Retire only that synthetic file before exercising unrelated remote gates.
   fs.unlinkSync(legacyPath);
-  fixtureGit(['add', '--', '.gitignore']);
-  fixtureGit(['-c', 'user.name=Test', '-c', 'user.email=test@example.invalid', 'commit', '--quiet', '-m', 'synthetic baseline']);
-  fixtureGit(['branch', '-M', 'main']);
+  // Migration cases deliberately observe an unavailable remote.
+  fixtureGit(['remote', 'remove', 'origin']);
+  for (const schema of [3, 4]) check(`CURRENT_MIGRATION v${schema} rebase creates a fresh v4 observation and refreshes required evidence`, () => {
+    const input = prepareCase(70 + schema, `migration-observation-input-v${schema}`);
+    const config = readJsonForTest(input.configPath);
+    const draft = readJsonForTest(config.draft_path);
+    const progressPath = path.join(sourceRoot, 'migration-progress.md');
+    fs.writeFileSync(progressPath, 'current progress\n', 'utf8');
+    draft.schema_version = schema;
+    if (schema === 4) draft.restrictions = ['HISTORICAL_WORKSPACE_PRESERVATION_UNVERIFIED'];
+    draft.handoff_phase = 'CURRENT_MIGRATION';
+    draft.switch_status = 'COMPLETED';
+    draft.old_writer_status = 'STOPPED_DISPATCH';
+    draft.seal_sequence = 1;
+    draft.previous_seal_digest = null;
+    draft.transition = null;
+    draft.migration = {
+      legacy_latest_seal_digest: 'a'.repeat(64),
+      legacy_generation: 1,
+      legacy_writer_id: 'COMMANDER-GEN-1',
+      migrated_at: stamp,
+      basis: 'CURRENT_ONLY_NO_RETROACTIVE_TRANSITION'
+    };
+    draft.workspace = {
+      ...draft.workspace,
+      ...readGitWorkspaceBaseline(sourceRoot, ['migration-progress.md']),
+      required_untracked: [{ path_ref: 'migration-progress.md', sha256: '0'.repeat(64), reason: 'current progress evidence' }]
+    };
+    writeJson(config.draft_path, draft);
+    const inputBytes = fs.readFileSync(config.draft_path);
+    const outputPath = path.join(path.dirname(config.draft_path), 'rebased-observation.json');
+    const result = rebaseHandoffDraft(input.configPath, outputPath);
+    const observation = readJsonForTest(outputPath);
+    assert.equal(result.remote_status, 'UNKNOWN');
+    assert.equal(observation.schema_version, 4);
+    assert(observation.restrictions.includes('HISTORICAL_WORKSPACE_PRESERVATION_UNVERIFIED'));
+    assert.equal(observation.handoff_phase, 'MATERIAL_PREPARED');
+    assert.equal(observation.transition, null);
+    assert.equal(observation.migration, null);
+    assert.equal(observation.switch_status, 'READY_WITH_RESTRICTIONS');
+    assert.equal(observation.candidate_verification_status, 'PASS_WITH_RESTRICTIONS');
+    assert.equal(observation.workspace.required_untracked[0].sha256, sha256(fs.readFileSync(progressPath)));
+    assert.deepEqual(fs.readFileSync(config.draft_path), inputBytes);
+    assert(observation.restrictions.includes('REMOTE_UNOBSERVED'));
+    const source = Object.values(draft.sources)[0];
+    const sourceFile = path.resolve(sourceRoot, source.path_ref), before = fs.readFileSync(sourceFile);
+    fs.appendFileSync(sourceFile, 'unexpected source edit');
+    assert.throws(() => rebaseHandoffDraft(input.configPath, `${outputPath}.rejected`), /sealed migration source changed/);
+    assert(!fs.existsSync(`${outputPath}.rejected`));
+    fs.writeFileSync(sourceFile, before);
+    draft.remote = { status: 'NOT_APPLICABLE', default_ref: 'origin/main', head: null, observed_at: null };
+    writeJson(config.draft_path, draft);
+    assert.throws(() => rebaseHandoffDraft(input.configPath, `${outputPath}.offline`), /offline handoff is not supported/);
+    assert(!fs.existsSync(`${outputPath}.offline`));
+  });
   fixtureGit(['remote', 'add', 'origin', sourceRoot]);
   const restrictedCase = number => {
     const input = prepareCase(number, `restricted-event-${number}`);
@@ -564,6 +805,16 @@ try {
     writeJson(input.configPath, config);
     return { ...input, config, draft };
   };
+  for (const [index, status] of ['FAIL', 'NOT_APPLICABLE'].entries()) for (const preflightOnly of [true, false]) check(`restricted ${preflightOnly ? 'preflight' : 'formal'} rejects remote ${status} without artifacts`, () => {
+    const input = restrictedCase(700 + index * 2 + Number(preflightOnly));
+    input.draft.remote.status = status;
+    input.config.preflight_only = preflightOnly;
+    writeJson(input.config.draft_path, input.draft);
+    writeJson(input.configPath, input.config);
+    assert.throws(() => prepareFormalHandoff(input.configPath), /draft preflight validation failed:.*READY_WITH_RESTRICTIONS.*remote/);
+    for (const target of [input.finalPath, input.receiptPath]) assert.equal(fs.existsSync(target), false);
+    assert.deepEqual(fs.existsSync(input.config.seal_directory) ? fs.readdirSync(input.config.seal_directory) : [], []);
+  });
   check('restricted preflight still rejects an observed remote HEAD conflict', () => {
     const input = restrictedCase(401);
     input.draft.remote.head = 'd'.repeat(40);
@@ -594,6 +845,8 @@ try {
     const externalRoot = path.join(temp, `外部 中央-${number}`);
     fs.mkdirSync(externalRoot);
     const inventoryPath = path.join(sourceRoot, 'inventory.json');
+    input.draft.sources.task_plan = input.draft.sources.task_contract;
+    delete input.draft.sources.task_contract;
     fs.writeFileSync(inventoryPath, JSON.stringify({ loading_record: '材料\\loading.json', task_contract: '材料/task-contract.md' }));
     fs.mkdirSync(path.join(sourceRoot, '材料'), { recursive: true });
     fs.writeFileSync(path.join(sourceRoot, '材料/loading.json'), '{}\n');
@@ -627,6 +880,69 @@ try {
     assert.match(body, /机器记录指针，读取前核验/);
     assert.match(body, /--summary/);
     assert.doesNotMatch(body, /stale baseline|old-candidate|{{[A-Z_]+}}/);
+  });
+  check('formal historical restrictions deliver the control-only route and one complete operator confirmation', () => {
+    const input = hydrationCase(490);
+    input.draft.schema_version = 4;
+    input.draft.restrictions = ['HISTORICAL_WORKSPACE_PRESERVATION_UNVERIFIED', 'HISTORICAL_SOURCE_PRESERVATION_UNVERIFIED'];
+    input.draft.runtime_acceptance_status = 'NOT_RUN';
+    writeJson(input.config.draft_path, input.draft);
+    const result = prepareFormalHandoff(input.configPath);
+    assert.equal(result.receipt.reception_route?.protocol, 'CONTROL_ONLY_V1');
+    assert.equal(result.receipt.reception_route.entry, '.github/scripts/Recover-CommanderAuthority.mjs');
+    const body = fs.readFileSync(input.finalPath, 'utf8');
+    assert.match(body, /CONTROL_ONLY_V1/);
+    assert.match(body, /Recover-CommanderAuthority\.mjs/);
+    assert.match(body, /保留历史保全未认证限制/);
+    assert.match(body, /仅移交中央控制权/);
+    assert.match(body, /当前接收/);
+    assert.match(body, /不恢复业务、自动化或远端权限/);
+    const manual = fs.readFileSync(path.join(workflowFilesRoot, '01-操作者操作手册.md'), 'utf8');
+    const prompt = manual.split('<a id="scenario-commander-takeover"></a>')[1]
+      .split('<a id="scenario-ordinary-handoff"></a>')[0].match(/```text\r?\n([\s\S]*?)\r?\n```/)[1];
+    assert.ok(body.includes(prompt), 'delivered confirmation must be the exact verified manual prompt');
+    assert.equal(body.split('<!-- HANDOFF_RECEPTION:BEGIN -->').length, 2);
+    assert.equal(result.receipt.reception_route.current_operator_message_required, true);
+    assert.deepEqual(result.receipt.reception_route.inherited_restrictions, input.draft.restrictions);
+  });
+  check('ordinary and remote-only formal artifacts retain the direct route and single confirmation', () => {
+    for (const [number, restrictions] of [[491, []], [492, ['REMOTE_UNOBSERVED']]]) {
+      const input = hydrationCase(number);
+      input.draft.schema_version = 4;
+      input.draft.restrictions = restrictions;
+      input.draft.runtime_acceptance_status = 'NOT_RUN';
+      if (restrictions.includes('REMOTE_UNOBSERVED')) {
+        input.draft.remote = { ...input.draft.remote, status: 'UNKNOWN', head: null, observed_at: null };
+      }
+      writeJson(input.config.draft_path, input.draft);
+      const result = prepareFormalHandoff(input.configPath);
+      assert.equal(result.receipt.reception_route.protocol, 'DIRECT_OPERATOR_V1');
+      assert.equal(result.receipt.reception_route.entry, '.github/scripts/Takeover-Handoff.mjs');
+      assert.deepEqual(result.receipt.reception_route.inherited_restrictions, restrictions);
+      assert.match(fs.readFileSync(input.finalPath, 'utf8'), /附件内的副本本身不是授权/);
+    }
+  });
+  for (const [number, historical, stale] of [
+    [493, true, '接收方须沿场景1D使用现有 `Verify-Handoff-Candidate.mjs`。'],
+    [494, true, 'node ".github/scripts/Takeover-Handoff.mjs" commit "config.json"'],
+    [495, true, '<!-- HANDOFF_RECEPTION:BEGIN -->wrong route<!-- HANDOFF_RECEPTION:END -->'],
+    [496, true, 'Run `.github/scripts/Takeover-Handoff.mjs` commit config.json'],
+    [497, true, 'Receiver entry: `Verify-Handoff-Candidate.mjs`'],
+    [498, true, '接管协议：DIRECT_OPERATOR_V1'],
+    [499, false, 'Receiver entry: `.github/scripts/Recover-CommanderAuthority.mjs`'],
+    [501, false, '接管协议：CONTROL_ONLY_V1'],
+    [502, true, 'Run `.github/scripts/takeover-handoff.mjs` commit config.json']
+  ]) check(`snapshot template cannot contradict the generated route (${number})`, () => {
+    const input = hydrationCase(number);
+    input.draft.schema_version = 4;
+    input.draft.restrictions = historical ? ['HISTORICAL_WORKSPACE_PRESERVATION_UNVERIFIED'] : [];
+    input.draft.runtime_acceptance_status = 'NOT_RUN';
+    fs.appendFileSync(input.templatePath, `${stale}\n`);
+    writeJson(input.config.draft_path, input.draft);
+    assert.throws(() => prepareFormalHandoff(input.configPath), /INPUT_REQUIRED:.*(?:conflicting entry|generated reception instructions)/);
+    assert.equal(fs.existsSync(input.finalPath), false);
+    assert.equal(fs.existsSync(input.receiptPath), false);
+    assert.deepEqual(fs.readdirSync(input.config.seal_directory), []);
   });
   let hydrationNumber = 410;
   for (const [field, stale] of [

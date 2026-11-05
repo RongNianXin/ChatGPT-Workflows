@@ -5,16 +5,18 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { spawn, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { appendSeal, prepareTransition, verifyChain, verifyControlIdentity, validateSeal } from './HandoffSeal.mjs';
+import { appendSeal, prepareTransition, readChain, verifyChain, verifyControlIdentity, validateSeal } from './HandoffSeal.mjs';
 import { readGitWorkspaceBaseline } from './Prepare-Handoff.mjs';
-import { takeoverHandoff, recoverTakeover, rollbackTakeover } from './Takeover-Handoff.mjs';
+import { takeoverHandoff, recoverTakeover, rollbackTakeover, renderCurrent } from './Takeover-Handoff.mjs';
 import { controlPaths, withControlLock, withControlTransaction } from './HandoffControl.mjs';
 import { verifyHandoffCandidate } from './Verify-Handoff-Candidate.mjs';
 import { createWorkspaceAmendment, validateWorkspaceAmendment } from './HandoffWorkspaceAmendment.mjs';
+import { enterSyntheticSuite } from './SyntheticTestRuntime.mjs';
+const synthetic = await enterSyntheticSuite(import.meta.url, { timeoutMs: 1200000 });
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const cache = path.join(root, '.codex-manual-cache');
-assert.equal(spawnSync('git', ['-C', root, 'check-ignore', '--quiet', '--', '.codex-manual-cache/direct-probe']).status, 0, 'synthetic cache must be Git-ignored');
+assert.equal(synthetic.runSync('git', ['-C', root, 'check-ignore', '--quiet', '--', '.codex-manual-cache/direct-probe']).status, 0, 'synthetic cache must be Git-ignored');
 fs.mkdirSync(cache, { recursive: true });
 const temp = fs.mkdtempSync(path.join(cache, 'direct-'));
 const hash = b => crypto.createHash('sha256').update(b).digest('hex');
@@ -27,9 +29,9 @@ function fixture(external = false, overrides = {}, englishDeclarations = false, 
   const sourceRoot = path.join(base, 'source'); fs.mkdirSync(sourceRoot);
   const externalControlPlaneRoot = external ? path.join(base, 'external') : undefined;
   if (external) fs.mkdirSync(externalControlPlaneRoot);
-  const git = args => { const r = spawnSync('git', ['-C', sourceRoot, ...args], { encoding: 'utf8' }); assert.equal(r.status, 0, r.stderr); return r.stdout.trim(); };
+  const git = args => { const r = synthetic.runSync('git', ['-C', sourceRoot, ...args], { encoding: 'utf8' }); assert.equal(r.status, 0, r.stderr); return r.stdout.trim(); };
   git(['init', '--quiet', '--initial-branch=main']);
-  fs.writeFileSync(path.join(sourceRoot, '.gitignore'), '.control/\n');
+  fs.writeFileSync(path.join(sourceRoot, '.gitignore'), '.control/\n.codex-private/receiver-state-adoption/\n');
   fs.writeFileSync(path.join(sourceRoot, 'probe.txt'), 'base\n');
   const localManifestRef = '总指挥工作流/第二代总指挥的工作模式/规则刷新manifest.json';
   if (localManifest) { fs.mkdirSync(path.dirname(path.join(sourceRoot, localManifestRef)), { recursive: true }); fs.copyFileSync(manifestPath, path.join(sourceRoot, localManifestRef)); }
@@ -37,6 +39,8 @@ function fixture(external = false, overrides = {}, englishDeclarations = false, 
   if (localManifest) git(['add', '--', localManifestRef]);
   git(['-c', 'user.name=Synthetic Test', '-c', 'user.email=test@example.invalid', 'commit', '--quiet', '-m', 'synthetic']);
   git(['remote', 'add', 'origin', sourceRoot]);
+  fs.writeFileSync(path.join(sourceRoot, 'task_plan.md'), '<a id="current-plan"></a>\n# 总指挥研发计划与续接入口\n');
+  fs.writeFileSync(path.join(sourceRoot, 'progress.md'), '# Progress Log\n');
   const stamp = '2026-01-01T00:00:00.000Z', sources = {};
   for (const name of ['status_index', 'central_work_items', 'current_view', 'central_entry', 'workflow_enablement']) {
     const rootRef = external ? 'external_control_plane' : 'source_root';
@@ -51,7 +55,11 @@ function fixture(external = false, overrides = {}, englishDeclarations = false, 
     fs.mkdirSync(path.dirname(file), { recursive: true }); fs.writeFileSync(file, preparedBody);
     sources[name] = { owner: 'synthetic', path_ref: pathRef, root_ref: rootRef, digest: hash(Buffer.from(preparedBody)), fact_cutoff: stamp };
   }
-  if (layout === 'untracked-entry') fs.writeFileSync(path.join(sourceRoot, '.gitignore'), '.control/*\n!.control/central_entry.md\n');
+  for (const [name, pathRef] of [['task_contract', 'task_plan.md'], ['progress', 'progress.md']]) {
+    const bytes = fs.readFileSync(path.join(sourceRoot, pathRef));
+    sources[name] = { owner: 'synthetic', path_ref: pathRef, root_ref: 'source_root', digest: hash(bytes), fact_cutoff: stamp };
+  }
+  if (layout === 'untracked-entry') fs.writeFileSync(path.join(sourceRoot, '.gitignore'), '.control/*\n!.control/central_entry.md\n.codex-private/receiver-state-adoption/\n');
   else if (layout) {
     git(['add', '-f', '--', `.control/${layout === 'index' ? 'status_index' : 'central_entry'}.md`]);
     git(['-c', 'user.name=Synthetic Test', '-c', 'user.email=test@example.invalid', 'commit', '--quiet', '-m', 'synthetic layout']);
@@ -80,6 +88,23 @@ function fixture(external = false, overrides = {}, englishDeclarations = false, 
 let passed = 0;
 function check(name, fn) { if (process.argv.includes('--repair-only') && !/repair/i.test(name)) return; fn(); passed++; console.log(`PASS: ${name}`); }
 
+check('repair preserves frozen version5 bytes and version6 through version9 golden bytes', () => {
+  const previous = { generation: 1, writer_id: 'SYNTHETIC-OLD', event_id: 'synthetic-material',
+    rule_baseline: { rule_version: 'synthetic-rules', manifest_sha256: 'a'.repeat(64) },
+    objective: { summary: 'synthetic', breakpoint: 'read-only' } };
+  const before = Buffer.from('<!-- CURRENT:BEGIN -->\n<!-- CONTROL_IDENTITY: {"generation":1,"writer_id":"SYNTHETIC-OLD","platform_task_id":"22222222-2222-4222-8222-222222222222"} -->\nold queue\n<!-- CURRENT:END -->\n<!-- HISTORY:BEGIN -->\n');
+  const expected = {
+    5: '19209bbb83aedc4b4c388d22738018694e3e24d9d6a4a2e38e6ba0fe63545190',
+    6: '6c424f8ed1064807cccfc1b6593532c72a8ba4b5cd515581b84ed2f610d4cf22',
+    7: '17cf7a16d67d4c44c84ea6fd29da528f5591435bacbbc937ab96a1c70d456199',
+    8: 'f04d286640f09e9dab559c42a063ce4c8ce8806480db93a941bdd17bebc66887',
+    9: 'dd3d1d57ce663cc2eb3d6ea1a945f1100487fb3ccf13b09bb09c5b4596169b92'
+  };
+  for (const [version, digest] of Object.entries(expected)) {
+    assert.equal(hash(renderCurrent(before, previous, recipient, Number(version), 'synthetic-event')), digest);
+  }
+});
+
 const one = fixture();
 check('preflight refuses a tracked private index before recommending stop', () => {
   const f = fixture(false, {}, false, '', 'index');
@@ -96,7 +121,8 @@ check('tracked central entry completes without treating its own writes as drift'
   assert.equal(takeoverHandoff(f).status, 'COMPLETED');
   const live = verifyChain(f.sealDirectory, f);
   assert.equal(live.status, 'PASS', live.errors.join(';'));
-  assert.deepEqual(live.latest.workspace.worktree_fingerprint, readGitWorkspaceBaseline(f.sourceRoot).worktree_fingerprint);
+  const requiredRefs = live.latest.workspace.required_untracked.map(item => item.path_ref);
+  assert.deepEqual(live.latest.workspace.worktree_fingerprint, readGitWorkspaceBaseline(f.sourceRoot, requiredRefs).worktree_fingerprint);
 });
 check('untracked central entry completes and records its new content baseline', () => {
   const f = fixture(false, {}, false, '', 'untracked-entry');
@@ -125,7 +151,7 @@ check('same-count staging OID changes cannot hide behind unchanged worktree', ()
   const f = fixture(false, {}, false, '', 'entry');
   assert.throws(() => takeoverHandoff({ ...f, fault: point => { if (point === 'after-journal') throw new Error('index interruption'); } }));
   f.git(['add', '--', 'probe.txt']);
-  const staged = spawnSync('git', ['-C', f.sourceRoot, 'hash-object', '-w', '--stdin'], { input: 'different index-only bytes\n', encoding: 'utf8' });
+  const staged = synthetic.runSync('git', ['-C', f.sourceRoot, 'hash-object', '-w', '--stdin'], { input: 'different index-only bytes\n', encoding: 'utf8' });
   assert.equal(staged.status, 0);
   f.git(['update-index', '--cacheinfo', `100644,${staged.stdout.trim()},probe.txt`]);
   assert.equal(fs.readFileSync(path.join(f.sourceRoot, 'probe.txt'), 'utf8'), 'base\n');
@@ -137,12 +163,12 @@ for (const field of ['controlDiffs', 'index', 'controlModes', 'remove']) check(`
   assert.throws(() => takeoverHandoff({ ...f, fault: point => { if (point === 'after-journal') throw new Error('anchor interruption'); } }), /anchor interruption/);
   const journalPath = controlPaths(f.material, f).journal, journal = JSON.parse(fs.readFileSync(journalPath));
   if (field === 'controlDiffs') {
-    const diff = spawnSync('git', ['-C', f.sourceRoot, 'diff', '--binary', 'HEAD', '--', 'probe.txt']);
+    const diff = synthetic.runSync('git', ['-C', f.sourceRoot, 'diff', '--binary', 'HEAD', '--', 'probe.txt']);
     journal.workspace_projection.before.controlDiffs.push(diff.stdout.toString('base64'));
     fs.writeFileSync(path.join(f.sourceRoot, 'probe.txt'), 'base\n');
   } else if (field === 'index') {
     f.git(['add', '--', 'probe.txt']);
-    journal.workspace_projection.before.index = spawnSync('git', ['-C', f.sourceRoot, 'ls-files', '--stage', '-z']).stdout.toString('base64');
+    journal.workspace_projection.before.index = synthetic.runSync('git', ['-C', f.sourceRoot, 'ls-files', '--stage', '-z']).stdout.toString('base64');
   } else if (field === 'controlModes') journal.workspace_projection.before.controlModes[0] = 'FORGED';
   else delete journal.workspace_projection;
   fs.writeFileSync(journalPath, JSON.stringify(journal));
@@ -164,18 +190,19 @@ check('one receiving call completes without a separately delivered ticket', () =
   assert.equal(live.latest.schema_version, 4); assert.equal(live.pending_intents.length, 0);
   assert.equal(live.records[0].seal_digest, one.material.seal_digest);
 });
-check('same event retry is idempotent', () => { assert.equal(takeoverHandoff(one).status, 'COMPLETED'); assert.equal(verifyChain(one.sealDirectory, one).records.length, 2); });
+check('same event retry is idempotent', () => { assert.equal(takeoverHandoff(one).status, 'COMPLETED'); assert.equal(verifyChain(one.sealDirectory, one).records.length, 3); });
 check('new CURRENT retires preparation fields without inheriting loading or business authority', () => {
   const f = fixture(false, {}, false, '# 当前交接准备\n状态：ACTIVE_FROZEN_NOT_STOPPED；MATERIAL_PREPARED\n候选事件：old-candidate\n加载记录：old-loading.json\n任务契约与工具限定放行：old-contract.md\n精确断点：preserve-business-breakpoint\n非终态：8\n禁止项：remote-write\n下一行动方：return-to-old-writer\n');
   const material = f.material;
   assert.equal(takeoverHandoff(f).status, 'COMPLETED');
-  for (const source of Object.values(material.sources).filter(source => source !== material.sources.workflow_enablement)) {
+  for (const name of ['status_index', 'central_work_items', 'current_view', 'central_entry']) {
+    const source = material.sources[name];
     const body = fs.readFileSync(path.join(f.sourceRoot, source.path_ref), 'utf8');
     const current = body.split('<!-- CURRENT:BEGIN -->')[1].split('<!-- CURRENT:END -->')[0];
     assert.doesNotMatch(current, /ACTIVE_FROZEN_NOT_STOPPED|MATERIAL_PREPARED|候选事件：|return-to-old-writer|# 当前交接准备/);
     assert.match(current, /完成事件：synthetic-takeover/);
     assert.match(current, /来源历史入口：.*#handoff-source-synthetic-takeover/);
-    assert.match(current, /本任务加载记录：待接收方独立建立/);
+     assert.match(current, /本任务加载记录：由1D接收方状态采用自动建立/);
     const history = body.split('<!-- HISTORY:BEGIN -->')[1];
     assert.match(history, /加载记录：old-loading.json/);
     assert.match(history, /preserve-business-breakpoint/);
@@ -231,7 +258,13 @@ check('Chinese identity aliases and old next owner cannot survive as current aft
 });
 check('repair renders a shared central path once with one navigation marker', () => {
   const f = fixture(false, {}, false, '下一步：SYNTHETIC-OLD 继续\n', 'shared');
-  assert.equal(takeoverHandoff(f).status, 'COMPLETED');
+  const result = takeoverHandoff(f);
+  assert.equal(result.status, 'COMPLETED');
+  assert.equal(result.receiver_adoption.status, 'COMPLETED', JSON.stringify(result.receiver_adoption));
+  const verified = verifyChain(f.sealDirectory, f);
+  assert.equal(verified.status, 'PASS', verified.errors.join('; '));
+  assert.equal(verified.latest.sources.central_entry.digest, verified.latest.sources.central_work_items.digest);
+  assert.equal(takeoverHandoff(f).receiver_adoption.writes, 0);
   const journal = JSON.parse(fs.readFileSync(controlPaths(f.material, f).journal));
   assert.equal(journal.plan.length, 3);
   const shared = journal.plan.find(item => item.names.includes('central_entry'));
@@ -320,15 +353,15 @@ check('repair blocks inconsistent frozen version4 identity before writes but kee
   for (const item of journal.plan) assert.equal(hash(fs.readFileSync(path.join(f.sourceRoot, item.path_ref))), item.before_sha256);
   assert.equal(rollbackTakeover(f).status, 'ROLLED_BACK_STOPPED');
 });
-for (const version of [1, 2, 3, 4, 0, 6, '2', null]) check(`changed CURRENT renderer version ${version} is rejected before writes`, () => {
+for (const version of [1, 2, 3, 4, 5, 0, 6, 7, 8, '2', null]) check(`changed CURRENT renderer version ${version} is rejected before writes`, () => {
   const f = fixture(); assert.throws(() => takeoverHandoff({ ...f, fault: stage => { if (stage === 'after-journal') throw new Error('interrupt'); } }));
   const journalPath = controlPaths(f.material, f).journal, journal = JSON.parse(fs.readFileSync(journalPath));
-  assert.equal(journal.current_render_version, 5); journal.current_render_version = version;
+  assert.equal(journal.current_render_version, 9); journal.current_render_version = version;
   fs.writeFileSync(journalPath, JSON.stringify(journal));
   assert.throws(() => recoverTakeover(f), /render version|target bytes changed/);
   for (const item of journal.plan) assert.equal(hash(fs.readFileSync(path.join(f.sourceRoot, item.path_ref))), item.before_sha256);
 });
-check('repair rejects downgrading an alias-bearing version5 plan to version3', () => {
+check('repair rejects downgrading an alias-bearing version9 plan to version3', () => {
   const f = fixture(false, {}, false, '当前平台任务：UNKNOWN\n');
   assert.throws(() => takeoverHandoff({ ...f, fault: point => { if (point === 'after-journal') throw new Error('interrupt'); } }));
   const file = controlPaths(f.material, f).journal, journal = JSON.parse(fs.readFileSync(file));
@@ -471,13 +504,69 @@ check('completion seal forbids rollback', () => {
   assert.throws(() => rollbackTakeover(f), /rollback forbidden/); assert.equal(recoverTakeover(f).status, 'COMPLETED');
 });
 check('source drift before prepare is rejected', () => { const f = fixture(); fs.appendFileSync(path.join(f.sourceRoot, '.control/current_view.md'), 'drift'); assert.throws(() => takeoverHandoff(f), /source|candidate/i); });
+check('candidate source drift cannot be reused after material preparation', () => {
+  const f = fixture();
+  const candidateDigest = f.material.seal_digest;
+  fs.appendFileSync(path.join(f.sourceRoot, '.control/current_view.md'), 'post-material drift');
+  assert.throws(() => takeoverHandoff(f), /source|candidate|digest/i);
+  const live = verifyChain(f.sealDirectory, f);
+  assert.equal(live.latest.seal_digest, candidateDigest);
+  assert.equal(live.latest.handoff_phase, 'MATERIAL_PREPARED');
+  assert.equal(live.latest.switch_status, 'READY');
+});
+check('post-takeover source drift preserves completed event without reviving old writer', () => {
+  const f = fixture();
+  assert.equal(takeoverHandoff(f).status, 'COMPLETED');
+  const completed = verifyChain(f.sealDirectory, f);
+  const completedHandoff = completed.records.find(record => record.event_id === f.eventId && record.handoff_phase === 'TAKEOVER_COMPLETED');
+  assert.ok(completedHandoff);
+  assert.equal(completedHandoff.switch_status, 'COMPLETED');
+  fs.appendFileSync(path.join(f.sourceRoot, '.control/current_view.md'), 'post-takeover progress');
+  const drifted = verifyChain(f.sealDirectory, f);
+  const driftedHandoff = drifted.records.find(record => record.event_id === f.eventId && record.handoff_phase === 'TAKEOVER_COMPLETED');
+  assert.ok(driftedHandoff);
+  assert.equal(driftedHandoff.switch_status, 'COMPLETED');
+  assert.equal(driftedHandoff.writer_id, recipient.writerId);
+  assert.equal(drifted.latest_source_status, 'FAIL');
+  assert.equal(drifted.control_status, 'BLOCKED');
+  assert.match(drifted.errors.join('; '), /source|digest|drift/i);
+});
 check('required workspace change is preserved and blocks takeover', () => { const f = fixture(); fs.appendFileSync(path.join(f.sourceRoot, 'probe.txt'), 'change'); assert.throws(() => takeoverHandoff(f), /workspace|candidate/i); assert.ok(fs.readFileSync(path.join(f.sourceRoot, 'probe.txt'), 'utf8').includes('change')); });
 function amendedFixture() {
   const f = fixture(false, {}, false, '', 'entry', false, false, true);
+  assert.equal(f.material.workspace.worktree_fingerprint.algorithm, 'git-diff-index-untracked-sha256-v2');
   fs.unlinkSync(path.join(f.sourceRoot, 'probe.txt')); fs.unlinkSync(path.join(f.sourceRoot, 'original.txt'));
   f.workspaceAmendment = createWorkspaceAmendment(f.material, f, { evidence_ref: 'synthetic-operator-confirmed-deletions', deletions: ['probe.txt', 'original.txt'], maintenance: [] });
   return f;
 }
+check('repair binds the V2 index in both live and frozen validation', () => {
+  const f = amendedFixture();
+  for (const live of [true, false]) for (const field of ['index', 'index_sha256', 'missing-index', 'missing-digest', 'algorithm']) {
+    const amendment = structuredClone(f.workspaceAmendment);
+    if (field === 'index') amendment.evidence.index = Buffer.from('changed index').toString('base64');
+    else if (field === 'index_sha256') amendment.evidence.workspace.worktree_fingerprint.index_sha256 = '0'.repeat(64);
+    else if (field === 'missing-index') delete amendment.evidence.index;
+    else if (field === 'missing-digest') delete amendment.evidence.workspace.worktree_fingerprint.index_sha256;
+    else amendment.evidence.workspace.worktree_fingerprint.algorithm = 'git-diff-binary+untracked-content-sha256-v1';
+    assert.throws(() => validateWorkspaceAmendment(f.material, { ...f, workspaceAmendment: amendment }, live), /index|fingerprint/);
+  }
+});
+check('repair keeps synthetic legacy evidence on its original algorithm', () => {
+  const f = amendedFixture();
+  const previous = structuredClone(f.material);
+  previous.workspace.worktree_fingerprint.algorithm = 'git-diff-binary+untracked-content-sha256-v1';
+  delete previous.workspace.worktree_fingerprint.index_sha256;
+  const original = JSON.stringify(previous);
+  const amendment = createWorkspaceAmendment(previous, f, {
+    evidence_ref: 'synthetic-legacy-repair-validation-only', deletions: ['probe.txt', 'original.txt'], maintenance: []
+  });
+  assert.equal(amendment.evidence.workspace.worktree_fingerprint.algorithm, 'git-diff-binary+untracked-content-sha256-v1');
+  assert.equal(Object.hasOwn(amendment.evidence.workspace.worktree_fingerprint, 'index_sha256'), false);
+  validateWorkspaceAmendment(previous, { ...f, workspaceAmendment: amendment }, false);
+  assert.equal(JSON.stringify(previous), original);
+  amendment.evidence.workspace.worktree_fingerprint.algorithm = 'git-diff-index-untracked-sha256-v2';
+  assert.throws(() => validateWorkspaceAmendment(previous, { ...f, workspaceAmendment: amendment }, false), /fingerprint/);
+});
 check('v5 replaces the actual Chinese platform-task alias with a normalized current field', () => {
   const f = fixture(false, {}, false, '当前平台任务：UNKNOWN\n');
   assert.equal(takeoverHandoff(f).status, 'COMPLETED');
@@ -489,12 +578,33 @@ check('v5 replaces the actual Chinese platform-task alias with a normalized curr
 check('receiving repair bridges exact tracked and required-untracked deletions without old-writer seals', () => {
   const f = amendedFixture();
   assert.equal(verifyHandoffCandidate(f).workspace.status, 'PASS');
-  assert.equal(takeoverHandoff(f).status, 'COMPLETED');
+  const completed = takeoverHandoff(f);
+  assert.equal(completed.status, 'COMPLETED');
+  assert.equal(completed.receiver_adoption?.status, 'COMPLETED', JSON.stringify(completed.receiver_adoption));
   assert.equal(takeoverHandoff(f).status, 'COMPLETED');
   const live = verifyChain(f.sealDirectory, f); assert.equal(live.status, 'PASS');
-  assert.equal(live.records.length, 2); assert.equal(live.latest.generation, 2);
-  assert.deepEqual(live.latest.workspace.required_untracked, []);
+  assert.equal(live.records.length, 3); assert.equal(live.latest.generation, 2);
+  assert.equal(live.latest.workspace.required_untracked.length, 5);
+  assert.ok(live.latest.workspace.required_untracked.every(item => item.reason === 'Receiver adoption state'));
   assert.equal(fs.existsSync(path.join(f.sourceRoot, 'probe.txt')), false);
+});
+check('repair receiver adoption resumes from the completed baseline after interruption', () => {
+  const f = amendedFixture();
+  const stopped = takeoverHandoff({ ...f, fault: point => {
+    if (point === 'after-adoption-write-0') throw new Error('repair receiver interruption');
+  } });
+  assert.equal(stopped.control_handoff, 'COMPLETED');
+  assert.equal(stopped.receiver_adoption?.status, 'BLOCKED');
+  assert.match(stopped.receiver_adoption.error, /repair receiver interruption/);
+  assert.equal(readChain(f.sealDirectory).records.length, 2);
+  const resumed = takeoverHandoff(f);
+  assert.equal(resumed.receiver_adoption?.status, 'COMPLETED', JSON.stringify(resumed.receiver_adoption));
+  assert.equal(readChain(f.sealDirectory).records.length, 3);
+  const repeated = takeoverHandoff(f);
+  assert.equal(repeated.receiver_adoption?.status, 'COMPLETED');
+  assert.equal(repeated.receiver_adoption.writes, 0);
+  assert.equal(readChain(f.sealDirectory).records.length, 3);
+  assert.equal(verifyChain(f.sealDirectory, f).status, 'PASS');
 });
 for (const field of ['version', 'previous_seal_digest', 'recipient_writer_id', 'recipient_platform_id', 'scope']) {
   check(`repair rejects tampered ${field}`, () => { const f = amendedFixture(); f.workspaceAmendment[field] = 'tampered'; assert.throws(() => takeoverHandoff(f), /AMENDMENT|candidate/); });
@@ -571,21 +681,51 @@ for (const invalid of ['missing', 'invalid', 'advanced']) {
   });
 }
 async function compete() {
-  const f = fixture(), second = path.join(path.dirname(f.sealDirectory), 'second-chain'); appendSeal(second, { ...f.material }, f);
+  const f = fixture(), second = path.join(path.dirname(f.sealDirectory), 'second-chain');
+  appendSeal(second, { ...f.material }, f);
   const first = { ...f }, other = { ...f, sealDirectory: second, eventId: 'synthetic-other', recipient: { ...recipient, writerId: 'SYNTHETIC-OTHER', platformTaskId: '22222222-2222-4222-8222-222222222222' } };
   other.confirmation = { ...f.confirmation, recipient_writer_id: other.recipient.writerId, recipient_platform_id: other.recipient.platformTaskId };
-  const launch = (options, suffix) => new Promise((resolve, reject) => {
-    const config = path.join(temp, `competitor-${suffix}.json`);
-    const serial = Object.fromEntries(Object.entries(options).filter(([key]) => !['material', 'git'].includes(key)));
-    fs.writeFileSync(config, JSON.stringify(serial));
-    const child = spawn(process.execPath, [path.join(root, '.github/scripts/Takeover-Handoff.mjs'), 'commit', config], { cwd: root, stdio: ['ignore', 'pipe', 'pipe'] });
-    let output = ''; child.stderr.on('data', bytes => output += bytes); child.on('error', reject); child.on('close', code => resolve({ code, output }));
+  const config = (options, suffix) => {
+    const file = path.join(temp, 'competitor-' + suffix + '.json');
+    fs.writeFileSync(file, JSON.stringify(Object.fromEntries(Object.entries(options).filter(([key]) => !['material', 'git'].includes(key)))));
+    return file;
+  };
+  const entry = path.join(root, '.github/scripts/Takeover-Handoff.mjs');
+  const firstConfig = config(first, 'one'), otherConfig = config(other, 'two');
+  const index = path.join(f.sourceRoot, '.control/status_index.md');
+  const before = fs.readFileSync(index);
+  // The real cooperative lock stays held throughout this child invocation.
+  // A failed candidate or an unrelated error is not accepted as lock contention.
+  withControlLock(f.material, f, () => {
+    const blocked = synthetic.runSync(process.execPath, [entry, 'commit', otherConfig], { cwd: root, encoding: 'utf8', timeoutMs: 60000 });
+    assert.equal(blocked.error, undefined, blocked.error?.message);
+    assert.notEqual(blocked.status, 0);
+    assert.match(blocked.stderr, /EEXIST/);
+    assert.ok(fs.readFileSync(index).equals(before));
+    assert.equal(readChain(f.sealDirectory).records.length, 1);
+    assert.equal(readChain(second).records.length, 1);
   });
-  const results = await Promise.all([launch(first, 'one'), launch(other, 'two')]);
-  assert.equal(results.filter(item => item.code === 0).length, 1, JSON.stringify(results));
-  const body = fs.readFileSync(path.join(f.sourceRoot, '.control/status_index.md'), 'utf8').split('<!-- CURRENT:BEGIN -->')[1].split('<!-- CURRENT:END -->')[0];
-  assert.equal(JSON.parse(body.match(/<!-- CONTROL_IDENTITY: (.*) -->/)[1]).generation, 2);
-  passed++; console.log('PASS: two receiving processes and different chains have one CAS winner');
+  passed++; console.log('PASS: held authoritative lock rejects a real receiving process with EEXIST and zero writes');
+  const winner = await synthetic.runNode([entry, 'commit', firstConfig], { cwd: root, timeoutMs: 60000 });
+  assert.equal(winner.error, null, winner.error);
+  assert.equal(winner.status, 0, winner.stderr);
+  const completed = JSON.parse(winner.stdout);
+  assert.equal(completed.status, 'COMPLETED');
+  assert.equal(completed.control_handoff, 'COMPLETED');
+  assert.equal(completed.receiver_adoption?.status, 'COMPLETED');
+  const after = fs.readFileSync(index);
+  const late = await synthetic.runNode([entry, 'commit', otherConfig], { cwd: root, timeoutMs: 60000 });
+  assert.equal(late.error, null, late.error);
+  assert.notEqual(late.status, 0);
+  assert.doesNotMatch(late.stderr, /EEXIST/);
+  assert.match(late.stderr, /candidate verification failed|TAKEOVER_INCOMPLETE|source.*(?:changed|digest|drift)|identity|authority/i);
+  assert.ok(fs.readFileSync(index).equals(after));
+  const current = after.toString().split('<!-- CURRENT:BEGIN -->')[1].split('<!-- CURRENT:END -->')[0];
+  const identity = JSON.parse(current.match(/<!-- CONTROL_IDENTITY: (.*) -->/)[1]);
+  assert.equal(identity.generation, 2); assert.equal(identity.writer_id, first.recipient.writerId);
+  assert.equal(identity.platform_task_id, first.recipient.platformTaskId);
+  assert.equal(readChain(second).records.length, 1);
+  passed++; console.log('PASS: a deliberately late receiver is rejected without changing the completed winner');
 }
 if (!process.argv.includes('--repair-only')) await compete();
 console.log(`Direct handoff journey: ${passed} PASS. Synthetic fixtures retained under ignored cache.`);

@@ -51,6 +51,15 @@ for (const name of ['status_index', 'central_work_items', 'current_view', 'centr
   fs.writeFileSync(internalFile, internalBody);
   internalSources[name] = { ...sources[name], root_ref: 'source_root', digest: sha256(Buffer.from(internalBody)) };
 }
+for (const [name, ref, body] of [
+  ['task_contract', 'task_plan.md', '<a id="current-plan"></a>\n# Current plan\n'],
+  ['progress', 'progress.md', '# Progress Log\n']
+]) {
+  fs.writeFileSync(path.join(sourceRoot, ref), body);
+  sources[name] = { owner: 'synthetic', path_ref: ref, root_ref: 'source_root',
+    digest: sha256(Buffer.from(body)), fact_cutoff: stamp };
+  internalSources[name] = { ...sources[name] };
+}
 let workspace;
 const makeCandidate = (overrides = {}) => {
   const sealDirectory = path.join(temp, `seals-${++event}`);
@@ -91,6 +100,17 @@ try {
   workspace = { root_ref: '<PROJECT_ROOT>', ...readGitWorkspaceBaseline(sourceRoot), required_untracked: [] };
   const candidate = makeCandidate();
   const internalCandidate = makeCandidate({ sources: internalSources });
+  for (const name of ['task_contract', 'progress']) check(`candidate refuses missing receiver projection ${name}`, () => {
+    const incomplete = { ...sources };
+    delete incomplete[name];
+    const result = verify(makeCandidate({ sources: incomplete }));
+    assert.equal(result.status, 'BLOCKED');
+    assert.equal(result.rotation.can_stop_old, false);
+    const expected = name === 'progress'
+      ? /receiver readiness: adoption progress requires unique protected workspace evidence/
+      : /receiver readiness: projection has no sealed source/;
+    assert.match(result.errors.join('; '), expected);
+  });
   for (const [field, stale] of [['generation', 0], ['writer_id', 'STALE-WRITER'], ['platform_task_id', '00000000-0000-4000-8000-000000000099'], ['rule_baseline', { rule_version: 'old', manifest_sha256: 'a'.repeat(64) }], ['objective', { summary: 'old', breakpoint: 'old' }]]) check(`candidate blocks stale inventory ${field} even when source hashes match`, () => {
     const ref = `control/inventory-${field}.json`, file = path.join(sourceRoot, ref);
     fs.writeFileSync(file, JSON.stringify({ record_type: 'handoff_inventory', generation: 1, writer_id: 'TEST-COMMANDER', platform_task_id: 'UNKNOWN', rule_baseline: ruleBaseline, objective: { summary: 'synthetic candidate', breakpoint: 'read-only check' }, [field]: stale }));
@@ -111,6 +131,27 @@ try {
       assert.equal(result.status, 'READY', result.errors.join('; '));
       assert.equal(result.inventory.status, 'NOT_DECLARED'); assert.match(result.actions.join('; '), /独立核对业务断点/);
     } finally { fs.unlinkSync(file); }
+  });
+  for (const restrictions of [
+    ['HISTORICAL_WORKSPACE_PRESERVATION_UNVERIFIED'],
+    ['HISTORICAL_SOURCE_PRESERVATION_UNVERIFIED'],
+    ['HISTORICAL_WORKSPACE_PRESERVATION_UNVERIFIED', 'HISTORICAL_SOURCE_PRESERVATION_UNVERIFIED']
+  ]) check(`historical restrictions refuse ordinary takeover and identify the bounded control-only route (${restrictions.length})`, () => {
+    const bounded = makeCandidate({
+      schema_version: 4, restrictions,
+      switch_status: 'READY_WITH_RESTRICTIONS', candidate_verification_status: 'PASS_WITH_RESTRICTIONS',
+      professional_acceptance_status: 'NOT_RUN'
+    });
+    const result = verify(bounded);
+    assert.equal(result.status, 'BLOCKED');
+    assert.equal(result.rotation.can_stop_old, false);
+    assert.match(result.errors.join('; '), /CONTROL_ONLY_REQUIRED/);
+    assert.equal(result.reception_route.entry, '.github/scripts/Recover-CommanderAuthority.mjs');
+    assert.equal(result.reception_route.current_operator_message_required, true);
+    assert.deepEqual(result.reception_route.inherited_restrictions, restrictions);
+    assert.match(result.actions.join('; '), /无需重复确认/);
+    assert.match(result.actions.join('; '), /独立当前观察和事务核验/);
+    assert.equal(verifyChain(bounded, { sourceRoot, externalControlPlaneRoot: externalRoot }).records.length, 1);
   });
   // The real candidate/rotation entry must accept unrelated in-flight changes.
   const inflightDirectory = path.join(sourceRoot, 'specialist');
@@ -354,6 +395,11 @@ try {
     check('CLI rejects observed remote drift when remote observation is required', () => {
       const result = cli(candidate, [`--external-control-plane-root=${externalRoot}`, '--remote-required']);
       assert.equal(result.code, 1); assert.equal(result.value.remote.status, 'FAIL');
+      assert.match(result.value.errors.join('\n'), /REMOTE_BASELINE_DRIFT/);
+    });
+    check('CLI also returns failure when optional remote drift leaves a restricted status with errors', () => {
+      const result = cli(candidate, [`--external-control-plane-root=${externalRoot}`]);
+      assert.equal(result.code, 1); assert.equal(result.value.status, 'READY_WITH_RESTRICTIONS');
       assert.match(result.value.errors.join('\n'), /REMOTE_BASELINE_DRIFT/);
     });
   } finally { git(['remote', 'set-url', 'origin', sourceRoot]); }

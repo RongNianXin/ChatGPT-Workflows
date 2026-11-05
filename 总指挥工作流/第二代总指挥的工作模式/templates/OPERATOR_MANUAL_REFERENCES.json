@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "document_ref": "01-操作者操作手册.md",
-  "manual_sha256": "9c014eada5eaef46b0cee5fa90c40cee1d2933290538e03e42ec4ea9445aa0af",
+  "manual_sha256": "2ca471d8bae1a508d386aeff527a546c608c240a8d98349c24a0c3ec7cd17bfd",
   "sections": [
     {
       "anchor": null,
@@ -58,7 +58,10 @@
         "scenario-reference-literature": "6B",
         "scenario-goal-template": "Gen1.1",
         "scenario-goal-specification": "Gen1.2",
-        "scenario-goal-pause-recovery": "Gen1.3"
+        "scenario-goal-pause-recovery": "Gen1.3",
+        "scenario-issue-feedback": "Gen3",
+        "scenario-issue-report": "Gen3.1",
+        "scenario-workflow-assessment": "Gen3.2"
       },
       "history": [
         {
@@ -514,6 +517,21 @@
     },
     {
       "anchor": "scenario-pause-and-archive",
+      "references": {},
+      "history": []
+    },
+    {
+      "anchor": "scenario-issue-feedback",
+      "references": {},
+      "history": []
+    },
+    {
+      "anchor": "scenario-issue-report",
+      "references": {},
+      "history": []
+    },
+    {
+      "anchor": "scenario-workflow-assessment",
       "references": {},
       "history": []
     },

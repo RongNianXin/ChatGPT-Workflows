@@ -78,7 +78,7 @@ check('a junction or symlink cannot replace the declared root', () => {
 check('unknown algorithm is rejected', () => assert(verify({ ...initial, worktree_fingerprint: { ...initial.worktree_fingerprint, algorithm: 'unknown' } }).length));
 const legacy = { root_ref: '.', required_untracked: [], ...readGitWorkspaceBaseline(root) };
 put('specialist/newer.js', 'more\n');
-check('default V1 still rejects specialist changes', () => assert(verifyWorkspaceBaseline(root, legacy).length));
+check('default strict full workspace still rejects specialist changes', () => assert(verifyWorkspaceBaseline(root, legacy).length));
 fs.unlinkSync(path.join(root, 'specialist/newer.js'));
 git('reset', '-q', 'HEAD', '--', 'specialist/task.js', 'specialist/new-test.js');
 const staging = base();
