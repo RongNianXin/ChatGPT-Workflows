@@ -112,14 +112,16 @@ export function scenarioTokens(text, { includeHeadings = false } = {}) {
 export function scenarioCatalog(manual) {
   const byAnchor = new Map(), byCode = new Map(), allAnchors = new Set(), headingCounts = new Map(), errors = [];
   const lines = manual.split('\n'); let pending = null, fence = null;
+  const parents = [];
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i]; const f = line.match(/^\s*(`{3,}|~{3,})/);
     if (f) { if (!fence) fence = f[1]; else if (f[1][0] === fence[0] && f[1].length >= fence.length) fence = null; continue; }
     if (fence) continue;
     for (const a of line.matchAll(/<a id="([^"]+)"><\/a>/g)) allAnchors.add(a[1]);
-    const anyHeading = line.match(/^#{1,6}\s+(.+)/);
+    const anyHeading = line.match(/^(#{1,6})\s+(.+)/);
     if (anyHeading) {
-      const base = slug(anyHeading[1]), count = headingCounts.get(base) || 0;
+      while (parents.length && parents.at(-1).level >= anyHeading[1].length) parents.pop();
+      const base = slug(anyHeading[2]), count = headingCounts.get(base) || 0;
       allAnchors.add(count ? `${base}-${count}` : base); headingCounts.set(base, count + 1);
     }
     const anchor = line.match(/^<a id="(scenario-[a-z0-9-]+)"><\/a>\s*$/);
@@ -128,11 +130,13 @@ export function scenarioCatalog(manual) {
     if (heading) {
       const code = heading[2] || (heading[3] ? '场景' + heading[3] : heading[4]);
       if (!pending) { errors.push(`line ${i + 1}: scenario ${code} has no stable semantic anchor`); continue; }
-      const value = { anchor: pending, code, title: heading[5].trim(), heading: heading[1], line: i + 1 };
+      const value = { anchor: pending, code, title: heading[5].trim(), heading: heading[1], line: i + 1,
+        parentAnchor: parents.findLast(item => item.anchor)?.anchor ?? null };
       if (byAnchor.has(pending)) errors.push(`duplicate semantic anchor: ${pending}`);
       if (byCode.has(code)) errors.push(`duplicate current scenario number: ${code}`);
-      byAnchor.set(pending, value); byCode.set(code, value); pending = null;
-    } else if (/^#{1,6}\s/.test(line)) pending = null;
+      byAnchor.set(pending, value); byCode.set(code, value);
+      parents.push({ level: anyHeading[1].length, anchor: pending }); pending = null;
+    } else if (anyHeading) { parents.push({ level: anyHeading[1].length, anchor: null }); pending = null; }
   }
   return { byAnchor, byCode, allAnchors, errors };
 }
@@ -202,6 +206,32 @@ export function validateScenarioDocument(text, catalog, { manual = false } = {})
     const toc = text.slice(text.indexOf('## 目录'), text.indexOf('## 快速上手'));
     const tocNumbers = [...toc.matchAll(/^(\d+)\. /gm)].map(m => Number(m[1]));
     if (tocNumbers.some((n, i) => n !== i + 1)) errors.push('table of contents ordering is not consecutive');
+    const tocEntries = [], tocParents = []; let tocFence = null;
+    for (const line of toc.split('\n')) {
+      const fence = line.match(/^\s*(`{3,}|~{3,})/);
+      if (fence) { if (!tocFence) tocFence = fence[1]; else if (fence[1][0] === tocFence[0] && fence[1].length >= tocFence.length) tocFence = null; continue; }
+      if (tocFence) continue;
+      const entry = line.match(/^( *)(\d+\.|-) \[([^\]\n]+)\]\(#([^\s)]+)\)\s*$/);
+      if (!entry) continue;
+      const indent = entry[1].length, anchor = decodeURIComponent(entry[4]);
+      while (tocParents.length && tocParents.at(-1).indent >= indent) tocParents.pop();
+      // A nested marker must reach the parent's content column, including its number width.
+      if (tocParents.length && indent < tocParents.at(-1).contentColumn) errors.push('table of contents list indentation is insufficient');
+      const parentAnchor = tocParents.findLast(item => catalog.byAnchor.has(item.anchor))?.anchor ?? null;
+      tocEntries.push({ anchor, parentAnchor }); tocParents.push({ indent, anchor, contentColumn: indent + entry[2].length + 1 });
+    }
+    let previousLine = -1;
+    for (const definition of catalog.byAnchor.values()) {
+      const entries = tocEntries.filter(item => item.anchor === definition.anchor);
+      if (entries.length !== 1) errors.push(`table of contents must list scenario exactly once: ${definition.code}`);
+      else if (entries[0].parentAnchor !== definition.parentAnchor) errors.push(`table of contents scenario parent differs: ${definition.code}`);
+    }
+    for (const entry of tocEntries) {
+      const definition = catalog.byAnchor.get(entry.anchor);
+      if (!definition) continue;
+      if (definition.line <= previousLine) errors.push('table of contents scenario order differs from body');
+      previousLine = definition.line;
+    }
     const overview = text.slice(text.indexOf('### 场景总览'), text.indexOf('<!-- SCENARIO_HISTORY:BEGIN -->'));
     const registeredMeanings = new Set([...overview.matchAll(/\]\(#(scenario-[a-z0-9-]+)\)/g)].map(m => m[1]));
     for (const definition of catalog.byAnchor.values()) {
@@ -361,6 +391,34 @@ function selfTests() {
     assert.equal(validateOperatorManual(wrongOrder, scenarioCatalog(wrongOrder), {...metadata, manual_sha256: manualDigest(wrongOrder)}).status, 'FAIL');
   });
   check('machine comments may not return to manual', () => assert.equal(validateOperatorManual(pair.text+'\n<!-- SCENARIO_REFS: {} -->',externalCatalog,{...pair.metadata,manual_sha256:manualDigest(pair.text+'\n<!-- SCENARIO_REFS: {} -->')}).status,'FAIL'));
+  const outline = '<!-- SCENARIO_REFS: {"scenario-group":"场景七","scenario-goal":"Gen1","scenario-feedback":"Gen3","scenario-report":"Gen3.1"} -->\n' +
+    '## 目录\n1. [场景七：通用能力](#scenario-group)\n' +
+    '   - [场景 Gen1：长任务](#scenario-goal)\n   - [场景 Gen3：问题反馈](#scenario-feedback)\n' +
+    '     - [场景 Gen3.1：整理报告](#scenario-report)\n## 快速上手\n### 场景总览\n' +
+    '[场景七：通用能力](#scenario-group)；[场景 Gen1：长任务](#scenario-goal)；[场景 Gen3：问题反馈](#scenario-feedback)；[场景 Gen3.1：整理报告](#scenario-report)\n' +
+    '<!-- SCENARIO_HISTORY:BEGIN -->旧编号<!-- SCENARIO_HISTORY:END -->\n' +
+    '<a id="scenario-group"></a>\n## 场景七：通用能力\n<a id="scenario-goal"></a>\n### 场景 Gen1：长任务\n' +
+    '<a id="scenario-feedback"></a>\n### 场景 Gen3：问题反馈\n<a id="scenario-report"></a>\n#### 场景 Gen3.1：整理报告\n';
+  const outlineCatalog = scenarioCatalog(outline);
+  const tocLine = '   - [场景 Gen3：问题反馈](#scenario-feedback)\n';
+  const mutateToc = edit => outline.replace(/## 目录\n([\s\S]*?)## 快速上手/, (_, toc) => '## 目录\n' + edit(toc) + '## 快速上手');
+  check('nested scenario directory matches actual heading hierarchy', () => assert.equal(validateScenarioDocument(outline, outlineCatalog, {manual:true}).status, 'PASS'));
+  const outlineMutations = [
+    ['missing named child', toc => toc.replace(tocLine, '')],
+    ['parenthetical codes do not replace a link', toc => toc.replace(tocLine, '   （含 Gen3）\n')],
+    ['missing grandchild', toc => toc.replace(/     - .*\n/, '')],
+    ['duplicate child', toc => toc.replace(tocLine, tocLine + tocLine)],
+    ['promoted child', toc => toc.replace(tocLine, tocLine.trimStart())],
+    ['promoted grandchild', toc => toc.replace('     -', '   -')],
+    ['wrong scenario parent', toc => toc.replace(tocLine, tocLine.replace('   -', '     -'))],
+    ['insufficient subtree indentation', toc => toc.replace(/^   -/gm, ' -').replace(/^     -/gm, '   -')],
+    ['insufficient grandchild indentation', toc => toc.replace('     -', '    -')],
+    ['swapped children', toc => toc.replace('   - [场景 Gen1：长任务](#scenario-goal)\n' + tocLine, tocLine + '   - [场景 Gen1：长任务](#scenario-goal)\n')],
+    ['broken target', toc => toc.replace('#scenario-report', '#missing-report')],
+    ['wrong link title', toc => toc.replace('场景 Gen3：问题反馈', '场景 Gen3：旧标题')],
+    ['fenced link cannot cover a missing entry', toc => toc.replace(tocLine, '```text\n' + tocLine + '```\n')]
+  ];
+  for (const [name, edit] of outlineMutations) check('directory rejects ' + name, () => assert.equal(validateScenarioDocument(mutateToc(edit), outlineCatalog, {manual:true}).status, 'FAIL'));
   return checks;
 }
 
