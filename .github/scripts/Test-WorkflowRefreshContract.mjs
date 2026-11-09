@@ -751,19 +751,27 @@ const documentLifecycleDocuments = {
   core: read('02-总指挥核心规则.md'),
   state: read('04-状态、目标变更与交接规范.md'),
   governance: read('06-复盘与优化规则.md'),
-  authority: read('09-自动化授权与风险分级.md')
+  authority: read('09-自动化授权与风险分级.md'),
+  index: read('10-自动状态索引规范.md')
 };
 const documentLifecycleSections = documents => ({
   entry: documents.core.split('### 文档生命周期维护\n')[1]?.split('\n### ')[0]?.split('\n## ')[0] || '',
   health: documents.governance.split('### 高增长文档健康检查\n')[1]?.split('\n### ')[0]?.split('\n## ')[0] || '',
   handoff: documents.state.split('#### 交接完成后的材料复核\n')[1]?.split('\n#### ')[0]?.split('\n### ')[0] || '',
-  authority: documents.authority.split('### 文档清理权限\n')[1]?.split('\n### ')[0] || ''
+  authority: documents.authority.split('### 文档清理权限\n')[1]?.split('\n### ')[0] || '',
+  index: documents.index.split('## 2. 自动记录内容\n')[1]?.split('\n## ')[0] || ''
 });
 const documentLifecycleRequirements = [
   ['all roles reach the shared rule within their own scope', 'entry', '总指挥、普通任务和专项任务均须在各自获准范围内'],
   ['entry uses the unique governance owner', 'entry', '06文档生命周期'],
   ['classification separates purpose and status without new ledgers', 'health', '用途与状态分开判断，不强制新目录、逐文件标签或平行台账'],
   ['events cover stock and incremental work without background scans', 'health', '首次获准范围内有界盘点；之后只检查本批变化和受影响依赖'],
+  ['closeout receipt binds actual coverage and execution state', 'health', '本次触发与已核范围、实际完成/部分/未运行/不适用及依据'],
+  ['partial checks retain a concrete continuation', 'health', '部分或未运行须带原因、受影响范围、下一责任方、首个动作和复核条件'],
+  ['recording cannot replace permitted necessary checks', 'health', '当前权限内可完成的必要检查继续，不以回执代替执行'],
+  ['no candidates is distinct from missing permission or observation', 'health', '已核范围无候选、存在候选待确认、未获删除权与未检查分别记录'],
+  ['receipt reuses evidence without repeated ledgers', 'health', '回执可复用原格式、稳定证据及适用范围；无相关资源变化说明依据即可'],
+  ['resumption follows the same receipt and unfinished entries', 'health', '交接与恢复只引用最近回执和原未完条目，不因重复恢复增账'],
   ['uncertain provenance gets a custodian, not invented authorship', 'health', '接管保管责任不改写历史来源'],
   ['controlled file changes have path-bound provenance', 'health', '逐文件关联精确相对路径、修改日期、来源依据和一句修改原因'],
   ['creation and purpose changes explain why the file exists', 'health', '新建或用途改变时说明文件为何存在'],
@@ -776,6 +784,10 @@ const documentLifecycleRequirements = [
   ['hashes and searches are not deletion proof', 'health', '同哈希、无文本引用、Git干净、文件名或年龄均不能单独证明可删'],
   ['drift and interrupted deletion are object scoped', 'health', '实质漂移使对应候选失效'],
   ['handoff cleanup is post-completion rather than another takeover gate', 'handoff', '清理未决不撤销已完成切换，也不增加接管前置'],
+  ['handoff carries the existing coverage and unfinished pointers', 'handoff', '准备冻结时沿原记录引用已有的最近资源检查范围、状态和未完指针'],
+  ['handoff transaction protects its dependencies without a global freeze', 'handoff', '冻结至事务完成不处置其实际依赖材料，无关的获准安全动作继续'],
+  ['index points to the unique receipt semantics', 'index', '资源检查回执引用（命中既有维护触发时）'],
+  ['index does not duplicate the resource ledger', 'index', '不复制去留表或新增登记文件'],
   ['historic exact bytes are checked beyond active links', 'handoff', '精确路径或字节对象是否仍承担链验证、恢复、回退、交付证明或活动用途'],
   ['duplicate copies and sole originals have different retirement evidence', 'handoff', '唯一正式原件还须证明其历史留存用途已解除'],
   ['old delivery protection has an explicit retirement pointer', 'handoff', '生成和交付期间仍按下文保留旧正式版本'],
@@ -790,7 +802,7 @@ const documentLifecycleErrors = documents => {
 for (const [name, section, needle] of documentLifecycleRequirements) {
   checks.push([`document lifecycle: ${name}`, documentLifecycleSections(documentLifecycleDocuments)[section], [needle]]);
   if (documentLifecycleErrors(documentLifecycleDocuments).length) continue;
-  const document = { entry: 'core', health: 'governance', handoff: 'state', authority: 'authority' }[section];
+  const document = { entry: 'core', health: 'governance', handoff: 'state', authority: 'authority', index: 'index' }[section];
   const mutated = { ...documentLifecycleDocuments, [document]: `${needle}\n${documentLifecycleDocuments[document].replace(needle, '')}` };
   if (!documentLifecycleErrors(mutated).includes(name)) throw new Error(`Document lifecycle out-of-section mutation accepted: ${name}`);
   console.log(`PASS: Document lifecycle out-of-section mutation rejected: ${name}`);

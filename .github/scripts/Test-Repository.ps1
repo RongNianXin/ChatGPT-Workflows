@@ -3,7 +3,11 @@ param(
     # Check explicit new files before staging; ignored and out-of-repository inputs are rejected.
     [string[]]$AdditionalPaths = @(),
     # Requires an already installed Playwright and Edge; never installs dependencies.
-    [switch]$IncludeBrowserTests
+    [switch]$IncludeBrowserTests,
+    # Full remains the default for CI and callers that have not opted into selection.
+    [ValidateSet('Full', 'Auto')][string]$Mode = 'Full',
+    # Report selection only; this does not run or certify any checks.
+    [switch]$PlanOnly
 )
 
 $ErrorActionPreference = 'Stop'
@@ -1430,10 +1434,53 @@ function Test-TroubleshootingKnowledgeBase {
     Write-Host "Troubleshooting knowledge base: PASS ($($cases.Count) cases)"
 }
 
+$validationSelection = @{ profile = 'Full'; reason = 'Explicit/default full validation' }
+$selectionArgs = @((Join-Path $PSScriptRoot 'Inspect-RepositoryValidationScope.mjs'))
+if ($AdditionalPaths.Count) { $selectionArgs += '--additional-files' }
+$selectionText = & node @selectionArgs
+if ($LASTEXITCODE -ne 0) { throw '无法判定验证范围；未执行验收。' }
+$observedSelection = $selectionText | ConvertFrom-Json
+if ($observedSelection.profile -eq 'Blocked') { throw $observedSelection.reason }
+if ($Mode -eq 'Auto' -and -not $IncludeBrowserTests) {
+    $validationSelection = $observedSelection
+}
+if ($PlanOnly) {
+    $validationSelection | ConvertTo-Json -Depth 5
+    return
+}
+Write-Host ("Validation profile: {0}; {1}" -f $validationSelection.profile, $validationSelection.reason)
+if ($validationSelection.profile -eq 'Navigation') {
+    Test-RepositoryPathPortability
+    Test-MarkdownFiles
+    Test-BilingualReadmes
+    Test-PowerShellFiles
+    Test-CommanderRuleVersion
+    foreach ($suite in @('Test-RepositoryValidationScope.mjs', 'Test-OperatorManualReferences.mjs',
+        'Test-WorkflowRefreshContract.mjs', 'Test-Inspect-RuleRefresh.mjs', 'Test-OperatorManualExternalEntries.mjs')) {
+        & node (Join-Path $PSScriptRoot $suite)
+        if ($LASTEXITCODE -ne 0) { throw "导航范围验收失败：$suite" }
+    }
+    $capture = & node (Join-Path $PSScriptRoot 'Inspect-RuleRefresh.mjs') --mode pinned
+    if ($LASTEXITCODE -ne 0) { throw '当前规则清单摘要检查失败。' }
+    $snapshot = $capture | ConvertFrom-Json
+    if ($snapshot.result -ne 'PASS') { throw '当前规则清单未通过。' }
+    $finalText = & node @selectionArgs
+    if ($LASTEXITCODE -ne 0) { throw '导航候选最终回读失败。' }
+    $finalSelection = $finalText | ConvertFrom-Json
+    if ($finalSelection.profile -ne 'Navigation' -or $finalSelection.candidate_sha256 -ne $validationSelection.candidate_sha256) {
+        throw '验收期间候选改变；本次结果失效，重新判定范围后运行。'
+    }
+    Write-Host 'Repository quality checks: PASS (navigation scope only; not full validation or publish authorization)'
+    $global:LASTEXITCODE = 0
+    return
+}
+
 Test-RepositoryPathPortability
 Test-MarkdownFiles
 Test-BilingualReadmes
 Test-PowerShellFiles
+& node (Join-Path $PSScriptRoot 'Test-RepositoryValidationScope.mjs')
+if ($LASTEXITCODE -ne 0) { throw '仓库验证范围选择与失败回退检查失败。' }
 & node (Join-Path $PSScriptRoot 'Test-SyntheticTestRuntime.mjs')
 if ($LASTEXITCODE -ne 0) { throw '合成测试隔离、等待时限和路径反例失败。' }
 & (Join-Path $PSScriptRoot 'Test-SessionRecordShape.ps1')

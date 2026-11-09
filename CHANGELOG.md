@@ -1,5 +1,25 @@
 # 变更记录
 
+## 2026-11-09：资源检查范围与未完交接
+
+- 在原责任记录区分资源检查实际完成、部分、未运行和不适用，绑定已核范围、覆盖限制、候选状态及未完指针；无候选不代签未检查或已获删除权，不新增资源台账。
+- 交接只沿原记录传递最近检查与未完指针，事务期间保全其实际依赖；不增加接管前置，不修改删除确认、全局规则或检查器默认行为。
+- Resource closeout receipts now distinguish actual coverage and execution state in the existing record. Handoffs retain the original unfinished-item pointers and protect transaction dependencies without adding a takeover prerequisite or granting deletion authority.
+- 本批仅本地规则接口及定点检查；相关验证和独立复核状态见本地责任记录，不证明宿主事件已接线、所有项目已采用或磁盘空间已释放。
+
+## 2026-11-08：浏览器效率与人工登录衔接
+
+- 已实施本地规则补充：复用获准会话、局部读取和确定步骤批处理；在新分支、未知状态、失败或人工确认点停止该批。隐藏窗口不等于无头，模式选择仍受项目通道和工具能力约束。
+- 网站当前会话的有效二维码只向本人展示并由本人确认；过期或会话变化重核，登录后在原会话独立回读状态与目标内容。保留原凭据、通道及有限重试边界，不新增自动化或授权。
+- Local browser guidance now covers bounded action batches and same-session QR login handoff. Hidden windows are not treated as headless browsers, and existing permission, credential and channel boundaries remain in force.
+- 本批仅本地文稿与必要规则摘要/版本联动；相关静态检查及独立产物复核状态见本地责任记录。未验证真实网站扫码或性能收益，未提交、推送或部署。
+
+## 2026-11-06：本地导航验收分流
+
+- 新增严格按HEAD、暂存区和工作区差额识别的导航验收；只允许手册目录及绑定版本/摘要变化，代码、正文、权限或未知变化仍选完整检查。候选不一致阻断，检查结束再次绑定实际文件；默认完整入口和远端完整CI保留。
+- 提交前入口使用PowerShell 7；先完成短检查及必要后审，再冻结并执行长测。新增范围判定与失败回退反例，导航结果不代签完整业务、公开许可或远端验收。
+- Added conservative local navigation validation from actual HEAD/index/worktree changes. Code, prose, permissions and unknown changes retain full validation; the default full entry and full remote CI remain. Candidate mismatches block certification, and navigation validation does not grant publication rights.
+
 ## 2026-11-06：操作手册目录完整性
 
 - 场景七将Gen1、Gen2、Gen3及其子场景展开为具名可点击目录；补齐1E—1I、场景二至六、个性化协作和其他已有操作入口，保留正文、编号和兼容锚点。

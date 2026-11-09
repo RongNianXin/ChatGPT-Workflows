@@ -23,6 +23,8 @@
 .github/scripts/Inspect-QuotaProtection.mjs text eol=lf
 .github/scripts/Inspect-PrReviewPayload.mjs text eol=lf
 .github/scripts/Test-OperatorManualReferences.mjs text eol=lf
+.github/scripts/Inspect-RepositoryValidationScope.mjs text eol=lf
+.github/scripts/Test-RepositoryValidationScope.mjs text eol=lf
 .github/scripts/Mark-Handoff-Delivered.mjs text eol=lf
 .github/scripts/Rebase-Handoff-Draft.mjs text eol=lf
 .github/scripts/Verify-Handoff-Candidate.mjs text eol=lf
