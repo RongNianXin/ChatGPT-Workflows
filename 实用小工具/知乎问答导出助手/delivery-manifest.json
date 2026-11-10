@@ -1,6 +1,6 @@
 {
   "applicationVersion": "0.6.7",
-  "deliveryRevision": "2026-11-10.5",
+  "deliveryRevision": "2026-11-10.8",
   "collectorSha256": "e56e66155d26bdfe71b61ac7b98e66a9314a1beb57030d288d67465ea169e2b7",
   "status": "MIT_LIMITED_MAINTENANCE_SOURCE_DISTRIBUTION",
   "files": [
@@ -11,13 +11,13 @@
     },
     {
       "path": "README.en.md",
-      "bytes": 6024,
-      "sha256": "e5d457b48b1e5258b6d78824f27c28f112f1252023b36cc903c0d387c6e1adbf"
+      "bytes": 6540,
+      "sha256": "d2921b90c82e6ad64fd4d5bad6213c294a2c4f8b4f7f2ffb58c5a604cd4c2873"
     },
     {
       "path": "README.md",
-      "bytes": 8090,
-      "sha256": "7c3038d81be3ed1f31c6ce96d2e900da1f85e00910edf6f606cf5a63f923ab95"
+      "bytes": 8493,
+      "sha256": "0ccb5e634cdbc5354f56f7ccc7a0141fcec720cd4fec3b886a65d5fa2c7c9a4f"
     },
     {
       "path": "evidence/delivery-tests.json",
@@ -95,9 +95,14 @@
       "sha256": "85bd70d04c95fc9fd06073763bf18dabed9372924820b2f1c15b03b37e972124"
     },
     {
+      "path": "tool.json",
+      "bytes": 3106,
+      "sha256": "421f3bba23d328cf690f9f59cdddf92cc1f3b8f00c6ebcaf06e41a344bd31dbf"
+    },
+    {
       "path": "verify-delivery.py",
-      "bytes": 2212,
-      "sha256": "3a8a4c295a41ff5df0b521ab4b5032b3c2f7ecedb1b6f0a1ecaea539993c2b52"
+      "bytes": 2416,
+      "sha256": "e5635a16951dc600d062d48fcefb0850fa049dc73a9280b63327bc2b79ae6e34"
     },
     {
       "path": "接管验收.md",

@@ -52,7 +52,7 @@ Windows is the primary validation environment. Local script execution on iOS is 
 | Troubleshoot Codex or CC Switch | [Troubleshooting notes](故障排查与解决经验/) |
 | Reuse a focused prompt | [Prompt collection](其他%20Codex%20技巧性提示词/) |
 | Find tools by task | [External Tool Directory](引用的外部工具/README.en.md) |
-| Try a local helper | [Local utilities](实用小工具/) |
+| Download and use one local helper | [Utility catalog](实用小工具/README.en.md): independent packages, runtime requirements and publication status |
 | Locate a project conversation missing from the recent list | [Codex task-name lookup](实用小工具/Codex任务定位/README.en.md): read-only candidates followed by host verification |
 | Save tasks and query Codex session snapshots (Windows desktop preview 0.2.0-dev.10) | [Session handoff assessment](实用小工具/Codex会话交接评估/README.en.md) |
 | See real-world results | [Showcase](SHOWCASE.md) |
@@ -177,4 +177,4 @@ Released under the [MIT License](LICENSE).
 
 This project acknowledges the [LINUX DO](https://linux.do/) community and supports sincere, friendly knowledge sharing and exchange.
 
-<!-- README-SOURCE-SHA256: b111bb28fd77b60b0a7bfc4474bdc46fed6c4fd10e07bab00cf9fa2d78694a3e -->
+<!-- README-SOURCE-SHA256: c59e605e2bda74cad0da6a867db5150a70cd445ecf76fcede6f3496d82744571 -->

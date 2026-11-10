@@ -1,0 +1,135 @@
+{
+  "schemaVersion": 1,
+  "tools": [
+    {
+      "id": "codex-session-desk",
+      "name": "Codex会话交接评估",
+      "nameEn": "Codex Session Handoff Assessment",
+      "summary": "Windows本地工作台，按需只读查看已有Codex会话状态。",
+      "summaryEn": "A local Windows desk for read-only snapshots of existing Codex sessions.",
+      "kind": "package",
+      "directory": "实用小工具/Codex会话交接评估",
+      "version": "0.2.0-dev.10",
+      "packageRevision": 1,
+      "asset": "codex-session-desk-0.2.0-dev.10-r1.zip",
+      "tag": "tool-codex-session-desk-v0.2.0-dev.10-r1",
+      "requirements": [
+        "Windows、已有PowerShell及Codex本地会话文件；其他系统未验收。",
+        "启动后运行仅本机服务并打开浏览器；数据保存在本包windows-local/.local下。"
+      ],
+      "requirementsEn": [
+        "Windows, existing PowerShell and local Codex session files; other systems are not validated.",
+        "Starting the desk runs a local-only service and opens a browser; state stays under windows-local/.local in this package."
+      ],
+      "published": null,
+      "downloadPage": "https://github.com/RongNianXin/ChatGPT-Workflows/blob/main/%E5%AE%9E%E7%94%A8%E5%B0%8F%E5%B7%A5%E5%85%B7/Codex%E4%BC%9A%E8%AF%9D%E4%BA%A4%E6%8E%A5%E8%AF%84%E4%BC%B0/DOWNLOAD.md",
+      "downloadPageEn": "https://github.com/RongNianXin/ChatGPT-Workflows/blob/main/%E5%AE%9E%E7%94%A8%E5%B0%8F%E5%B7%A5%E5%85%B7/Codex%E4%BC%9A%E8%AF%9D%E4%BA%A4%E6%8E%A5%E8%AF%84%E4%BC%B0/DOWNLOAD.en.md"
+    },
+    {
+      "id": "codex-task-guard",
+      "name": "Codex任务续执行守卫",
+      "nameEn": "Codex Task Continuation Guard",
+      "summary": "按任务启用验收与有限续作，不接管已有桌面对话。",
+      "summaryEn": "Per-task verification and bounded continuation without taking over existing desktop chats.",
+      "kind": "package",
+      "directory": "实用小工具/Codex任务续执行守卫",
+      "version": "0.1.0",
+      "packageRevision": 1,
+      "asset": "codex-task-guard-0.1.0-r1.zip",
+      "tag": "tool-codex-task-guard-v0.1.0-r1",
+      "requirements": [
+        "Windows、PowerShell、Node.js及已有可用认证的Codex CLI。",
+        "正式运行需明确授权的任务契约和经审查的只读验收器；不自动安装。"
+      ],
+      "requirementsEn": [
+        "Windows, PowerShell, Node.js and an existing authenticated Codex CLI.",
+        "A real run requires an authorized task contract and reviewed read-only checker; no automatic installation."
+      ],
+      "published": null,
+      "downloadPage": "https://github.com/RongNianXin/ChatGPT-Workflows/blob/main/%E5%AE%9E%E7%94%A8%E5%B0%8F%E5%B7%A5%E5%85%B7/Codex%E4%BB%BB%E5%8A%A1%E7%BB%AD%E6%89%A7%E8%A1%8C%E5%AE%88%E5%8D%AB/DOWNLOAD.md",
+      "downloadPageEn": "https://github.com/RongNianXin/ChatGPT-Workflows/blob/main/%E5%AE%9E%E7%94%A8%E5%B0%8F%E5%B7%A5%E5%85%B7/Codex%E4%BB%BB%E5%8A%A1%E7%BB%AD%E6%89%A7%E8%A1%8C%E5%AE%88%E5%8D%AB/DOWNLOAD.en.md"
+    },
+    {
+      "id": "codex-task-locator",
+      "name": "Codex任务定位",
+      "nameEn": "Codex Task Locator",
+      "summary": "按明确项目路径及名称只读查本机会话候选，再由平台核身份。",
+      "summaryEn": "Find local session candidates by explicit project and name; verify identity through the host.",
+      "kind": "package",
+      "directory": "实用小工具/Codex任务定位",
+      "version": "0.1.0",
+      "packageRevision": 1,
+      "asset": "codex-task-locator-0.1.0-r1.zip",
+      "tag": "tool-codex-task-locator-v0.1.0-r1",
+      "requirements": [
+        "Node.js、Python 3及已获准访问的本地Codex元数据库。",
+        "查询只返回检查点候选，不能代替平台核验。"
+      ],
+      "requirementsEn": [
+        "Node.js, Python 3 and an authorized local Codex metadata database.",
+        "Lookup returns checkpoint candidates only; host verification is still required."
+      ],
+      "published": null,
+      "downloadPage": "https://github.com/RongNianXin/ChatGPT-Workflows/blob/main/%E5%AE%9E%E7%94%A8%E5%B0%8F%E5%B7%A5%E5%85%B7/Codex%E4%BB%BB%E5%8A%A1%E5%AE%9A%E4%BD%8D/DOWNLOAD.md",
+      "downloadPageEn": "https://github.com/RongNianXin/ChatGPT-Workflows/blob/main/%E5%AE%9E%E7%94%A8%E5%B0%8F%E5%B7%A5%E5%85%B7/Codex%E4%BB%BB%E5%8A%A1%E5%AE%9A%E4%BD%8D/DOWNLOAD.en.md"
+    },
+    {
+      "id": "git-state-compass",
+      "name": "Git仓库状态罗盘",
+      "nameEn": "Git State Compass",
+      "summary": "已迁至独立仓库，本目录仅保留入口。",
+      "summaryEn": "Maintained in its own repository; this directory is a pointer only.",
+      "kind": "external",
+      "directory": "实用小工具/Git仓库状态罗盘",
+      "repository": "https://github.com/RongNianXin/Git-State-Compass"
+    },
+    {
+      "id": "markdown-reader",
+      "name": "Markdown阅读器",
+      "nameEn": "Markdown Reader",
+      "summary": "离线阅读主动选择的Markdown文件，不修改原文件。",
+      "summaryEn": "Read selected Markdown files offline without modifying the originals.",
+      "kind": "package",
+      "directory": "实用小工具/Markdown阅读器",
+      "version": "1.0.0",
+      "packageRevision": 1,
+      "asset": "markdown-reader-1.0.0-r1.zip",
+      "tag": "tool-markdown-reader-v1.0.0-r1",
+      "requirements": [
+        "现代桌面浏览器；无需Node、安装或服务。",
+        "原文件自动记忆依赖浏览器接口与授权；不支持时使用普通文件选择。"
+      ],
+      "requirementsEn": [
+        "A modern desktop browser; no Node, installation or server is needed.",
+        "Remembering original files depends on browser APIs and permission; ordinary selection is the fallback."
+      ],
+      "published": null,
+      "downloadPage": "https://github.com/RongNianXin/ChatGPT-Workflows/blob/main/%E5%AE%9E%E7%94%A8%E5%B0%8F%E5%B7%A5%E5%85%B7/Markdown%E9%98%85%E8%AF%BB%E5%99%A8/DOWNLOAD.md",
+      "downloadPageEn": "https://github.com/RongNianXin/ChatGPT-Workflows/blob/main/%E5%AE%9E%E7%94%A8%E5%B0%8F%E5%B7%A5%E5%85%B7/Markdown%E9%98%85%E8%AF%BB%E5%99%A8/DOWNLOAD.en.md"
+    },
+    {
+      "id": "zhihu-export",
+      "name": "知乎问答导出助手",
+      "nameEn": "Zhihu Q&A Export Helper",
+      "summary": "在浏览器中将知乎问题、回答及正常返回的评论保存为本机JSON。",
+      "summaryEn": "Export normally returned Zhihu questions, answers and comments to local JSON.",
+      "kind": "package",
+      "directory": "实用小工具/知乎问答导出助手",
+      "version": "0.6.7",
+      "packageRevision": 1,
+      "asset": "zhihu-export-0.6.7-r1.zip",
+      "tag": "tool-zhihu-export-v0.6.7-r1",
+      "requirements": [
+        "桌面Chrome或Edge；通过开发者模式手动加载扩展。",
+        "采集需要使用者自己已有的知乎访问权限及网络；不需要Node或Python。"
+      ],
+      "requirementsEn": [
+        "Desktop Chrome or Edge; load the unpacked extension in developer mode.",
+        "Collection uses your existing Zhihu access and network; Node and Python are not required."
+      ],
+      "published": null,
+      "downloadPage": "https://github.com/RongNianXin/ChatGPT-Workflows/blob/main/%E5%AE%9E%E7%94%A8%E5%B0%8F%E5%B7%A5%E5%85%B7/%E7%9F%A5%E4%B9%8E%E9%97%AE%E7%AD%94%E5%AF%BC%E5%87%BA%E5%8A%A9%E6%89%8B/DOWNLOAD.md",
+      "downloadPageEn": "https://github.com/RongNianXin/ChatGPT-Workflows/blob/main/%E5%AE%9E%E7%94%A8%E5%B0%8F%E5%B7%A5%E5%85%B7/%E7%9F%A5%E4%B9%8E%E9%97%AE%E7%AD%94%E5%AF%BC%E5%87%BA%E5%8A%A9%E6%89%8B/DOWNLOAD.en.md"
+    }
+  ]
+}

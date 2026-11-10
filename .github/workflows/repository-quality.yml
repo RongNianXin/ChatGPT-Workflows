@@ -26,6 +26,14 @@ jobs:
           python -B "实用小工具/知乎问答导出助手/verify-delivery.py"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
+      - name: Verify independent utility distribution (offline only)
+        shell: pwsh
+        run: |
+          python -B "实用小工具/manage_tools.py" check
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python -B "实用小工具/test_manage_tools.py"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
       - name: Run repository checks
         shell: pwsh
         run: ./.github/scripts/Test-Repository.ps1

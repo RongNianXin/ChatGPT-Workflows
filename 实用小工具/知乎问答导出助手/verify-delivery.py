@@ -10,7 +10,10 @@ if not __debug__:
     raise SystemExit("Run verification without -O or PYTHONOPTIMIZE; assertions must remain enabled.")
 manifest = json.loads((root / "delivery-manifest.json").read_text(encoding="utf-8"))
 expected = {row["path"] for row in manifest["files"]}
-actual = {p.relative_to(root).as_posix() for p in root.rglob("*") if p.is_file()}
+# Live publication pages stay outside the package; manage_tools.py checks them.
+publication_pages = {"DOWNLOAD.md", "DOWNLOAD.en.md"}
+actual = {p.relative_to(root).as_posix() for p in root.rglob("*") if p.is_file()
+          and p.relative_to(root).as_posix() not in publication_pages}
 assert actual == expected | {"delivery-manifest.json"}, "Unexpected or missing baseline files"
 assert len(expected) == len(manifest["files"]), "Duplicate manifest path"
 for row in manifest["files"]:

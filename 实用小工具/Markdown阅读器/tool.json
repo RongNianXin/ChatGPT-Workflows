@@ -1,0 +1,47 @@
+{
+  "schemaVersion": 1,
+  "id": "markdown-reader",
+  "name": "Markdown阅读器",
+  "nameEn": "Markdown Reader",
+  "summary": "离线阅读主动选择的Markdown文件，不修改原文件。",
+  "summaryEn": "Read selected Markdown files offline without modifying the originals.",
+  "kind": "package",
+  "version": "1.0.0",
+  "packageRevision": 1,
+  "files": [
+    "实用小工具/Markdown阅读器/index.html",
+    "实用小工具/Markdown阅读器/reader.js",
+    "实用小工具/Markdown阅读器/reader.css",
+    "实用小工具/Markdown阅读器/vendor/markdown-it.min.js",
+    "实用小工具/Markdown阅读器/vendor/markdown-it.LICENSE",
+    "实用小工具/Markdown阅读器/vendor/lucide.min.js",
+    "实用小工具/Markdown阅读器/vendor/lucide.LICENSE",
+    "实用小工具/Markdown阅读器/README.md",
+    "实用小工具/Markdown阅读器/README.en.md",
+    "实用小工具/Markdown阅读器/build.cjs",
+    "实用小工具/Markdown阅读器/verify.cjs",
+    "实用小工具/Markdown阅读器/browser-check.cjs",
+    "实用小工具/Markdown阅读器/package.json",
+    "实用小工具/Markdown阅读器/package-lock.json"
+  ],
+  "sharedFiles": [],
+  "entrypoints": [
+    "实用小工具/Markdown阅读器/index.html"
+  ],
+  "requirements": [
+    "现代桌面浏览器；无需Node、安装或服务。",
+    "原文件自动记忆依赖浏览器接口与授权；不支持时使用普通文件选择。"
+  ],
+  "requirementsEn": [
+    "A modern desktop browser; no Node, installation or server is needed.",
+    "Remembering original files depends on browser APIs and permission; ordinary selection is the fallback."
+  ],
+  "instructions": [
+    "双击 实用小工具/Markdown阅读器/index.html。",
+    "点击“打开文档”，选择自己的Markdown；包中不附带工作流文档。"
+  ],
+  "instructionsEn": [
+    "Open 实用小工具/Markdown阅读器/index.html.",
+    "Click Open document and select your Markdown files. Workflow documents are not bundled."
+  ]
+}

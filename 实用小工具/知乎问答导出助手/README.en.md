@@ -1,5 +1,7 @@
 # Zhihu Q&A Export Helper
 
+[Download this tool and check release status](https://github.com/RongNianXin/ChatGPT-Workflows/blob/main/%E5%AE%9E%E7%94%A8%E5%B0%8F%E5%B7%A5%E5%85%B7/%E7%9F%A5%E4%B9%8E%E9%97%AE%E7%AD%94%E5%AF%BC%E5%87%BA%E5%8A%A9%E6%89%8B/DOWNLOAD.en.md)
+
 [简体中文](README.md) | English
 
 Version: 0.6.7. A free, locally loaded browser extension included in ChatGPT Workflows. It is not listed in a browser extension store and does not guarantee complete coverage.
@@ -18,9 +20,9 @@ Choose either the current answer or the entire question. The extension exports t
 
 Node and Python are not required for normal use.
 
-1. Download and extract this repository, or keep an existing checkout in a stable folder.
+1. Get the ZIP from this tool's download page above and extract it to a stable folder. No repository clone is required. Existing checkouts still work. Do not load files directly from the ZIP.
 2. Open `chrome://extensions` in Chrome or `edge://extensions` in Edge and enable Developer mode.
-3. Select **Load unpacked** and choose this tool's `extension` folder, which directly contains `manifest.json`.
+3. Select **Load unpacked** and choose `实用小工具/知乎问答导出助手/extension` inside the package, the folder that directly contains `manifest.json`.
 4. Confirm version 0.6.7 and optionally pin the extension to the toolbar.
 
 Other Manifest V3 browsers may work, but compatibility has not been verified across browsers. For an update, obtain the new files first, reload the extension, and refresh any open Zhihu tab. Reloading reads your local folder; it does not download updates from the maintainer. After disabling or removing the extension, refresh tabs where it was already injected.
@@ -71,7 +73,7 @@ This is a limited-maintenance utility, with no promised response time, release s
 - `研发与维护记录.md`: design decisions, history, known gaps, and verification scope.
 - `接管验收.md`: portable acceptance and future maintenance handoff.
 - `evidence/`: sanitized historical receipts, not current live-site acceptance.
-- `delivery-manifest.json`: the current file list and SHA-256 integrity checks.
+- `delivery-manifest.json`: fixed delivery files and SHA-256 integrity checks. The two generated DOWNLOAD pages are checked separately by the parent distribution checker and are excluded from packages.
 - `verify-delivery.py`: verifies the file set and runs offline tests using installed Python and Node.
 
-<!-- README-SOURCE-SHA256: 7c3038d81be3ed1f31c6ce96d2e900da1f85e00910edf6f606cf5a63f923ab95 -->
+<!-- README-SOURCE-SHA256: 0ccb5e634cdbc5354f56f7ccc7a0141fcec720cd4fec3b886a65d5fa2c7c9a4f -->

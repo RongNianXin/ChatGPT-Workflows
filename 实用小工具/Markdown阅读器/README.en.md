@@ -1,11 +1,15 @@
 [中文](README.md)
-<!-- README-SOURCE-SHA256: 32f291c23a0cd36ac0cd7fb140dfe6560b98e4ac52d846c7efcf12a37ce545d7 -->
+<!-- README-SOURCE-SHA256: 548dd2b5e32bf368c4ade00e612f93a8304beebb3674acecd7addeaf359b99db -->
 
 # Markdown Reader
+
+[Download this tool and check release status](https://github.com/RongNianXin/ChatGPT-Workflows/blob/main/%E5%AE%9E%E7%94%A8%E5%B0%8F%E5%B7%A5%E5%85%B7/Markdown%E9%98%85%E8%AF%BB%E5%99%A8/DOWNLOAD.en.md)
 
 Double-click [index.html](index.html) to read Markdown in a browser. Select source files for both the manual and other project documents, then switch between them in the same library. No manual snapshot is bundled. Reading requires no application installation, login, or server.
 
 ## Getting Started
+
+Get the ZIP from this tool's download page above, extract it and open `实用小工具/Markdown阅读器/`. No repository clone or other tool is required. Existing copies still work. Use a modern desktop browser; normal reading needs neither Node nor Python.
 
 1. Double-click `index.html`. The first visit shows “暂无文档” (No documents) and an Open documents button. Remembered files restore the library on later visits. Once loaded, documents appear in the library on the left, with content in the center and an outline on the right. On narrow screens, use the toolbar buttons to open the library and outline. If the page is blank, check that `reader.js`, `reader.css`, and `vendor/` are kept alongside `index.html`, and record the browser and any error shown.
 2. Select “打开文档” (Open documents) and choose the manual's original `.md` file or any other document. Expect a new or selected entry labeled as an original file or session import. The old bundled snapshot no longer appears; existing saved file references remain in use.
@@ -57,6 +61,10 @@ All interface assets ship locally: no CDN, document uploads, AI integration, or 
 
 Reading permission does not authorize publication or sending. Do not embed private documents into a distribution package. Open documents through runtime file selection.
 
+## Updating the reader
+
+Close the old reader page, extract the new ZIP separately and open its index.html. Your Markdown files do not need to move or change. Moving the reader can change its browser storage scope, so you may need to select documents again. For failures, include the package version, browser, import mode and redacted error text.
+
 ## Validation
 
 Headless Chrome and Edge on Windows validated exact source agreement for 43 headings and 40 fenced blocks after importing the manual; navigation to scenarios 2F/2G and subsections; document switching and position restoration; duplicate headings, legacy anchors, cross-file candidate confirmation, text search and copying with highlights; session replacement without new entries; an initially empty library, removal controls for all entries, clearing the last document, removed entries staying removed after reopening, and source files remaining unchanged after entry removal; invalid encoding; inert scripts and no image requests; 1440-pixel desktop, 390-pixel narrow layouts, and light/dark themes. No page exceptions or external requests were found.
@@ -79,7 +87,7 @@ The build copies pinned parser/icon assets and licenses into `vendor/`, resolvin
 
 `npm run check` checks JavaScript syntax, the absence of the old snapshot file, the bilingual README hash and language links, asset existence, and common machine-specific paths in the tool files listed by the script. It is not a complete repository path audit or translation review. The Chinese README is the source; update its English translation whenever the Chinese text changes. Building updates the hash marker but does not translate the text.
 
-With Playwright and Chrome available:
+The following maintainer checks require a full repository checkout with its manual fixtures, plus existing Playwright and Chrome. Reading with the standalone package does not require those fixtures or tests:
 
 ```sh
 node browser-check.cjs /path/to/playwright

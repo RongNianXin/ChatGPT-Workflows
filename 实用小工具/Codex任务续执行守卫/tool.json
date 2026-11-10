@@ -1,0 +1,41 @@
+{
+  "schemaVersion": 1,
+  "id": "codex-task-guard",
+  "name": "Codex任务续执行守卫",
+  "nameEn": "Codex Task Continuation Guard",
+  "summary": "按任务启用验收与有限续作，不接管已有桌面对话。",
+  "summaryEn": "Per-task verification and bounded continuation without taking over existing desktop chats.",
+  "kind": "package",
+  "version": "0.1.0",
+  "packageRevision": 1,
+  "files": [
+    "实用小工具/Codex任务续执行守卫/Start-GuardedTask.ps1",
+    "实用小工具/Codex任务续执行守卫/guard.mjs",
+    "实用小工具/Codex任务续执行守卫/README.md",
+    "实用小工具/Codex任务续执行守卫/README.en.md"
+  ],
+  "sharedFiles": [
+    ".github/scripts/Test-TaskContinuationGuard.mjs"
+  ],
+  "entrypoints": [
+    "实用小工具/Codex任务续执行守卫/Start-GuardedTask.ps1"
+  ],
+  "requirements": [
+    "Windows、PowerShell、Node.js及已有可用认证的Codex CLI。",
+    "正式运行需明确授权的任务契约和经审查的只读验收器；不自动安装。"
+  ],
+  "requirementsEn": [
+    "Windows, PowerShell, Node.js and an existing authenticated Codex CLI.",
+    "A real run requires an authorized task contract and reviewed read-only checker; no automatic installation."
+  ],
+  "instructions": [
+    "先读 实用小工具/Codex任务续执行守卫/README.md，由AI在已授权任务内准备契约与验收器。",
+    "在该目录调用 Start-GuardedTask.ps1 并给出契约/提示词；被守护项目须与本包分离。",
+    "0.1.0是初始独立分发版本，不代表新增后台自动化。"
+  ],
+  "instructionsEn": [
+    "Read 实用小工具/Codex任务续执行守卫/README.en.md; have the agent prepare the authorized contract and checker.",
+    "Run Start-GuardedTask.ps1 from that directory with the contract and prompt; keep the guarded workspace separate from this package.",
+    "0.1.0 is the initial distribution version, not a new background automation."
+  ]
+}

@@ -1,0 +1,46 @@
+{
+  "schemaVersion": 1,
+  "id": "codex-session-desk",
+  "name": "Codex会话交接评估",
+  "nameEn": "Codex Session Handoff Assessment",
+  "summary": "Windows本地工作台，按需只读查看已有Codex会话状态。",
+  "summaryEn": "A local Windows desk for read-only snapshots of existing Codex sessions.",
+  "kind": "package",
+  "version": "0.2.0-dev.10",
+  "packageRevision": 1,
+  "files": [
+    "实用小工具/Codex会话交接评估/Start-SessionDesk.cmd",
+    "实用小工具/Codex会话交接评估/check-codex-session.ps1",
+    "实用小工具/Codex会话交接评估/README.md",
+    "实用小工具/Codex会话交接评估/README.en.md",
+    "实用小工具/Codex会话交接评估/DEV10_TEST_MANIFEST.md",
+    "实用小工具/Codex会话交接评估/compatibility-fixtures.json",
+    "实用小工具/Codex会话交接评估/windows-local/Start-SessionDesk.cmd",
+    "实用小工具/Codex会话交接评估/windows-local/Start-SessionDesk.ps1",
+    "实用小工具/Codex会话交接评估/windows-local/Invoke-IsolatedAnalyzer.ps1",
+    "实用小工具/Codex会话交接评估/windows-local/Read-DeskMetadata.ps1",
+    "实用小工具/Codex会话交接评估/windows-local/desk.html",
+    "实用小工具/Codex会话交接评估/windows-local/README.md",
+    "实用小工具/Codex会话交接评估/windows-local/README.en.md"
+  ],
+  "sharedFiles": [],
+  "entrypoints": [
+    "实用小工具/Codex会话交接评估/Start-SessionDesk.cmd"
+  ],
+  "requirements": [
+    "Windows、已有PowerShell及Codex本地会话文件；其他系统未验收。",
+    "启动后运行仅本机服务并打开浏览器；数据保存在本包windows-local/.local下。"
+  ],
+  "requirementsEn": [
+    "Windows, existing PowerShell and local Codex session files; other systems are not validated.",
+    "Starting the desk runs a local-only service and opens a browser; state stays under windows-local/.local in this package."
+  ],
+  "instructions": [
+    "双击 实用小工具/Codex会话交接评估/Start-SessionDesk.cmd；首次使用先读同目录README。",
+    "本包是当前源码的独立分发修订r1，不等于历史同名预览ZIP；关闭按工作台说明操作。"
+  ],
+  "instructionsEn": [
+    "Run 实用小工具/Codex会话交接评估/Start-SessionDesk.cmd; read the adjacent README first.",
+    "This is distribution revision r1 of the current sources, distinct from older preview ZIPs with the same app version. Follow the desk shutdown instructions."
+  ]
+}

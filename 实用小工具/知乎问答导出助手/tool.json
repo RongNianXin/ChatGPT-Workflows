@@ -1,0 +1,55 @@
+{
+  "schemaVersion": 1,
+  "id": "zhihu-export",
+  "name": "知乎问答导出助手",
+  "nameEn": "Zhihu Q&A Export Helper",
+  "summary": "在浏览器中将知乎问题、回答及正常返回的评论保存为本机JSON。",
+  "summaryEn": "Export normally returned Zhihu questions, answers and comments to local JSON.",
+  "kind": "package",
+  "version": "0.6.7",
+  "packageRevision": 1,
+  "files": [
+    "实用小工具/知乎问答导出助手/LICENSE",
+    "实用小工具/知乎问答导出助手/README.en.md",
+    "实用小工具/知乎问答导出助手/README.md",
+    "实用小工具/知乎问答导出助手/evidence/delivery-tests.json",
+    "实用小工具/知乎问答导出助手/evidence/expert-review.json",
+    "实用小工具/知乎问答导出助手/evidence/final.json",
+    "实用小工具/知乎问答导出助手/evidence/live-acceptance-summary.json",
+    "实用小工具/知乎问答导出助手/evidence/summary.json",
+    "实用小工具/知乎问答导出助手/evidence/text-scope-replay.json",
+    "实用小工具/知乎问答导出助手/extension/MAINTENANCE.md",
+    "实用小工具/知乎问答导出助手/extension/README.en.md",
+    "实用小工具/知乎问答导出助手/extension/README.md",
+    "实用小工具/知乎问答导出助手/extension/collector.js",
+    "实用小工具/知乎问答导出助手/extension/manifest.json",
+    "实用小工具/知乎问答导出助手/extension/test-menu.cjs",
+    "实用小工具/知乎问答导出助手/extension/test-portable.cjs",
+    "实用小工具/知乎问答导出助手/extension/test-text-scope.cjs",
+    "实用小工具/知乎问答导出助手/extension/worker.js",
+    "实用小工具/知乎问答导出助手/verify-delivery.py",
+    "实用小工具/知乎问答导出助手/接管验收.md",
+    "实用小工具/知乎问答导出助手/研发与维护记录.md",
+    "实用小工具/知乎问答导出助手/delivery-manifest.json"
+  ],
+  "sharedFiles": [],
+  "entrypoints": [
+    "实用小工具/知乎问答导出助手/extension/manifest.json"
+  ],
+  "requirements": [
+    "桌面Chrome或Edge；通过开发者模式手动加载扩展。",
+    "采集需要使用者自己已有的知乎访问权限及网络；不需要Node或Python。"
+  ],
+  "requirementsEn": [
+    "Desktop Chrome or Edge; load the unpacked extension in developer mode.",
+    "Collection uses your existing Zhihu access and network; Node and Python are not required."
+  ],
+  "instructions": [
+    "在扩展管理页开启开发者模式，加载 实用小工具/知乎问答导出助手/extension。选择直接包含manifest.json的文件夹。",
+    "刷新目标知乎标签，再点击扩展；结果只保存到本机，不能保证全量。"
+  ],
+  "instructionsEn": [
+    "Enable developer mode on the extensions page and load 实用小工具/知乎问答导出助手/extension, the folder containing manifest.json.",
+    "Refresh the target Zhihu tab, then click the extension. Results remain local; full coverage is not guaranteed."
+  ]
+}

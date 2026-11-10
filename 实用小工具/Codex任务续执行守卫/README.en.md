@@ -1,12 +1,18 @@
-<!-- README-SOURCE-SHA256: aa6ca1a1e0b99c61ca1fcead3341423791cb10a59179893c686e8f639a1e8e2a -->
+<!-- README-SOURCE-SHA256: afbc3ffed93c1d72efa7f5f92de905659fbb40930432add2e1fb789c77ae7e4c -->
 
 # Codex task continuation guard
+
+[Download this tool and check release status](https://github.com/RongNianXin/ChatGPT-Workflows/blob/main/%E5%AE%9E%E7%94%A8%E5%B0%8F%E5%B7%A5%E5%85%B7/Codex%E4%BB%BB%E5%8A%A1%E7%BB%AD%E6%89%A7%E8%A1%8C%E5%AE%88%E5%8D%AB/DOWNLOAD.en.md)
 
 [简体中文](README.md)
 
 Add independent acceptance checks to a newly launched CLI task. When the task tries to stop, a reviewed checker inspects the actual result. An actionable failure can continue the same turn while the original budget remains valid. An AI completion claim or a zero CLI exit code alone does not establish completion.
 
 This is a per-task local launcher. It does not install hooks into existing desktop conversations, resume old tasks, send cross-chat messages, change global settings, or exit or restart Codex. The session handoff assessment tool remains separate. No resident service or scheduled automation is created.
+
+## Download and requirements
+
+Get the ZIP from this tool's download page above and extract it completely, preserving the relative `.github/` and `实用小工具/` layout. No repository clone is required. Enter `实用小工具/Codex任务续执行守卫/` before running the commands below. Use requires Windows, PowerShell, Node.js and an existing authenticated Codex CLI; nothing is installed automatically. Version 0.1.0 is the initial distribution version, not a desktop conversation plugin.
 
 ## Use
 
@@ -84,6 +90,10 @@ Only this CLI invocation receives `Stop`, tool lifecycle and interruption hooks.
 - Final exit reconciliation requires a valid `Stop`, verified state and clean termination. Later cancellation, hook errors, tool activity or newer stop events invalidate earlier success. Crashes and network failures do not trigger automatic replay.
 
 Hooks are not a completion judge and do not guarantee final text has not yet appeared. Evidence covers the tested CLI path; existing desktop conversations are not integrated. See official [Hooks](https://developers.openai.com/codex/hooks) and [noninteractive mode](https://developers.openai.com/codex/noninteractive).
+
+## Updates and errors
+
+Before upgrading, inspect status in the original run directory, confirm that the owned CLI has exited, and reconcile pending effects. Extract the new ZIP separately. Keep the old package, state and unique registration at their original paths; the new package does not automatically inherit that registration. Do not use a different package path to replay the same work item or reset its budget. Use the new version for the next separately authorized batch. For errors, report the package and CLI versions, final status and redacted error text. Logs can contain task content; do not publish the whole run directory.
 
 ## Automated verification
 

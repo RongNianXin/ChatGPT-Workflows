@@ -1,5 +1,7 @@
 # Codex session handoff assessment
 
+[Download this tool and check release status](https://github.com/RongNianXin/ChatGPT-Workflows/blob/main/%E5%AE%9E%E7%94%A8%E5%B0%8F%E5%B7%A5%E5%85%B7/Codex%E4%BC%9A%E8%AF%9D%E4%BA%A4%E6%8E%A5%E8%AF%84%E4%BC%B0/DOWNLOAD.en.md)
+
 [简体中文](README.md)
 
 Save frequently used task IDs and query local Codex turns, file size, compaction and handoff guidance with one click. **Recommended download: Windows desk 0.2.0-dev.10.** No commands are required for everyday use. Source sessions are read-only; data is not uploaded.
@@ -10,7 +12,9 @@ The repository source includes score-bar recovery, history compatibility and Chi
 
 ## Download and start
 
-1. [Download the standalone Windows ZIP](https://github.com/RongNianXin/ChatGPT-Workflows/releases/download/windows-sessiondesk-v0.2.0-dev.10/Windows-SessionDesk-0.2.0-dev.10.zip), extract it completely, and double-click the root `Start-SessionDesk.cmd`. You do not need to clone the repository. Do not open the HTML by itself.
+The tool-specific download page above covers the current unified standalone package. Extract that package completely and run `实用小工具/Codex会话交接评估/Start-SessionDesk.cmd`, or follow START-HERE.en.md at the package root. The historical dev.10 ZIP below uses a root launcher and has a different layout and source revision.
+
+1. [Download the historical standalone Windows ZIP](https://github.com/RongNianXin/ChatGPT-Workflows/releases/download/windows-sessiondesk-v0.2.0-dev.10/Windows-SessionDesk-0.2.0-dev.10.zip), extract it completely, and double-click the root `Start-SessionDesk.cmd`. You do not need to clone the repository. Do not open the HTML by itself.
 2. If you cloned the repository, double-click [Start-SessionDesk.cmd](Start-SessionDesk.cmd). Repository source may be newer than the download; use the version displayed at the top of the page.
 3. Save a task ID. Query / Refresh updates that task, while Refresh all updates the complete list. The conversation name and local project are detected automatically. Basic and detailed reports have separate areas, with Simplified Chinese and English available.
 
@@ -83,4 +87,4 @@ Results are engineering guidance, not official thresholds or live status. Segmen
 
 Detailed reports and history can contain complete user input and local paths. They remain in `.local` and must not be published without review. ZIP files exclude private state. The service listens only on loopback and validates a random connection token. Exit does not stop other programs or Codex tasks. Preserve the analyzer’s integrity warnings; missing Token counts must not be treated as zero.
 
-<!-- README-SOURCE-SHA256: d0051f55bb42d8a467826a25d08c456345b591ec220ffe027f3567fbeab84076 -->
+<!-- README-SOURCE-SHA256: e2e35cda2a39894fe183605339d7b71b7e2cfbf9b117bb8f81cced4876dd78f9 -->

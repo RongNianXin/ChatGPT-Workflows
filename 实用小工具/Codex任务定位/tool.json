@@ -1,0 +1,39 @@
+{
+  "schemaVersion": 1,
+  "id": "codex-task-locator",
+  "name": "Codex任务定位",
+  "nameEn": "Codex Task Locator",
+  "summary": "按明确项目路径及名称只读查本机会话候选，再由平台核身份。",
+  "summaryEn": "Find local session candidates by explicit project and name; verify identity through the host.",
+  "kind": "package",
+  "version": "0.1.0",
+  "packageRevision": 1,
+  "files": [
+    "实用小工具/Codex任务定位/README.md",
+    "实用小工具/Codex任务定位/README.en.md"
+  ],
+  "sharedFiles": [
+    ".github/scripts/Find-CodexThread.mjs",
+    ".github/scripts/Find-CodexThread.py",
+    ".github/scripts/Test-Find-CodexThread.mjs"
+  ],
+  "entrypoints": [
+    ".github/scripts/Find-CodexThread.mjs"
+  ],
+  "requirements": [
+    "Node.js、Python 3及已获准访问的本地Codex元数据库。",
+    "查询只返回检查点候选，不能代替平台核验。"
+  ],
+  "requirementsEn": [
+    "Node.js, Python 3 and an authorized local Codex metadata database.",
+    "Lookup returns checkpoint candidates only; host verification is still required."
+  ],
+  "instructions": [
+    "在本包根目录按README执行 node .github/scripts/Find-CodexThread.mjs，并填写已授权项目根与名称。",
+    "0.1.0是初始独立分发版本，不代表修改了定位功能。"
+  ],
+  "instructionsEn": [
+    "From this package root, follow the README to run node .github/scripts/Find-CodexThread.mjs with the authorized project root and name.",
+    "0.1.0 is the initial distribution version, not a change to lookup behavior."
+  ]
+}
