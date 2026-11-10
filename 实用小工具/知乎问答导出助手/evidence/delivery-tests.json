@@ -1,0 +1,24 @@
+{
+  "result": "PASS",
+  "version": "0.6.6",
+  "testedCollectorSha256": "62dd8c358197bf9f9a1b6470767b1afcb1729d9ce09f16880e490b2a89cf3243",
+  "suites": [
+    {
+      "suite": "test-portable.cjs",
+      "result": "PASS",
+      "cases": 33
+    },
+    {
+      "suite": "test-menu.cjs",
+      "result": "PASS",
+      "cases": 15
+    },
+    {
+      "suite": "test-text-scope.cjs",
+      "result": "PASS",
+      "cases": 8
+    }
+  ],
+  "network": "NONE",
+  "browser": "NOT_RUN"
+}

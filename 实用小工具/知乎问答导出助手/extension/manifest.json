@@ -1,0 +1,16 @@
+{
+  "manifest_version": 3,
+  "name": "知乎当前问题只读导出（本机试验）",
+  "version": "0.6.7",
+  "description": "在问题或回答页选择单篇或整题，导出正常返回的回答、评论与楼中楼到本机。有限维护，不保证全量覆盖。",
+  "permissions": [
+    "activeTab",
+    "scripting"
+  ],
+  "background": {
+    "service_worker": "worker.js"
+  },
+  "action": {
+    "default_title": "选择扫描范围：单篇回答或整个问题"
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "result": "PASS",
+  "cases": 3,
+  "input": "0.6.1 original capture, unchanged",
+  "testedCollectorSha256": "62dd8c358197bf9f9a1b6470767b1afcb1729d9ce09f16880e490b2a89cf3243",
+  "imageVariant": "Known CDN/source-only form no longer causes a body gap in synthetic replay",
+  "emptyBodies": "Both remain unknown automatically; manual video acceptance stays in separate evidence",
+  "limitation": "This is isolated body replay, not a new full run or re-certification of the old capture",
+  "network": "NONE",
+  "browser": "NOT_RUN"
+}

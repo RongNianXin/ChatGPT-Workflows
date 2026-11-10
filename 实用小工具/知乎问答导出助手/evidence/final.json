@@ -1,0 +1,22 @@
+{
+  "result": "PASS",
+  "version": "0.6.6",
+  "testedCollectorSha256": "62dd8c358197bf9f9a1b6470767b1afcb1729d9ce09f16880e490b2a89cf3243",
+  "checks": {
+    "regression": 89,
+    "portable": 33,
+    "menu": 15,
+    "textScope": 8,
+    "syntheticTotal": 145,
+    "privateReplay": 3,
+    "syntax": "PASS",
+    "packageExtracted": "PASS"
+  },
+  "packageSha256": "568228f422afab46b1958811205827c2179e3b049fc1cba21b1db3b758fe1c0c",
+  "expertReview": "PASS_SAME_HASH",
+  "liveInputVersion": "0.6.5",
+  "liveAuditChecks": 34,
+  "browser": "NOT_RUN",
+  "network": "NONE",
+  "uploaded": false
+}

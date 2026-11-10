@@ -1,0 +1,113 @@
+{
+  "applicationVersion": "0.6.7",
+  "deliveryRevision": "2026-11-10.5",
+  "collectorSha256": "e56e66155d26bdfe71b61ac7b98e66a9314a1beb57030d288d67465ea169e2b7",
+  "status": "MIT_LIMITED_MAINTENANCE_SOURCE_DISTRIBUTION",
+  "files": [
+    {
+      "path": "LICENSE",
+      "bytes": 1095,
+      "sha256": "2f4708a0c2a25daf5795daecc8f7362242c439aa6e968020da78cd6a4509ac92"
+    },
+    {
+      "path": "README.en.md",
+      "bytes": 6024,
+      "sha256": "e5d457b48b1e5258b6d78824f27c28f112f1252023b36cc903c0d387c6e1adbf"
+    },
+    {
+      "path": "README.md",
+      "bytes": 8090,
+      "sha256": "7c3038d81be3ed1f31c6ce96d2e900da1f85e00910edf6f606cf5a63f923ab95"
+    },
+    {
+      "path": "evidence/delivery-tests.json",
+      "bytes": 497,
+      "sha256": "b24a681f6d239ca932762ae7d872c70a25d192b133f50ae4937e51aea129f488"
+    },
+    {
+      "path": "evidence/expert-review.json",
+      "bytes": 927,
+      "sha256": "29afa58e12b8f8c654f52787d658820119501b7cbd7283f1a3d0759341c33f65"
+    },
+    {
+      "path": "evidence/final.json",
+      "bytes": 608,
+      "sha256": "41791c5edb25545c13e0dfcd745f4d58ad99b53077f54afddea09faadb44dc10"
+    },
+    {
+      "path": "evidence/live-acceptance-summary.json",
+      "bytes": 1872,
+      "sha256": "f3300779e486b88f61315cff0d334f6ea54d7f6de022139a9df3d29e80e6b5de"
+    },
+    {
+      "path": "evidence/summary.json",
+      "bytes": 1425,
+      "sha256": "f36929105b2bfee2967034073e1e65e83c068955c4aa24e6268279c6282f2272"
+    },
+    {
+      "path": "evidence/text-scope-replay.json",
+      "bytes": 545,
+      "sha256": "3b23b8cc60cb403c1cd61a5660365a4688123e4165b9bf82451b9a2ed5d33024"
+    },
+    {
+      "path": "extension/MAINTENANCE.md",
+      "bytes": 8169,
+      "sha256": "cec527da61ec787a30ad0f079da530455277d471c42788cb84602983bf2117aa"
+    },
+    {
+      "path": "extension/README.en.md",
+      "bytes": 3206,
+      "sha256": "d8a150d2ad1067e227bbf163e89a02751514262a5a90b1a95643bf34282dcf96"
+    },
+    {
+      "path": "extension/README.md",
+      "bytes": 8670,
+      "sha256": "d275dac41bc69fd7fb9ac844b4a81d3b2cbc976f03d34ab9ea4ca175e73dd615"
+    },
+    {
+      "path": "extension/collector.js",
+      "bytes": 52602,
+      "sha256": "e56e66155d26bdfe71b61ac7b98e66a9314a1beb57030d288d67465ea169e2b7"
+    },
+    {
+      "path": "extension/manifest.json",
+      "bytes": 498,
+      "sha256": "87e3aeb7af415ae06829a656795b2f0b36066d4d050a191c841ce26712410cbd"
+    },
+    {
+      "path": "extension/test-menu.cjs",
+      "bytes": 6017,
+      "sha256": "819795ea7225cb50bec9f5a4e0bbac1d366cd02a3691e5f03c38a878e45568e3"
+    },
+    {
+      "path": "extension/test-portable.cjs",
+      "bytes": 26910,
+      "sha256": "e3b5b3e312c217ed79c44ce1bf9ba0351cc828b5bcb3b72d4307ab50115d0f3e"
+    },
+    {
+      "path": "extension/test-text-scope.cjs",
+      "bytes": 3702,
+      "sha256": "f7c9117f1838ce55a58597a6b2464ae9c0467c5edf704c32ba7e4f23dd1c12a4"
+    },
+    {
+      "path": "extension/worker.js",
+      "bytes": 1261,
+      "sha256": "85bd70d04c95fc9fd06073763bf18dabed9372924820b2f1c15b03b37e972124"
+    },
+    {
+      "path": "verify-delivery.py",
+      "bytes": 2212,
+      "sha256": "3a8a4c295a41ff5df0b521ab4b5032b3c2f7ecedb1b6f0a1ecaea539993c2b52"
+    },
+    {
+      "path": "接管验收.md",
+      "bytes": 2082,
+      "sha256": "109f6a6fbcb4ee9f75fe62ae7bdd235daaf3acae598b04e5f6be589c319e0dc5"
+    },
+    {
+      "path": "研发与维护记录.md",
+      "bytes": 12853,
+      "sha256": "3fcb5e335ca893b1543c07824259dbdc189b130bd47185edf1dde9f5f15ca12a"
+    }
+  ]
+}

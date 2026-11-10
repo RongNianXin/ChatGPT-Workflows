@@ -115,6 +115,7 @@ Specific model names, prices, and reasoning levels are not permanent prerequisit
 - [External Tool Directory](引用的外部工具/README.en.md): a shared directory for people and AI. Find candidates by goal, read only the selected guidance, and acquire resources when needed.
 - [Troubleshooting and recovery](故障排查与解决经验/): sanitized records and recovery tools for reproduced Codex Desktop and CC Switch issues.
 - [Local utilities](实用小工具/): read-only or reversible helpers, including the Codex session handoff assessment.
+- [Zhihu Q&A Export Helper](实用小工具/知乎问答导出助手/README.en.md): a free local browser extension that exports one answer or a question's normally returned answers, comments, and replies. Results stay on your device; full coverage is not guaranteed.
 - [Showcase](SHOWCASE.md): privacy-reviewed screenshots of real runs so visitors can see what the workflows and tools produce.
 
 ## ChatGPT and Codex naming boundary
@@ -176,4 +177,4 @@ Released under the [MIT License](LICENSE).
 
 This project acknowledges the [LINUX DO](https://linux.do/) community and supports sincere, friendly knowledge sharing and exchange.
 
-<!-- README-SOURCE-SHA256: 8fcc7a69dc6712e7515e919b638c16974ada5353733481779115d1072496516f -->
+<!-- README-SOURCE-SHA256: b111bb28fd77b60b0a7bfc4474bdc46fed6c4fd10e07bab00cf9fa2d78694a3e -->

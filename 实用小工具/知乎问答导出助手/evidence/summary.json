@@ -1,0 +1,53 @@
+{
+  "result": "PASS",
+  "version": "0.6.6",
+  "testedCollectorSha256": "62dd8c358197bf9f9a1b6470767b1afcb1729d9ce09f16880e490b2a89cf3243",
+  "cases": 89,
+  "suites": [
+    {
+      "suite": "export",
+      "result": "PASS",
+      "cases": 17,
+      "receipt": "stage1-v066-validation\\one-click-export-validation.json"
+    },
+    {
+      "suite": "recovery",
+      "result": "PASS",
+      "cases": 15,
+      "receipt": "stage1-v066-validation\\one-click-recovery-validation.json"
+    },
+    {
+      "suite": "variants",
+      "result": "PASS",
+      "cases": 10,
+      "receipt": "stage1-v066-validation\\one-click-variants-validation.json"
+    },
+    {
+      "suite": "panel",
+      "result": "PASS",
+      "cases": 4,
+      "receipt": "stage1-v066-validation\\one-click-panel-validation.json"
+    },
+    {
+      "suite": "pacing",
+      "result": "PASS",
+      "cases": 7,
+      "receipt": "stage1-v066-validation\\one-click-pacing-validation.json"
+    },
+    {
+      "suite": "diagnostics",
+      "result": "PASS",
+      "cases": 23,
+      "receipt": "stage1-v066-validation\\one-click-diagnostics-validation.json"
+    },
+    {
+      "suite": "sample",
+      "result": "PASS",
+      "cases": 13,
+      "receipt": "stage1-v066-validation\\one-click-sample-validation.json"
+    }
+  ],
+  "realBrowser": "NOT_RUN",
+  "network": "NONE",
+  "historicalReceipts": "UNCHANGED"
+}
