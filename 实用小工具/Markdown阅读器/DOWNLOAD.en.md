@@ -10,8 +10,12 @@ Distribution version: 1.0.0 / r1
 
 ## Download
 
-This version of the standalone package has not been published; no ZIP download is available here yet.
-You can read the usage guide now. Any older download listed there is a separate release.
+[Download this tool ZIP](https://github.com/RongNianXin/ChatGPT-Workflows/releases/download/tool-markdown-reader-v1.0.0-r1/markdown-reader-1.0.0-r1.zip)
+ · [SHA256SUMS.txt](https://github.com/RongNianXin/ChatGPT-Workflows/releases/download/tool-markdown-reader-v1.0.0-r1/SHA256SUMS.txt)
+ · [Release notes](https://github.com/RongNianXin/ChatGPT-Workflows/releases/tag/tool-markdown-reader-v1.0.0-r1)
+
+Development preview.
+ZIP SHA-256: `216ab8f71cf6921f15c9ecde9cd9248ada763101d899560ef301996636f9603a`
 
 Once a download is available, extract the entire ZIP to a permanent folder and read START-HERE.en.md.
 No repository clone or other tool is required. Keep the package layout intact; GitHub's Source code archive is the whole repository.
@@ -38,4 +42,4 @@ For failures, report the tool and package version, OS, runtime/browser and redac
 
 Run from a source checkout to create a local package; this does not publish it. Ordinary users do not need this command.
 
-<!-- README-SOURCE-SHA256: 1366b249395ff26a54f9992088afd4b9cd8d09a721e633b3a22388269db80c9b -->
+<!-- README-SOURCE-SHA256: 4ad7469f6f3f3196f82cd5c9ab0760c4cd53c64a2c262246adf1dca4bdef77f6 -->

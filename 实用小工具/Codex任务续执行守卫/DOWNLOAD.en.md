@@ -10,8 +10,12 @@ Distribution version: 0.1.0 / r1
 
 ## Download
 
-This version of the standalone package has not been published; no ZIP download is available here yet.
-You can read the usage guide now. Any older download listed there is a separate release.
+[Download this tool ZIP](https://github.com/RongNianXin/ChatGPT-Workflows/releases/download/tool-codex-task-guard-v0.1.0-r1/codex-task-guard-0.1.0-r1.zip)
+ · [SHA256SUMS.txt](https://github.com/RongNianXin/ChatGPT-Workflows/releases/download/tool-codex-task-guard-v0.1.0-r1/SHA256SUMS.txt)
+ · [Release notes](https://github.com/RongNianXin/ChatGPT-Workflows/releases/tag/tool-codex-task-guard-v0.1.0-r1)
+
+Development preview.
+ZIP SHA-256: `53ec4e5914ab23ea520df30c39c03444470037219634a78b8a8a53e95beef378`
 
 Once a download is available, extract the entire ZIP to a permanent folder and read START-HERE.en.md.
 No repository clone or other tool is required. Keep the package layout intact; GitHub's Source code archive is the whole repository.
@@ -39,4 +43,4 @@ For failures, report the tool and package version, OS, runtime/browser and redac
 
 Run from a source checkout to create a local package; this does not publish it. Ordinary users do not need this command.
 
-<!-- README-SOURCE-SHA256: f0fff5c46108aa5fcadbd84e7d625f8ef5b137993e52fd1f087dadc5252cdb23 -->
+<!-- README-SOURCE-SHA256: 7f92c8d36887e0794b3bb89fc78abb47ce405ffd03c4b45ac60e29bbc000b211 -->

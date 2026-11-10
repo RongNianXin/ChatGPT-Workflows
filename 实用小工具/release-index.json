@@ -1,1 +1,60 @@
-{"schemaVersion": 1, "releases": []}
+{
+  "schemaVersion": 1,
+  "releases": [
+    {
+      "id": "codex-session-desk",
+      "version": "0.2.0-dev.10",
+      "packageRevision": 1,
+      "tag": "tool-codex-session-desk-v0.2.0-dev.10-r1",
+      "asset": "codex-session-desk-0.2.0-dev.10-r1.zip",
+      "sha256": "a5200fa9355b3a0bcca4c58d5f7a01543b76aa79945875bee40389e32065a3bf",
+      "sourceFingerprint": "c8f9450edfd2cd8a67c00d10cdafd38881751578f6c4a9900c33a4970dd2f8f9",
+      "sourceCommit": "e193ff13e947179f2fc8e2494beb1ae3dff9f8c4",
+      "prerelease": true
+    },
+    {
+      "id": "codex-task-guard",
+      "version": "0.1.0",
+      "packageRevision": 1,
+      "tag": "tool-codex-task-guard-v0.1.0-r1",
+      "asset": "codex-task-guard-0.1.0-r1.zip",
+      "sha256": "53ec4e5914ab23ea520df30c39c03444470037219634a78b8a8a53e95beef378",
+      "sourceFingerprint": "d36b6da5a62ffebcb17a036d2e372cef6f979e394fa8bdb078c8499ac7143541",
+      "sourceCommit": "e193ff13e947179f2fc8e2494beb1ae3dff9f8c4",
+      "prerelease": true
+    },
+    {
+      "id": "codex-task-locator",
+      "version": "0.1.0",
+      "packageRevision": 1,
+      "tag": "tool-codex-task-locator-v0.1.0-r1",
+      "asset": "codex-task-locator-0.1.0-r1.zip",
+      "sha256": "e485e5d0dc5d5c2e98e158563d16b4aff936143feab2cb15f9f67b6b6eda249f",
+      "sourceFingerprint": "aa72114d33700af94d964db704e2a9f9261a54af7b745362a3a1aa3886b1678d",
+      "sourceCommit": "e193ff13e947179f2fc8e2494beb1ae3dff9f8c4",
+      "prerelease": true
+    },
+    {
+      "id": "markdown-reader",
+      "version": "1.0.0",
+      "packageRevision": 1,
+      "tag": "tool-markdown-reader-v1.0.0-r1",
+      "asset": "markdown-reader-1.0.0-r1.zip",
+      "sha256": "216ab8f71cf6921f15c9ecde9cd9248ada763101d899560ef301996636f9603a",
+      "sourceFingerprint": "ae4e3bf09de65a951abff79360972c253eecb6ab72ddf0f75c35b0c609e1ac85",
+      "sourceCommit": "e193ff13e947179f2fc8e2494beb1ae3dff9f8c4",
+      "prerelease": true
+    },
+    {
+      "id": "zhihu-export",
+      "version": "0.6.7",
+      "packageRevision": 1,
+      "tag": "tool-zhihu-export-v0.6.7-r1",
+      "asset": "zhihu-export-0.6.7-r1.zip",
+      "sha256": "ec7a91a144a0f3aaf457f41f19c225db347297d8818b610925cedb0008018b7c",
+      "sourceFingerprint": "ab4f93b684ac4ceee18876ab4f5d27ddeee5a9a1c14de6a1247bdee6e025ed83",
+      "sourceCommit": "e193ff13e947179f2fc8e2494beb1ae3dff9f8c4",
+      "prerelease": true
+    }
+  ]
+}

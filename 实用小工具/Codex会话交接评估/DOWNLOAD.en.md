@@ -10,8 +10,12 @@ Distribution version: 0.2.0-dev.10 / r1
 
 ## Download
 
-This version of the standalone package has not been published; no ZIP download is available here yet.
-You can read the usage guide now. Any older download listed there is a separate release.
+[Download this tool ZIP](https://github.com/RongNianXin/ChatGPT-Workflows/releases/download/tool-codex-session-desk-v0.2.0-dev.10-r1/codex-session-desk-0.2.0-dev.10-r1.zip)
+ · [SHA256SUMS.txt](https://github.com/RongNianXin/ChatGPT-Workflows/releases/download/tool-codex-session-desk-v0.2.0-dev.10-r1/SHA256SUMS.txt)
+ · [Release notes](https://github.com/RongNianXin/ChatGPT-Workflows/releases/tag/tool-codex-session-desk-v0.2.0-dev.10-r1)
+
+Development preview.
+ZIP SHA-256: `a5200fa9355b3a0bcca4c58d5f7a01543b76aa79945875bee40389e32065a3bf`
 
 Once a download is available, extract the entire ZIP to a permanent folder and read START-HERE.en.md.
 No repository clone or other tool is required. Keep the package layout intact; GitHub's Source code archive is the whole repository.
@@ -38,4 +42,4 @@ For failures, report the tool and package version, OS, runtime/browser and redac
 
 Run from a source checkout to create a local package; this does not publish it. Ordinary users do not need this command.
 
-<!-- README-SOURCE-SHA256: 7a7c1557e8001fbcc4a0202ed20c067a7400707c3ff3c5f48c381264713cb822 -->
+<!-- README-SOURCE-SHA256: 8d1d1f57471a6df4c26d2eb27be6103668b40afa06645ba14ea8c64e6a7bfb32 -->

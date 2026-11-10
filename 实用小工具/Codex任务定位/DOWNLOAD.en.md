@@ -10,8 +10,12 @@ Distribution version: 0.1.0 / r1
 
 ## Download
 
-This version of the standalone package has not been published; no ZIP download is available here yet.
-You can read the usage guide now. Any older download listed there is a separate release.
+[Download this tool ZIP](https://github.com/RongNianXin/ChatGPT-Workflows/releases/download/tool-codex-task-locator-v0.1.0-r1/codex-task-locator-0.1.0-r1.zip)
+ · [SHA256SUMS.txt](https://github.com/RongNianXin/ChatGPT-Workflows/releases/download/tool-codex-task-locator-v0.1.0-r1/SHA256SUMS.txt)
+ · [Release notes](https://github.com/RongNianXin/ChatGPT-Workflows/releases/tag/tool-codex-task-locator-v0.1.0-r1)
+
+Development preview.
+ZIP SHA-256: `e485e5d0dc5d5c2e98e158563d16b4aff936143feab2cb15f9f67b6b6eda249f`
 
 Once a download is available, extract the entire ZIP to a permanent folder and read START-HERE.en.md.
 No repository clone or other tool is required. Keep the package layout intact; GitHub's Source code archive is the whole repository.
@@ -38,4 +42,4 @@ For failures, report the tool and package version, OS, runtime/browser and redac
 
 Run from a source checkout to create a local package; this does not publish it. Ordinary users do not need this command.
 
-<!-- README-SOURCE-SHA256: b80b0c50c496a4460b449676743b2919ed93da57fb71deb6fec42103610920c2 -->
+<!-- README-SOURCE-SHA256: 7c0704ef6f4986a51e9298380458f32119d9e315c065215d13cbc194203904a3 -->

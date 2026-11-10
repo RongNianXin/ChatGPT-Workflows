@@ -10,8 +10,12 @@
 
 ## 下载
 
-这一版本的独立包尚未发布，当前没有可用的ZIP下载入口。
-可以先阅读使用说明；说明中如有旧版下载，它属于另一条历史发布。
+[下载本工具ZIP](https://github.com/RongNianXin/ChatGPT-Workflows/releases/download/tool-codex-task-locator-v0.1.0-r1/codex-task-locator-0.1.0-r1.zip)
+ · [SHA256SUMS.txt](https://github.com/RongNianXin/ChatGPT-Workflows/releases/download/tool-codex-task-locator-v0.1.0-r1/SHA256SUMS.txt)
+ · [版本说明](https://github.com/RongNianXin/ChatGPT-Workflows/releases/tag/tool-codex-task-locator-v0.1.0-r1)
+
+开发预览版。
+ZIP SHA-256: `e485e5d0dc5d5c2e98e158563d16b4aff936143feab2cb15f9f67b6b6eda249f`
 
 取得ZIP后完整解压到稳定目录，先看包根的START-HERE.md。
 无需克隆整个仓库或安装其他工具。保留包内目录结构；GitHub的Source code附件是整个仓库源码。
